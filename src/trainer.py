@@ -48,6 +48,7 @@ def train(model, epoch, data, optimizer, batch_size, val_data):
             val_loss = model(val_data['x'], val_data['t'])
     print("Epoch: {}, NLL Loss: {}, Val Loss: {}, Time took: {}".format(epoch, train_loss/n_train,\
      val_loss/n_val, (end-start)))
+    #print(model.base_intensity.item(),model.time_influence.item(), model.embed_time.bias[0].item())
 
 
 def trainer(model, data = None, lr= 1e-2, epoch = 100, batch_size = 100 ):

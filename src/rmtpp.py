@@ -67,7 +67,8 @@ class rmtpp(nn.Module):
         self.rnn_cell = nn.GRUCell(
             input_size=self.x_embedding_layer[-1] + self.t_embedding_layer[-1], hidden_size=self.hidden_dim)
         # For tractivility of conditional intensity time module is a dic where forward needs to be defined
-        self.embed_hidden_state, self.output_x_mu, self.output_x_logvar, self.output_time_dic = self.create_output_layer()
+        self.embed_hidden_state, self.output_x_mu, self.output_x_logvar = self.create_output_marker_layer()
+        self.h_influence, self.time_influence, self.base_intensity = self.create_output_time_layer()
 
     def assert_input(self):
         assert self.marker_type in {
@@ -87,7 +88,7 @@ class rmtpp(nn.Module):
         t_module = nn.Linear(2, self.t_embedding_layer[0])
         return x_module, t_module
 
-    def create_output_layer(self):
+    def create_output_marker_layer(self):
         embed_module = nn.Sequential(
             nn.Linear(self.hidden_dim,
                       self.shared_output_layers[0]), nn.ReLU(),
@@ -103,12 +104,14 @@ class rmtpp(nn.Module):
         if self.marker_type == 'real':
             x_module_logvar = nn.Linear(l, self.marker_dim)
 
-        h_influence =  nn.Linear(self.shared_output_layers[-1], 1, bias=False),
-        time_module_dic = nn.ParameterDict({
-            'time_influence': nn.Parameter(torch.ones(1, 1, 1)),
-            'base_intensity': nn.Parameter(torch.zeros(1, 1, 1))
-        })
-        return embed_module, x_module_mu, x_module_logvar, [time_module_dic, h_influence]
+        return embed_module, x_module_mu, x_module_logvar
+
+    def create_output_time_layer(self):
+
+        h_influence =  nn.Linear(self.shared_output_layers[-1], 1, bias=False)
+        time_influence = nn.Parameter(torch.ones(1, 1, 1))
+        base_intensity =  nn.Parameter(torch.zeros(1, 1, 1))
+        return h_influence, time_influence, base_intensity
 
     def forward(self, x, t, mask=None):
         """
@@ -244,18 +247,18 @@ class rmtpp(nn.Module):
         h_trimmed = h[:-1, :, :]  # TxBSxself.shared_output_layers[-1]
         d_js = t[:, :, 1][:, :, None]  # Shape TxBSx1 Time differences
 
-        past_influence = self.output_time_dic[1][0](h_trimmed)  # TxBSx1
+        past_influence = self.h_influence(h_trimmed)  # TxBSx1
 
         # TxBSx1
-        current_influence = self.output_time_dic[0]['time_influence'] * d_js
-        base_intensity = self.output_time_dic[0]['base_intensity']  # 1x1x1
+        current_influence = self.time_influence * d_js
+        base_intensity = self.base_intensity  # 1x1x1
 
         term1 = past_influence + current_influence + base_intensity
         term2 = (past_influence + base_intensity).exp()
         term3 = term1.exp()
 
         log_f_t = term1 + \
-            (1./self.output_time_dic[0]['time_influence']) * (term2-term3)
+            (1./self.time_influence) * (term2-term3)
         return log_f_t[:, :, 0]  # TxBS
 
     def generate_marker(self, h, t):
