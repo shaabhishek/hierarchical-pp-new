@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 # import pdb; pdb.set_trace()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-DEBUG = True
+DEBUG = False
 
 def one_hot_encoding(y, n_dims=None):
     # Implement
@@ -54,6 +54,8 @@ class rmtpp(nn.Module):
         self.hidden_dim = hidden_dim
         self.x_given_t = x_given_t
         self.assert_input()
+
+        self.sigma_min = 1e-2
 
         # Set up layer dimensions
         self.x_embedding_layer = [64, 64]
@@ -103,7 +105,7 @@ class rmtpp(nn.Module):
 
         h_influence =  nn.Linear(self.shared_output_layers[-1], 1, bias=False),
         time_module_dic = nn.ParameterDict({
-            'time_influence': nn.Parameter(torch.zeros(1, 1, 1)),
+            'time_influence': nn.Parameter(torch.ones(1, 1, 1)),
             'base_intensity': nn.Parameter(torch.zeros(1, 1, 1))
         })
         return embed_module, x_module_mu, x_module_logvar, [time_module_dic, h_influence]
@@ -123,7 +125,7 @@ class rmtpp(nn.Module):
         time_log_likelihood, marker_log_likelihood = self._forward(
             x, t, mask)
         if DEBUG:
-            print("Losses:", marker_log_likelihood.sum().item())
+            print("Losses:", marker_log_likelihood.sum().item(),  time_log_likelihood.sum().item())
         loss = -1. * (time_log_likelihood + marker_log_likelihood)
         if mask is not None:
             loss = loss * mask
@@ -192,15 +194,12 @@ class rmtpp(nn.Module):
 
         # Tensor of shape (T+1)xBSxself.shared_output_layers[-1]
         _, hidden_states = self.run_forward_rnn(x, t)
-        if DEBUG:
-            print("hidden_states:", hidden_states.sum().item())
 
         # marker generation layer. Ideally it should include time gap also.
         # Tensor of shape TxBSx marker_dim
         marker_out_mu, marker_out_logvar = self.generate_marker(
             hidden_states, t)
-        if DEBUG:
-            print("mu, var", marker_out_mu.sum().item(), marker_out_logvar.sum().item())
+
         time_log_likelihood = self.compute_point_log_likelihood(
             hidden_states, t)
         marker_log_likelihood = self.compute_marker_log_likelihood(
@@ -219,10 +218,11 @@ class rmtpp(nn.Module):
                     loss : TxBS
         """
         if self.marker_type == 'real':
-            x_recon_dist = Normal(mu, logvar.exp().sqrt())
-            nll_loss = (-x_recon_dist.log_prob(x)
+            sigma = torch.clamp(logvar.exp().sqrt(), min= self.sigma_min)
+            x_recon_dist = Normal(mu, sigma)
+            ll_loss = (x_recon_dist.log_prob(x)
                         ).sum(dim=-1)
-            return nll_loss
+            return ll_loss
         else:
             seq_lengths, batch_size = x.size(0), x.size(1)
             mu_ = mu.view(-1, self.marker_dim)  # T*BS x marker_dim
@@ -241,7 +241,6 @@ class rmtpp(nn.Module):
                 log_f_t : tensor of shape TxBS
 
         """
-        print(self.output_time_dic[1][0],)
         h_trimmed = h[:-1, :, :]  # TxBSxself.shared_output_layers[-1]
         d_js = t[:, :, 1][:, :, None]  # Shape TxBSx1 Time differences
 
@@ -279,8 +278,6 @@ class rmtpp(nn.Module):
             marker_out_logvar = self.output_x_logvar(h_trimmed)
         else:
             marker_out_logvar = None
-        if DEBUG:
-            print("generate marker", marker_out_mu.sum().item(), marker_out_logvar.sum().item())
         return marker_out_mu, marker_out_logvar
 
 

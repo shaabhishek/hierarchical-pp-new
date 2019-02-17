@@ -15,7 +15,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def create_synthetic_data(time_step = 10, num_sample = 1000, marker_dim = 20):
      marker = np.random.randn(time_step, num_sample, marker_dim)
-     points_ = np.random.rand(time_step, num_sample) * 100.
+     points_ = np.random.rand(time_step, num_sample) * 1.
      cum_sum_points =  np.cumsum(points_, axis = 0)
      t = np.stack([cum_sum_points, points_], axis = 2)
      x, t  = marker.tolist(), t.tolist()
@@ -31,26 +31,26 @@ def train(model, epoch, data, optimizer, batch_size, val_data):
     start = time.time()
     model.train()
     train_loss = 0
-    n_train, n_val = len(data['x']), 1.
+    n_train, n_val = len(data['x'][0]), 1.
 
     optimizer.zero_grad()
     idxs = np.random.permutation(len(data['x']))
     for i in range(0, n_train, batch_size):
-        loss = model(data['x'][i:i+batch_size], data['t'][i:i+batch_size])
+        loss = model(data['x'][:,i:i+batch_size, :], data['t'][:,i:i+batch_size,:])
         loss.backward()
         train_loss += loss.item()
     optimizer.step()
     end = time.time()
     val_loss = 0.
     if val_data is not None:
-        n_val = len(val_data)
+        n_val = len(val_data[0])
         with torch.no_grad():
             val_loss = model(val_data['x'], val_data['t'])
     print("Epoch: {}, NLL Loss: {}, Val Loss: {}, Time took: {}".format(epoch, train_loss/n_train,\
      val_loss/n_val, (end-start)))
 
 
-def trainer(model, data = None, lr= 1e-3, epoch = 10, batch_size = 100 ):
+def trainer(model, data = None, lr= 1e-2, epoch = 100, batch_size = 100 ):
     if data == None:
         data, val_data = create_synthetic_data()
 
