@@ -139,14 +139,14 @@ class hrmtpp(nn.Module):
                 loss : Tensor scalar
         """
         #TxBS and TxBS
-        time_log_likelihood, marker_log_likelihood = self._forward(x, t, mask)
+        time_log_likelihood, marker_log_likelihood, kl_loss = self._forward(x, t, mask)
 
         if DEBUG:
-            print("Losses:", marker_log_likelihood.sum().item(),  time_log_likelihood.sum().item())
-        loss = -1. * (time_log_likelihood + marker_log_likelihood)
+            print("Losses:", -marker_log_likelihood.sum().item(),  -time_log_likelihood.sum().item(), kl_loss.sum().item())
+        loss =  -1.* (time_log_likelihood + marker_log_likelihood)
         if mask is not None:
             loss = loss * mask
-        return loss.sum()
+        return loss.sum()+ kl_loss.sum()
 
     def run_forward_backward_rnn(self, x, t, mask):
         """
@@ -280,7 +280,11 @@ class hrmtpp(nn.Module):
         marker_out_mu, marker_out_logvar = self.generate_marker(hz_embedded,  t)
         marker_log_likelihood = self.compute_marker_log_likelihood(x, marker_out_mu, marker_out_logvar)
 
-        return time_log_likelihood, marker_log_likelihood  # TxBS and TxBS
+        posterior_dist = Normal(mu[0,:,:], logvar[0,:,:].exp().sqrt())
+        prior_dist = Normal(0, 1)
+        kld_loss = kl_divergence(posterior_dist, prior_dist)#Shape BSxlatent_dim
+
+        return time_log_likelihood, marker_log_likelihood, kld_loss  # TxBS and TxBS
 
     def compute_marker_log_likelihood(self, x, mu, logvar):
         """
