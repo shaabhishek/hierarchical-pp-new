@@ -10,6 +10,7 @@ from torch.distributions.normal import Normal
 from torch.distributions.kl import kl_divergence
 from torch.optim import Adam
 from rmtpp import rmtpp
+from hrmtpp import hrmtpp
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -62,7 +63,7 @@ def trainer(model, data = None, lr= 1e-2, epoch = 100, batch_size = 100 ):
     return model
 
 if __name__ == "__main__":
-    model = rmtpp()
+    model = hrmtpp()
     trainer(model)
 
 
