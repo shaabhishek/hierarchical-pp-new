@@ -124,7 +124,7 @@ class rmtpp(nn.Module):
             x, t, mask)
         if DEBUG:
             print("Losses:", marker_log_likelihood.sum().item())
-        loss = -1. * (time_log_likelihood + marker_log_likelihood*0.)
+        loss = -1. * (time_log_likelihood + marker_log_likelihood)
         if mask is not None:
             loss = loss * mask
         return loss.sum()
