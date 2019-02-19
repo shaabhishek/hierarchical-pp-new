@@ -10,7 +10,7 @@ from torch.distributions.normal import Normal
 from torch.distributions.kl import kl_divergence
 from torch.optim import Adam
 import matplotlib.pyplot as plt
-# import pdb; pdb.set_trace()
+from utils_ import generate_mpp
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 DEBUG = False
@@ -125,6 +125,7 @@ class rmtpp(nn.Module):
                 loss : Tensor scalar
         """
         #TxBS and TxBS
+        import pdb; pdb.set_trace()
         time_log_likelihood, marker_log_likelihood = self._forward(
             x, t, mask)
         if DEBUG:
@@ -286,3 +287,6 @@ class rmtpp(nn.Module):
 
 if __name__ == "__main__":
     model = rmtpp()
+    data = generate_mpp()
+    print(model(data['x'], data['t']))
+
