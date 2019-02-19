@@ -125,7 +125,6 @@ class rmtpp(nn.Module):
                 loss : Tensor scalar
         """
         #TxBS and TxBS
-        import pdb; pdb.set_trace()
         time_log_likelihood, marker_log_likelihood = self._forward(
             x, t, mask)
         if DEBUG:

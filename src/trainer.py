@@ -11,6 +11,7 @@ from torch.distributions.kl import kl_divergence
 from torch.optim import Adam
 from rmtpp import rmtpp
 from hrmtpp import hrmtpp
+from utils_ import generate_mpp
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -52,7 +53,7 @@ def train(model, epoch, data, optimizer, batch_size, val_data):
     #print(model.base_intensity.item(),model.time_influence.item(), model.embed_time.bias[0].item())
 
 
-def trainer(model, data = None, lr= 1e-2, epoch = 100, batch_size = 100 ):
+def trainer(model, data = None, val_data=None, lr= 1e-2, epoch = 100, batch_size = 100):
     if data == None:
         data, val_data = create_synthetic_data()
 
@@ -63,8 +64,10 @@ def trainer(model, data = None, lr= 1e-2, epoch = 100, batch_size = 100 ):
     return model
 
 if __name__ == "__main__":
-    model = hrmtpp()
-    trainer(model)
+    model = rmtpp()
+    data, _ = generate_mpp()
+    import pdb; pdb.set_trace()
+    trainer(model, data)
 
 
 

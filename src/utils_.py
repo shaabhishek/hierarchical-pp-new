@@ -58,7 +58,7 @@ def generate_hawkes(time_step, num_sample, num_clusters):
 
     history = torch.tensor(history).transpose(0,1)[1:]
     intervals = get_intervals(history, dim=0)
-    t = torch.stack([history, intervals])
+    t = torch.stack([history, intervals], dim=2)
     
     return t
 
@@ -68,7 +68,7 @@ def generate_mpp(type='hawkes', time_step = 100, num_sample = 80, marker_dim = 2
 
     markers = torch.randn(time_step, num_sample, marker_dim)
     data = {'x': markers, 't': t}
-    return data
+    return data, None
 
 def plot_process(timeseries):
     history = np.array(timeseries)
