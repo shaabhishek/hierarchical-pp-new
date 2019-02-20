@@ -132,7 +132,7 @@ class rmtpp(nn.Module):
         loss = -1. * (time_log_likelihood + marker_log_likelihood)
         if mask is not None:
             loss = loss * mask
-        return loss.sum()
+        return loss.sum(), [-marker_log_likelihood.sum().item(), -time_log_likelihood.sum().item() ]
 
     def run_forward_rnn(self, x, t):
         """

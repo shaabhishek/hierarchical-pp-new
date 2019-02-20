@@ -63,6 +63,7 @@ def generate_hawkes(time_step, num_sample, num_clusters):
     return t
 
 def generate_mpp(type='hawkes', time_step = 100, num_sample = 80, marker_dim = 20, num_clusters=3):
+    torch.manual_seed(1)
     if type == 'hawkes':
         t = generate_hawkes(time_step, num_sample, num_clusters)
 

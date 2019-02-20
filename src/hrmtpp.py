@@ -142,11 +142,11 @@ class hrmtpp(nn.Module):
         time_log_likelihood, marker_log_likelihood, kl_loss = self._forward(x, t, mask)
 
         if DEBUG:
-            print("Losses:", -marker_log_likelihood.sum().item(),  -time_log_likelihood.sum().item(), kl_loss.sum().item())
+            print("Losses:", -time_log_likelihood.sum().item(),  -marker_log_likelihood.sum().item(), kl_loss.sum().item())
         loss =  -1.* (time_log_likelihood + marker_log_likelihood)
         if mask is not None:
             loss = loss * mask
-        return loss.sum()+ kl_loss.sum()
+        return loss.sum()+ kl_loss.sum(), [-marker_log_likelihood.sum().item(), -time_log_likelihood.sum().item(), kl_loss.sum().item()]
 
     def run_forward_backward_rnn(self, x, t, mask):
         """

@@ -38,22 +38,26 @@ def train(model, epoch, data, optimizer, batch_size, val_data):
     optimizer.zero_grad()
     idxs = np.random.permutation(len(data['x']))
     for i in range(0, n_train, batch_size):
-        loss = model(data['x'][:,i:i+batch_size, :], data['t'][:,i:i+batch_size,:])
+        loss, out = model(data['x'][:,i:i+batch_size, :], data['t'][:,i:i+batch_size,:])
         loss.backward()
         train_loss += loss.item()
     optimizer.step()
     end = time.time()
     val_loss = 0.
     if val_data is not None:
-        n_val = len(val_data[0])
+        n_val = len(val_data['x'])
         with torch.no_grad():
-            val_loss = model(val_data['x'], val_data['t'])
+            val_loss, val_out = model(val_data['x'], val_data['t'])
+    out = [i/n_train for i in out]
+    val_out = [i/n_val for i in val_out]
     print("Epoch: {}, NLL Loss: {}, Val Loss: {}, Time took: {}".format(epoch, train_loss/n_train,\
      val_loss/n_val, (end-start)))
+    print("Train loss Meta Info: ", out)
+    print("Val Loss Meta Info: ", val_out)
     #print(model.base_intensity.item(),model.time_influence.item(), model.embed_time.bias[0].item())
 
 
-def trainer(model, data = None, val_data=None, lr= 1e-2, epoch = 100, batch_size = 100):
+def trainer(model, data = None, val_data=None, lr= 1e-3, epoch = 500, batch_size = 100):
     if data == None:
         data, val_data = create_synthetic_data()
 
@@ -66,8 +70,9 @@ def trainer(model, data = None, val_data=None, lr= 1e-2, epoch = 100, batch_size
 if __name__ == "__main__":
     model = rmtpp()
     data, _ = generate_mpp()
-    import pdb; pdb.set_trace()
-    trainer(model, data)
+    val_data, _ = generate_mpp(num_sample = 150)
+    #import pdb; pdb.set_trace()
+    trainer(model, data, val_data)
 
 
 
