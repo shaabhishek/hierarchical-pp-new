@@ -68,12 +68,8 @@ def trainer(model, data = None, val_data=None, lr= 1e-3, epoch = 500, batch_size
     return model
 
 if __name__ == "__main__":
-    model = rmtpp()
+    model = rmtpp().to(device)
     data, _ = generate_mpp()
     val_data, _ = generate_mpp(num_sample = 150)
     #import pdb; pdb.set_trace()
     trainer(model, data, val_data)
-
-
-
-

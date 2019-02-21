@@ -5,6 +5,8 @@ import time
 import matplotlib.pyplot as plt
 from torch.distributions import Categorical
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 def intensity_hawkes(t,history, mu=torch.tensor(0.2), alpha=torch.tensor(0.8), beta=torch.tensor(1.)):
     # intensity = mu + alpha*sum(torch.exp(-beta*(t - ti)) for ti in history if ti <= t)
     time_diffs = t - torch.tensor(history, dtype=torch.float)
@@ -66,9 +68,9 @@ def generate_hawkes(time_step, num_sample, num_clusters):
 def generate_mpp(type='hawkes', time_step = 100, num_sample = 80, marker_dim = 20, num_clusters=3, seed = 1):
     torch.manual_seed(seed)
     if type == 'hawkes':
-        t = generate_hawkes(time_step, num_sample, num_clusters)
+        t = generate_hawkes(time_step, num_sample, num_clusters).to(device)
 
-    markers = torch.randn(time_step, num_sample, marker_dim)
+    markers = torch.randn(time_step, num_sample, marker_dim).to(device)
     data = {'x': markers, 't': t}
     return data, None
 
