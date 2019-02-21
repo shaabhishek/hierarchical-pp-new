@@ -25,7 +25,7 @@ def hawkes(intensity_fn, time_step=100):
         while True:
             t = homo_poisson(intensity_max, t)
             u = random.random()
-            if u <= intensity_fn(t, history)/intensity_max:
+            if u <= intensity_fn(t, history)/intensity_max and (t - history[-1])>1e-1:
                 history.append(t)
                 break
     return history
@@ -58,6 +58,7 @@ def generate_hawkes(time_step, num_sample, num_clusters):
 
     history = torch.tensor(history).transpose(0,1)[1:]
     intervals = get_intervals(history, dim=0)
+    intervals = intervals.clamp(0.1, 2.5)
     t = torch.stack([history, intervals], dim=2)
     
     return t
