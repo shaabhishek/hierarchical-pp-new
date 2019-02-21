@@ -38,7 +38,7 @@ class rmtpp(nn.Module):
 
     """
 
-    def __init__(self, marker_type='real', marker_dim=20, hidden_dim=300, x_given_t=False, ):
+    def __init__(self, marker_type='real', marker_dim=20, hidden_dim=20, x_given_t=False, ):
         super().__init__()
         """
             Input:
