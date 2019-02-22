@@ -65,7 +65,7 @@ def generate_hawkes(time_step, num_sample, num_clusters):
     
     return t
 
-def generate_autoregressive_data(time_step = 100, num_sample = 80, num_clusters=3):
+def generate_autoregressive_data(time_step = 100, num_sample = 80, num_clusters=3, debug=False):
     def _alpha_n(interval_history, mu, gamma, mem_vec, m):
         """
             Input:
@@ -83,16 +83,15 @@ def generate_autoregressive_data(time_step = 100, num_sample = 80, num_clusters=
         inverse_alpha = mu + gamma * past_effects.sum(dim=-1)
         return torch.div(1, inverse_alpha)
     
-    num_clusters = 3
-    
     # effect of previous intervals
     m = 5
     
     # for each cluster, we have different
     # base_mu, gamma, and memory_vector
-    vals_base_mu = 1+torch.rand(num_clusters)
+    vals_base_mu = torch.rand(num_clusters)
     vals_gamma = torch.rand(num_clusters)
     mem_vec = torch.rand(num_clusters, m)
+    mem_vec /= mem_vec.sum(dim=-1, keepdim=True)
     
     
     interval_history = torch.zeros(num_sample, num_clusters, 1)
@@ -116,7 +115,15 @@ def generate_autoregressive_data(time_step = 100, num_sample = 80, num_clusters=
     timeseries = interval_history.cumsum(0)
     # shape = T x N x 2
     t = torch.stack([timeseries, interval_history], dim=-1)
-    return t
+    if debug == False:
+        return t
+    else:
+        info = {
+            'vals_base_mu': torch.rand(num_clusters),
+            'vals_gamma': torch.rand(num_clusters),
+            'mem_vec': torch.rand(num_clusters, m)
+            }
+        return t, info
 
 def generate_mpp(type='hawkes', time_step = 100, num_sample = 80, marker_dim = 20, num_clusters=3, seed = 1):
     torch.manual_seed(seed)
