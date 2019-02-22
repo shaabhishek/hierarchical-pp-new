@@ -3,7 +3,7 @@ import numpy as np
 import random
 import time
 import matplotlib.pyplot as plt
-from torch.distributions import Categorical
+from torch.distributions import Categorical, Exponential
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -60,15 +60,69 @@ def generate_hawkes(time_step, num_sample, num_clusters):
 
     history = torch.tensor(history).transpose(0,1)[1:]
     intervals = get_intervals(history, dim=0)
-    intervals = intervals.clamp(0.1, 2.5)
+    # intervals = intervals.clamp(0.1, 2.5)
     t = torch.stack([history, intervals], dim=2)
     
+    return t
+
+def generate_autoregressive_data(time_step = 100, num_sample = 80, num_clusters=3):
+    def _alpha_n(interval_history, mu, gamma, mem_vec, m):
+        """
+            Input:
+                interval_history: Tensor of shape num_clusters x n-1
+                mu: base duration, Tensor of length num_clusters
+                gamma: Tensor of length num_clusters
+                mem_vec: Tensor of shape num_clusters x m
+                m: number of lookback steps, Scalar
+            Output:
+                alpha_n: Tensor of shape num_clusters
+        """
+        _, _, history_size = interval_history.shape
+        window_size = min(m, history_size)
+        past_effects = interval_history[:,:,-window_size:]*mem_vec[:,-window_size:]
+        inverse_alpha = mu + gamma * past_effects.sum(dim=-1)
+        return torch.div(1, inverse_alpha)
+    
+    num_clusters = 3
+    
+    # effect of previous intervals
+    m = 5
+    
+    # for each cluster, we have different
+    # base_mu, gamma, and memory_vector
+    vals_base_mu = 1+torch.rand(num_clusters)
+    vals_gamma = torch.rand(num_clusters)
+    mem_vec = torch.rand(num_clusters, m)
+    
+    
+    interval_history = torch.zeros(num_sample, num_clusters, 1)
+    # for each time, get alpha and using it compute
+    # the duration of the interval.
+    # Here the intervals are distributed according to the
+    # exponential distribution with rate = alpha
+
+    for n in range(time_step):
+        rate = _alpha_n(interval_history, vals_base_mu, vals_gamma, mem_vec, m)
+        interval_dist = Exponential(rate=rate)
+        duration_n = interval_dist.sample()
+        interval_history = torch.cat([interval_history, duration_n.view(num_sample, -1, 1)], dim=-1)
+    
+    # first interval was all zeros for convenience
+    interval_history = interval_history[:,:,1:]
+    # combine the data from different clusters into one
+    interval_history = interval_history.view(-1, time_step)
+    # shape = T x N
+    interval_history = interval_history.transpose(0,1)
+    timeseries = interval_history.cumsum(0)
+    # shape = T x N x 2
+    t = torch.stack([timeseries, interval_history], dim=-1)
     return t
 
 def generate_mpp(type='hawkes', time_step = 100, num_sample = 80, marker_dim = 20, num_clusters=3, seed = 1):
     torch.manual_seed(seed)
     if type == 'hawkes':
-        t = generate_hawkes(time_step, num_sample, num_clusters).to(device)
+        # t = generate_hawkes(time_step, num_sample, num_clusters).to(device)
+        t = generate_autoregressive_data(time_step, num_sample, num_clusters).to(device)
 
     markers = torch.randn(time_step, num_sample, marker_dim).to(device)
     data = {'x': markers, 't': t}
