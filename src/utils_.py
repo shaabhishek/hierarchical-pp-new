@@ -65,7 +65,7 @@ def generate_hawkes(time_step, num_sample, num_clusters):
     
     return t
 
-def generate_autoregressive_data(time_step = 100, num_sample = 80, num_clusters=3, debug=False):
+def generate_autoregressive_data(time_step = 100, num_sample = 80, num_clusters=3, m=5, debug=False):
     def _alpha_n(interval_history, mu, gamma, mem_vec, m):
         """
             Input:
@@ -83,14 +83,25 @@ def generate_autoregressive_data(time_step = 100, num_sample = 80, num_clusters=
         inverse_alpha = mu + gamma * past_effects.sum(dim=-1)
         return torch.div(1, inverse_alpha)
     
-    # effect of previous intervals
-    m = 5
+    ### for each cluster, we have different
+    ### base_mu, gamma, and memory_vector
+    # memory_vector is a probability vector
+    # vals_base_mu = torch.rand(num_clusters)
+    # vals_gamma = torch.rand(num_clusters)
+    # mem_vec = torch.rand(num_clusters, m)
     
-    # for each cluster, we have different
-    # base_mu, gamma, and memory_vector
-    vals_base_mu = torch.rand(num_clusters)
-    vals_gamma = torch.rand(num_clusters)
-    mem_vec = torch.rand(num_clusters, m)
+    ## Fixed parameters
+    vals_base_mu = torch.tensor([0.5, 0.9, 0.9])[:num_clusters]
+    vals_gamma = torch.tensor([0.75, 0.5, 0.25])[:num_clusters]
+    ### Make the first mem_vec as the one with equal probability
+    ### Second one gives more weights to recent past
+    ### Third one gives more weights to older events
+    mem_vec = torch.tensor([
+                            [1 for _ in range(m)],
+                            [i for i in range(1,m+1)],
+                            [i for i in range(m, 0, -1)]], dtype=torch.float)
+    mem_vec = mem_vec[:num_clusters]
+
     mem_vec /= mem_vec.sum(dim=-1, keepdim=True)
     
     
@@ -100,8 +111,10 @@ def generate_autoregressive_data(time_step = 100, num_sample = 80, num_clusters=
     # Here the intervals are distributed according to the
     # exponential distribution with rate = alpha
 
+    rates = []
     for n in range(time_step):
         rate = _alpha_n(interval_history, vals_base_mu, vals_gamma, mem_vec, m)
+        rates.append(rate)
         interval_dist = Exponential(rate=rate)
         duration_n = interval_dist.sample()
         interval_history = torch.cat([interval_history, duration_n.view(num_sample, -1, 1)], dim=-1)
@@ -118,10 +131,13 @@ def generate_autoregressive_data(time_step = 100, num_sample = 80, num_clusters=
     if debug == False:
         return t
     else:
+        # shape = T x N
+        rates = torch.stack(rates, dim=-1).view(-1,time_step).transpose(0,1)
         info = {
-            'vals_base_mu': torch.rand(num_clusters),
-            'vals_gamma': torch.rand(num_clusters),
-            'mem_vec': torch.rand(num_clusters, m)
+            'vals_base_mu': vals_base_mu,
+            'vals_gamma': vals_gamma,
+            'mem_vec': mem_vec,
+            'intensities': rates
             }
         return t, info
 
