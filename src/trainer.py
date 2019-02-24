@@ -33,12 +33,14 @@ def train(model, epoch, data, optimizer, batch_size, val_data):
     start = time.time()
     model.train()
     train_loss = 0
+    train_losses_split = np.zeros(2)
     n_train, n_val = len(data['x'][0]), 1.
 
     optimizer.zero_grad()
     idxs = np.random.permutation(len(data['x']))
     for i in range(0, n_train, batch_size):
         loss, out = model(data['x'][:,i:i+batch_size, :], data['t'][:,i:i+batch_size,:])
+        train_losses_split += np.array(out)
         loss.backward()
         train_loss += loss.item()
     optimizer.step()
@@ -48,11 +50,12 @@ def train(model, epoch, data, optimizer, batch_size, val_data):
         n_val = len(val_data['x'])
         with torch.no_grad():
             val_loss, val_out = model(val_data['x'], val_data['t'])
-    out = [i/n_train for i in out]
+    # out = [i/n_train for i in out]
+    train_losses_split /= n_train
     val_out = [i/n_val for i in val_out]
     print("Epoch: {}, NLL Loss: {}, Val Loss: {}, Time took: {}".format(epoch, train_loss/n_train,\
      val_loss/n_val, (end-start)))
-    print("Train loss Meta Info: ", out)
+    print("Train loss Meta Info: ", train_losses_split)
     print("Val Loss Meta Info: ", val_out)
     #print(model.base_intensity.item(),model.time_influence.item(), model.embed_time.bias[0].item())
     print()
