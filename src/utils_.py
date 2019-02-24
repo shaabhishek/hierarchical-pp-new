@@ -91,7 +91,7 @@ def generate_autoregressive_data(time_step = 100, num_sample = 80, num_clusters=
     # mem_vec = torch.rand(num_clusters, m)
     
     ## Fixed parameters
-    vals_base_mu = torch.tensor([0.5, 0.9, 0.9])[:num_clusters]
+    vals_base_mu = 1+torch.tensor([0.5, 0.9, 0.9])[:num_clusters]
     vals_gamma = torch.tensor([0.75, 0.5, 0.25])[:num_clusters]
     ### Make the first mem_vec as the one with equal probability
     ### Second one gives more weights to recent past
@@ -144,10 +144,12 @@ def generate_autoregressive_data(time_step = 100, num_sample = 80, num_clusters=
 def generate_mpp(type='hawkes', time_step = 100, num_sample = 80, marker_dim = 20, num_clusters=3, seed = 1):
     torch.manual_seed(seed)
     if type == 'hawkes':
-        # t = generate_hawkes(time_step, num_sample, num_clusters).to(device)
+        t = generate_hawkes(time_step, num_sample, num_clusters).to(device)
+        markers = torch.randn(time_step, num_sample, marker_dim).to(device)
+    elif type == 'autoregressive':
         t = generate_autoregressive_data(time_step, num_sample, num_clusters).to(device)
+        markers = torch.randn(time_step, num_sample*num_clusters, marker_dim).to(device)
 
-    markers = torch.randn(time_step, num_sample, marker_dim).to(device)
     data = {'x': markers, 't': t}
     return data, None
 

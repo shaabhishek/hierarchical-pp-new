@@ -55,6 +55,7 @@ def train(model, epoch, data, optimizer, batch_size, val_data):
     print("Train loss Meta Info: ", out)
     print("Val Loss Meta Info: ", val_out)
     #print(model.base_intensity.item(),model.time_influence.item(), model.embed_time.bias[0].item())
+    print()
 
 
 def trainer(model, data = None, val_data=None, lr= 1e-3, epoch = 500, batch_size = 100):
