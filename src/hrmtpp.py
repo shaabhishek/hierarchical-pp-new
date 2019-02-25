@@ -37,7 +37,7 @@ class hrmtpp(nn.Module):
 
     """
 
-    def __init__(self, marker_type='real', marker_dim=20, latent_dim = 20, hidden_dim=20, x_given_t=False ):
+    def __init__(self, marker_type='real', marker_dim=20, latent_dim = 20, hidden_dim=128, x_given_t=False ):
         super().__init__()
         """
             Input:
@@ -54,14 +54,15 @@ class hrmtpp(nn.Module):
         self.hidden_dim = hidden_dim
         self.latent_dim = latent_dim
         self.x_given_t = x_given_t
+        self.use_rnn_cell = False
         self.assert_input()
 
         self.logvar_min = np.log(1e-4)
 
         # Set up layer dimensions. This is only hidden layers dimensions
-        self.x_embedding_layer = [64, 64]
-        self.t_embedding_layer = [16]
-        self.shared_output_layers = [64, 64]
+        self.x_embedding_layer = [64]
+        self.t_embedding_layer = [64]
+        self.shared_output_layers = [64]
         self.encoder_layers = [64, 64]
 
         # setup layers
@@ -79,35 +80,46 @@ class hrmtpp(nn.Module):
             print("Setting marker dimension to 2 for binary input!")
 
     def create_rnn_network(self):
-        rnn   = nn.GRUCell(
-            input_size=self.x_embedding_layer[-1] + self.t_embedding_layer[-1], hidden_size=self.hidden_dim)
-        rnn_b = nn.GRUCell(
-            input_size=self.x_embedding_layer[-1] + self.t_embedding_layer[-1], hidden_size=self.hidden_dim)
-        return rnn , rnn_b
+        if self.use_rnn_cell:
+            rnn   = nn.GRUCell(
+                input_size=self.x_embedding_layer[-1] + self.t_embedding_layer[-1], hidden_size=self.hidden_dim)
+            rnn_b = nn.GRUCell(
+                input_size=self.x_embedding_layer[-1] + self.t_embedding_layer[-1], hidden_size=self.hidden_dim)
+            return rnn , rnn_b
+        else:
+            rnn   = nn.GRU(
+                input_size=self.x_embedding_layer[-1] + self.t_embedding_layer[-1], hidden_size=self.hidden_dim)
+            rnn_b = nn.GRU(
+                input_size=self.x_embedding_layer[-1] + self.t_embedding_layer[-1], hidden_size=self.hidden_dim)
+            return rnn , rnn_b
 
     def create_inference_network(self):
         encoder = nn.Sequential(
-            nn.Linear(2* self.hidden_dim,self.encoder_layers[0]), nn.ReLU(),
-            nn.Linear(self.encoder_layers[0], self.encoder_layers[1]), nn.ReLU()
+            nn.Linear(2* self.hidden_dim,self.encoder_layers[-1]), nn.ReLU()#,
+            #nn.Linear(self.encoder_layers[0], self.encoder_layers[1]), nn.ReLU()
         )
-        inference_mu = nn.Linear(self.encoder_layers[1], self.latent_dim)
-        inference_logvar = nn.Linear(self.encoder_layers[1], self.latent_dim)
+        inference_mu = nn.Linear(self.encoder_layers[-1], self.latent_dim)
+        inference_logvar = nn.Linear(self.encoder_layers[-1], self.latent_dim)
         return encoder, inference_mu, inference_logvar
 
     def create_input_embedding_layer(self):
         x_module = nn.Sequential(
-            nn.Linear(self.marker_dim, self.x_embedding_layer[0]), nn.ReLU(),
+            nn.Linear(self.marker_dim, self.x_embedding_layer[0])#, nn.ReLU(),
             # Not sure whether to put Relu at the end of embedding layer
-            nn.Linear(self.x_embedding_layer[0],self.x_embedding_layer[1]), nn.ReLU()
+            #nn.Linear(self.x_embedding_layer[0],self.x_embedding_layer[1]), nn.ReLU()
         )
 
-        t_module = nn.Linear(2, self.t_embedding_layer[0])
+        t_module = nn.Sequential(
+            nn.Linear(2, self.t_embedding_layer[0]),
+            nn.ReLU(),
+            nn.Linear(self.t_embedding_layer[0], self.t_embedding_layer[0])
+        )
         return x_module, t_module
 
     def create_output_marker_layer(self):
         embed_module = nn.Sequential(
-            nn.Linear(self.hidden_dim + self.latent_dim, self.shared_output_layers[0]), nn.ReLU(),
-            nn.Linear(self.shared_output_layers[0], self.shared_output_layers[1]), nn.ReLU()
+            nn.Linear(self.hidden_dim + self.latent_dim, self.shared_output_layers[0])#, nn.ReLU(),
+            #nn.Linear(self.shared_output_layers[0], self.shared_output_layers[1]), nn.ReLU()
         )
 
         x_module_logvar = None
@@ -123,11 +135,11 @@ class hrmtpp(nn.Module):
     def create_output_time_layer(self):
 
         h_influence =  nn.Linear(self.shared_output_layers[-1], 1, bias=False)
-        time_influence = nn.Parameter(torch.ones(1, 1, 1))
+        time_influence = nn.Parameter(0.01*torch.ones(1, 1, 1))
         base_intensity =  nn.Parameter(torch.zeros(1, 1, 1))
         return h_influence, time_influence, base_intensity
 
-    def forward(self, x, t, mask=None):
+    def forward(self, x, t, anneal = 1., mask=None):
         """
             Input: 
                 x   : Tensor of shape TxBSxmarker_dim (if real)
@@ -164,36 +176,53 @@ class hrmtpp(nn.Module):
         # phi Tensor shape TxBS x (self.x_embedding_layer[-1] + self.t_embedding_layer[-1])
         _, _, phi = self.preprocess_input(x, t)
 
-        outs = []
-        h_t = torch.zeros(batch_size, self.hidden_dim).to(device)
-        outs.append(h_t[None, :, :])
-        for seq in range(seq_length):
-            h_t = self.forward_rnn_cell(phi[seq, :, :], h_t)
-            if mask is None:
-                outs.append(h_t[None, :, :])
-            else:
-                outs.append(h_t[None, :, :] * mask[seq,:][None,:,None])# 1xBSxhidden_dim * 1xBSx1 Broadcasting
 
-        h = torch.cat(outs, dim=0)  # shape = [T+1, batchsize, h]
+        if self.use_rnn_cell:
+            outs = []
+            h_t = torch.zeros(batch_size, self.hidden_dim).to(device)
+            outs.append(h_t[None, :, :])
+            for seq in range(seq_length):
+                h_t = self.forward_rnn_cell(phi[seq, :, :], h_t)
+                if mask is None:
+                    outs.append(h_t[None, :, :])
+                else:
+                    outs.append(h_t[None, :, :] * mask[seq,:][None,:,None])# 1xBSxhidden_dim * 1xBSx1 Broadcasting
 
-        phi_flipped = torch.flip(phi, [0])
-        if mask is not None:
-            mask_flipped = torch.flip(mask, [0])
-        reverse_outs = []
-        rh_t = torch.zeros(batch_size, self.hidden_dim).to(device)
-        reverse_outs.append(rh_t[None,:,:])
-        for seq in range(seq_length):
-            rh_t = self.backward_rnn_cell(phi_flipped[seq, :, :], rh_t)
-            if mask is None:
-                reverse_outs.append(rh_t[None, :, :])
-            else:
-                reverse_outs.append(rh_t[None, :, :] * mask_flipped[seq,:][None,:,None])# 1xBSxhidden_dim * 1xBSx1 Broadcasting
+            h = torch.cat(outs, dim=0)  # shape = [T+1, batchsize, h]
 
-        rh_flipped = torch.cat(reverse_outs, dim=0)  # shape = [T+1, batchsize, h]
-        rh = torch.flip(rh_flipped, [0])
+            phi_flipped = torch.flip(phi, [0])
+            if mask is not None:
+                mask_flipped = torch.flip(mask, [0])
+            reverse_outs = []
+            rh_t = torch.zeros(batch_size, self.hidden_dim).to(device)
+            reverse_outs.append(rh_t[None,:,:])
+            for seq in range(seq_length):
+                rh_t = self.backward_rnn_cell(phi_flipped[seq, :, :], rh_t)
+                if mask is None:
+                    reverse_outs.append(rh_t[None, :, :])
+                else:
+                    reverse_outs.append(rh_t[None, :, :] * mask_flipped[seq,:][None,:,None])# 1xBSxhidden_dim * 1xBSx1 Broadcasting
 
-        #Now for generation at time i we need h_{i-1}. For encoder network at time i, we need a_i in the reverse rnn
-        return h[:-1,:,:], rh[1:,:,:]
+            rh_flipped = torch.cat(reverse_outs, dim=0)  # shape = [T+1, batchsize, h]
+            rh = torch.flip(rh_flipped, [0])
+
+            #Now for generation at time i we need h_{i-1}. For encoder network at time i, we need a_i in the reverse rnn
+            return h[:-1,:,:], rh[1:,:,:]
+        else:
+            # Run RNN over the concatenated sequence [marker_seq_emb, time_seq_emb]
+            h_0 = torch.zeros(1, batch_size, self.hidden_dim).to(device)
+            hidden_seq, _ = self.forward_rnn_cell(phi, h_0)
+            h = torch.cat([h_0, hidden_seq], dim = 0)[:-1,:,:]
+
+            phi_flipped = torch.flip(phi, [0])
+            rh_0 = torch.zeros(1,batch_size, self.hidden_dim).to(device)
+            r_hidden_seq, _ = self.backward_rnn_cell(phi_flipped, rh_0)
+            rh_flipped = torch.cat([rh_0, r_hidden_seq], dim = 0)
+            rh = torch.flip(rh_flipped, [0])[1:,:,:]
+
+            return h, rh
+
+
 
     def preprocess_hidden_latent_state(self, h, z):
         """

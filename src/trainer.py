@@ -33,13 +33,16 @@ def train(model, epoch, data, optimizer, batch_size, val_data):
     start = time.time()
     model.train()
     train_loss = 0
-    train_losses_split = np.zeros(2)
+    train_losses_split = None#np.zeros(3)
     n_train, n_val = len(data['x'][0]), 1.
 
     optimizer.zero_grad()
     idxs = np.random.permutation(len(data['x']))
     for i in range(0, n_train, batch_size):
-        loss, out = model(data['x'][:,i:i+batch_size, :], data['t'][:,i:i+batch_size,:])
+        anneal = min(1., epoch*.001)
+        loss, out = model(data['x'][:,i:i+batch_size, :], data['t'][:,i:i+batch_size,:], anneal = anneal)
+        if train_losses_split is None:
+            train_losses_split = np.zeros(len(out))
         train_losses_split += np.array(out)
         loss.backward()
         train_loss += loss.item()
@@ -72,7 +75,7 @@ def trainer(model, data = None, val_data=None, lr= 1e-3, epoch = 500, batch_size
     return model
 
 if __name__ == "__main__":
-    model = rmtpp().to(device)
+    model = hrmtpp().to(device)
     data, _ = generate_mpp()
     val_data, _ = generate_mpp(num_sample = 150)
     #import pdb; pdb.set_trace()
