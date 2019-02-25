@@ -38,7 +38,7 @@ class rmtpp(nn.Module):
 
     """
 
-    def __init__(self, marker_type='real', marker_dim=20, hidden_dim=20, x_given_t=False, ):
+    def __init__(self, marker_type='real', marker_dim=20, hidden_dim=128, x_given_t=False, ):
         super().__init__()
         """
             Input:
@@ -53,19 +53,27 @@ class rmtpp(nn.Module):
         self.marker_dim = marker_dim
         self.hidden_dim = hidden_dim
         self.x_given_t = x_given_t
+        self.use_rnn_cell = False
         self.assert_input()
 
         self.sigma_min = 1e-2
 
         # Set up layer dimensions
-        self.x_embedding_layer = [64, 64]
-        self.t_embedding_layer = [16]
-        self.shared_output_layers = [64, 64]
+        self.x_embedding_layer = [64]
+        self.t_embedding_layer = [64]
+        self.shared_output_layers = [64]
 
         # setup layers
         self.embed_x, self.embed_time = self.create_input_embedding_layer()
-        self.rnn_cell = nn.GRUCell(
-            input_size=self.x_embedding_layer[-1] + self.t_embedding_layer[-1], hidden_size=self.hidden_dim)
+        if self.use_rnn_cell:
+            self.rnn_cell = nn.GRUCell(
+                input_size=self.x_embedding_layer[-1] + self.t_embedding_layer[-1], hidden_size=self.hidden_dim)
+        else:
+            self.rnn = nn.GRU(
+                input_size=self.x_embedding_layer[-1] + self.t_embedding_layer[-1],
+                hidden_size = self.hidden_dim
+                #nonlinearity='relu'
+            )
         # For tractivility of conditional intensity time module is a dic where forward needs to be defined
         self.embed_hidden_state, self.output_x_mu, self.output_x_logvar = self.create_output_marker_layer()
         self.h_influence, self.time_influence, self.base_intensity = self.create_output_time_layer()
@@ -79,21 +87,26 @@ class rmtpp(nn.Module):
 
     def create_input_embedding_layer(self):
         x_module = nn.Sequential(
-            nn.Linear(self.marker_dim, self.x_embedding_layer[0]), nn.ReLU(),
+            nn.Linear(self.marker_dim, self.x_embedding_layer[0])#, nn.ReLU(),
             # Not sure whether to put Relu at the end of embedding layer
-            nn.Linear(self.x_embedding_layer[0],
-                      self.x_embedding_layer[1]), nn.ReLU()
+            #nn.Linear(self.x_embedding_layer[0],
+            #          self.x_embedding_layer[1]), nn.ReLU()
         )
 
-        t_module = nn.Linear(2, self.t_embedding_layer[0])
+        #t_module = nn.Linear(2, self.t_embedding_layer[0])
+        t_module = nn.Sequential(
+            nn.Linear(2, self.t_embedding_layer[0]),
+            nn.ReLU(),
+            nn.Linear(self.t_embedding_layer[0], self.t_embedding_layer[0])
+        )
         return x_module, t_module
 
     def create_output_marker_layer(self):
         embed_module = nn.Sequential(
             nn.Linear(self.hidden_dim,
                       self.shared_output_layers[0]), nn.ReLU(),
-            nn.Linear(
-                self.shared_output_layers[0], self.shared_output_layers[1]), nn.ReLU()
+            #nn.Linear(
+            #    self.shared_output_layers[0], self.shared_output_layers[1]), nn.ReLU()
         )
 
         x_module_logvar = None
@@ -149,14 +162,20 @@ class rmtpp(nn.Module):
         # phi Tensor shape TxBS x (self.x_embedding_layer[-1] + self.t_embedding_layer[-1])
         _, _, phi = self.preprocess_input(x, t)
 
-        outs = []
-        h_t = torch.zeros(batch_size, self.hidden_dim).to(device)
-        outs.append(h_t[None, :, :])
-        for seq in range(seq_length):
-            h_t = self.rnn_cell(phi[seq, :, :], h_t)
-            outs.append(h_t[None, :, :])
+        if self.use_rnn_cell is False:
+            # Run RNN over the concatenated sequence [marker_seq_emb, time_seq_emb]
+            h_0 = torch.zeros(1, batch_size, self.hidden_dim).to(device)
+            hidden_seq, _ = self.rnn(phi, h_0)
+            h = torch.cat([h_0, hidden_seq], dim = 0)
 
-        h = torch.cat(outs, dim=0)  # shape = [T+1, batchsize, h]
+        else:
+            outs = []
+            h_t = torch.zeros(batch_size, self.hidden_dim).to(device)
+            outs.append(h_t[None, :, :])
+            for seq in range(seq_length):
+                h_t = self.rnn_cell(phi[seq, :, :], h_t)
+                outs.append(h_t[None, :, :])
+            h = torch.cat(outs, dim=0)  # shape = [T+1, batchsize, h]
         return h, self.preprocess_hidden_state(h)
 
     def preprocess_hidden_state(self, h):
@@ -283,9 +302,12 @@ class rmtpp(nn.Module):
             marker_out_logvar = None
         return marker_out_mu, marker_out_logvar
 
+        
+
 
 if __name__ == "__main__":
     model = rmtpp()
     data = generate_mpp()
     print(model(data['x'], data['t']))
+
 
