@@ -27,7 +27,7 @@ def hawkes(intensity_fn, time_step=100):
         while True:
             t = homo_poisson(intensity_max, t)
             u = random.random()
-            if u <= intensity_fn(t, history)/intensity_max and (t - history[-1])>1e-1:
+            if u <= intensity_fn(t, history)/intensity_max:# and (t - history[-1])>1e-1:
                 history.append(t)
                 break
     return history
@@ -65,7 +65,7 @@ def generate_hawkes(time_step, num_sample, num_clusters):
     
     return t
 
-def generate_autoregressive_data(time_step = 100, num_sample = 80, num_clusters=3, m=5, debug=False):
+def generate_autoregressive_data(time_step = 100, num_sample = 80, num_clusters=3, m=2, debug=False):
     def _alpha_n(interval_history, mu, gamma, mem_vec, m):
         """
             Input:
@@ -91,8 +91,8 @@ def generate_autoregressive_data(time_step = 100, num_sample = 80, num_clusters=
     # mem_vec = torch.rand(num_clusters, m)
     
     ## Fixed parameters
-    vals_base_mu = 1+torch.tensor([0.5, 0.9, 0.9])[:num_clusters]
-    vals_gamma = torch.tensor([0.75, 0.5, 0.25])[:num_clusters]
+    vals_base_mu = torch.tensor([0.5, 0.9, 0.9])[:num_clusters]
+    vals_gamma = torch.tensor([0.5, 0.5, 0.25])[:num_clusters]
     ### Make the first mem_vec as the one with equal probability
     ### Second one gives more weights to recent past
     ### Third one gives more weights to older events
