@@ -86,21 +86,21 @@ def generate_autoregressive_data(time_step = 100, num_sample = 80, num_clusters=
     ### for each cluster, we have different
     ### base_mu, gamma, and memory_vector
     # memory_vector is a probability vector
-    # vals_base_mu = torch.rand(num_clusters)
-    # vals_gamma = torch.rand(num_clusters)
-    # mem_vec = torch.rand(num_clusters, m)
+    vals_base_mu = torch.rand(num_clusters)
+    vals_gamma = torch.rand(num_clusters)
+    mem_vec = torch.rand(num_clusters, m)
     
     ## Fixed parameters
-    vals_base_mu = torch.tensor([0.5, 0.9, 0.9])[:num_clusters]
-    vals_gamma = torch.tensor([0.5, 0.5, 0.25])[:num_clusters]
-    ### Make the first mem_vec as the one with equal probability
-    ### Second one gives more weights to recent past
-    ### Third one gives more weights to older events
-    mem_vec = torch.tensor([
-                            [1 for _ in range(m)],
-                            [i for i in range(1,m+1)],
-                            [i for i in range(m, 0, -1)]], dtype=torch.float)
-    mem_vec = mem_vec[:num_clusters]
+    # vals_base_mu = torch.tensor([0.5, 0.9, 0.9])[:num_clusters]
+    # vals_gamma = torch.tensor([0.5, 0.5, 0.25])[:num_clusters]
+    # ### Make the first mem_vec as the one with equal probability
+    # ### Second one gives more weights to recent past
+    # ### Third one gives more weights to older events
+    # mem_vec = torch.tensor([
+    #                         [1 for _ in range(m)],
+    #                         [i for i in range(1,m+1)],
+    #                         [i for i in range(m, 0, -1)]], dtype=torch.float)
+    # mem_vec = mem_vec[:num_clusters]
 
     mem_vec /= mem_vec.sum(dim=-1, keepdim=True)
     
@@ -159,3 +159,25 @@ def plot_process(timeseries):
     intensities = [intensity_hawkes(t, history) for t in time]
     plt.plot(time, intensities)
     plt.scatter(history, np.zeros_like(history))
+
+def test_val_split(data, val_ratio=0.2):
+    """
+        Input:
+            data: dict with keys 'x' and 't'.
+            data['x']: Tensor of shape T x N x marker_dim
+            data['t']: Tensor of shape T x N x 2
+
+        Output:
+            train_split, val_split
+    """
+    _, N, _ = data['x'].shape
+    val_size = int(val_ratio * N)
+    
+    random_order = torch.randperm(N).to(device)
+    
+    train_split = {}
+    val_split = {}
+    for key, value in data.items():
+        train_split[key] = data[key][:,random_order[:N-val_size]]
+        val_split[key] = data[key][:,random_order[N-val_size:]]
+    return train_split, val_split
