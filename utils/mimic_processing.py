@@ -53,16 +53,26 @@ def get_raw_data(path):
     return patient_dic
 
 
+def preprocess_raw_data():
+    d = './../data/mimic3-benchmarks/data/root/'
+    subject_path = [os.path.join(d, o) for o in os.listdir(d) 
+                        if os.path.isdir(os.path.join(d,o))]
+    threshold = 3
+    valid_subject_list = [o for o in subject_path if valid_subject(o)>=threshold]
+    print(len(valid_subject_list), len(subject_path))
 
-d = './../data/mimic3-benchmarks/data/root/'
-subject_path = [os.path.join(d, o) for o in os.listdir(d) 
-                    if os.path.isdir(os.path.join(d,o))]
-threshold = 3
-valid_subject_list = [o for o in subject_path if valid_subject(o)>=threshold]
-print(len(valid_subject_list), len(subject_path))
+    raw_data = [get_raw_data(o) for o in valid_subject_list]
+    #print(raw_data[0])
+    with open(raw_file, 'wb') as handle:
+        pickle.dump(raw_data, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    return raw_data
 
-raw_data = [get_raw_data(o) for o in valid_subject_list]
-#print(raw_data[0])
-with open('./../data/mimic.pickle', 'wb') as handle:
-    pickle.dump(raw_data, handle, protocol=pickle.HIGHEST_PROTOCOL)
+raw_file = './../data/dump/mimic.pickle'
+if os.path.isfile(raw_file):
+    print("Dictionary Exists!")
+    with open(raw_file, 'rb') as handle:
+        data = pickle.load(handle)
+else:
+    data = preprocess_raw_data()
+print(len(data))
 
