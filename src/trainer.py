@@ -64,11 +64,11 @@ def train(model, epoch, data, optimizer, batch_size, val_data):
     print()
 
 
-def trainer(model, data = None, val_data=None, lr= 1e-3, epoch = 500, batch_size = 100):
+def trainer(model, data = None, val_data=None, lr= 1e-2, l2_reg=1e-2, epoch = 200, batch_size = 200):
     if data == None:
-        data, val_data = create_synthetic_data()
+        data, val_data = generate_mpp()
 
-    optimizer = Adam(model.parameters(), lr=lr)
+    optimizer = Adam(model.parameters(), lr=lr, weight_decay=l2_reg)
 
     for epoch_number in range(epoch):
         train(model, epoch_number, data, optimizer, batch_size, val_data)
