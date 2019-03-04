@@ -141,13 +141,13 @@ def generate_autoregressive_data(time_step = 100, num_sample = 80, num_clusters=
             }
         return t, info
 
-def generate_mpp(type='hawkes', time_step = 100, num_sample = 80, marker_dim = 20, num_clusters=3, seed = 1):
+def generate_mpp(type='hawkes', time_step = 100, num_sample = 80, marker_dim = 20, num_clusters=3, seed = 1, **kwargs):
     torch.manual_seed(seed)
     if type == 'hawkes':
-        t = generate_hawkes(time_step, num_sample, num_clusters).to(device)
+        t = generate_hawkes(time_step, num_sample, num_clusters, **kwargs).to(device)
         markers = torch.randn(time_step, num_sample, marker_dim).to(device)
     elif type == 'autoregressive':
-        t = generate_autoregressive_data(time_step, num_sample, num_clusters).to(device)
+        t = generate_autoregressive_data(time_step, num_sample, num_clusters, **kwargs).to(device)
         markers = torch.randn(time_step, num_sample*num_clusters, marker_dim).to(device)
 
     data = {'x': markers, 't': t}
