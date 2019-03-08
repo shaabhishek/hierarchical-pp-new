@@ -62,7 +62,8 @@ def compute_admit_times(data):
         patient_visit_n = len(patient_admit_times)
         patient_admit_times = np.pad(patient_admit_times, (0,max_visit_n-patient_visit_n), mode='constant')
         admit_times.append(patient_admit_times)
-    admit_times = np.stack(admit_times).T#[:,:,np.newaxis]
+    admit_times = np.stack(admit_times).T
+    admit_times = admit_times / admit_times.max()
     admit_times = torch.tensor(admit_times).float().to(device)
     intervals = get_intervals(admit_times)
     admit_times = torch.stack([admit_times, intervals], dim=-1)
