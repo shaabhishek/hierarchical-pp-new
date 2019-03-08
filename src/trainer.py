@@ -29,7 +29,7 @@ def create_synthetic_data(time_step = 10, num_sample = 1000, marker_dim = 20):
 
 
 
-def train(model, epoch, data, optimizer, batch_size, val_data):
+def train(model, epoch, data, optimizer, batch_size, val_data, train_mask, val_mask):
     start = time.time()
     model.train()
     train_loss = 0
@@ -40,7 +40,7 @@ def train(model, epoch, data, optimizer, batch_size, val_data):
     idxs = np.random.permutation(len(data['x']))
     for i in range(0, n_train, batch_size):
         anneal = min(1., epoch*.001)
-        loss, out = model(data['x'][:,i:i+batch_size, :], data['t'][:,i:i+batch_size,:], anneal = anneal)
+        loss, out = model(data['x'][:,i:i+batch_size, :], data['t'][:,i:i+batch_size,:], mask=train_mask[:,i:i+batch_size,:], anneal = anneal)
         if train_losses_split is None:
             train_losses_split = np.zeros(len(out))
         train_losses_split += np.array(out)
@@ -52,7 +52,7 @@ def train(model, epoch, data, optimizer, batch_size, val_data):
     if val_data is not None:
         n_val = len(val_data['x'])
         with torch.no_grad():
-            val_loss, val_out = model(val_data['x'], val_data['t'])
+            val_loss, val_out = model(val_data['x'], val_data['t'], mask=val_mask)
     # out = [i/n_train for i in out]
     train_losses_split /= n_train
     val_out = [i/n_val for i in val_out]
@@ -64,14 +64,14 @@ def train(model, epoch, data, optimizer, batch_size, val_data):
     print()
 
 
-def trainer(model, data = None, val_data=None, lr= 1e-2, l2_reg=1e-2, epoch = 200, batch_size = 200):
+def trainer(model, data = None, val_data=None, train_mask=None, val_mask=None, lr= 1e-2, l2_reg=1e-2, epoch = 200, batch_size = 128):
     if data == None:
         data, val_data = generate_mpp()
 
     optimizer = Adam(model.parameters(), lr=lr, weight_decay=l2_reg)
 
     for epoch_number in range(epoch):
-        train(model, epoch_number, data, optimizer, batch_size, val_data)
+        train(model, epoch_number, data, optimizer, batch_size, val_data, train_mask, val_mask)
     return model
 
 if __name__ == "__main__":
@@ -79,4 +79,5 @@ if __name__ == "__main__":
     data, _ = generate_mpp()
     val_data, _ = generate_mpp(num_sample = 150)
     #import pdb; pdb.set_trace()
-    trainer(model, data, val_data)
+    train_mask = val_mask = None
+    trainer(model, data=data, val_data=val_data, train_mask=train_mask, val_mask=val_mask)

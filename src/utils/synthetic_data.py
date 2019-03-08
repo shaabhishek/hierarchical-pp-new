@@ -160,17 +160,18 @@ def plot_process(timeseries):
     plt.plot(time, intensities)
     plt.scatter(history, np.zeros_like(history))
 
-def test_val_split(data, val_ratio=0.2):
+def test_val_split(data, mask=None, val_ratio=0.2):
     """
         Input:
             data: dict with keys 'x' and 't'.
             data['x']: Tensor of shape T x N x marker_dim
             data['t']: Tensor of shape T x N x 2
-
+            mask: Tensor of shape T x N x 1
         Output:
-            train_split, val_split
+            train_split, val_split, train_mask, val_mask
     """
     _, N, _ = data['x'].shape
+    train_mask, val_mask = None, None
     val_size = int(val_ratio * N)
     
     random_order = torch.randperm(N).to(device)
@@ -180,4 +181,8 @@ def test_val_split(data, val_ratio=0.2):
     for key, value in data.items():
         train_split[key] = data[key][:,random_order[:N-val_size]]
         val_split[key] = data[key][:,random_order[N-val_size:]]
-    return train_split, val_split
+
+    if mask is not None:
+        train_mask = mask[:,random_order[:N-val_size]]
+        val_mask = mask[:,random_order[N-val_size:]]
+    return train_split, val_split, train_mask, val_mask
