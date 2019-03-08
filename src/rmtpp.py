@@ -11,6 +11,8 @@ from torch.distributions.kl import kl_divergence
 from torch.optim import Adam
 import matplotlib.pyplot as plt
 from utils.synthetic_data import generate_mpp
+from utils.mimic_data_tensors import mimic_data_tensors
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 DEBUG = False
@@ -214,6 +216,7 @@ class rmtpp(nn.Module):
 
         """
 
+        import pdb; pdb.set_trace()
         # Tensor of shape (T+1)xBSxself.shared_output_layers[-1]
         _, hidden_states = self.run_forward_rnn(x, t)
 
@@ -307,7 +310,8 @@ class rmtpp(nn.Module):
 
 if __name__ == "__main__":
     model = rmtpp()
-    data = generate_mpp()
+    # data = generate_mpp()
+    data = mimic_data_tensors()
     print(model(data['x'], data['t']))
 
 
