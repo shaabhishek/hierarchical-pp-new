@@ -95,7 +95,7 @@ def compute_markers(data):
         markers.append(patient_markers)
     # Shape = T x N x marker_dim
     markers = np.stack(markers).transpose((1,0,2))
-    markers = torch.tensor(markers).to(device)
+    markers = torch.tensor(markers).float().to(device)
     return markers
 
 def mimic_data_tensors(data=None):
