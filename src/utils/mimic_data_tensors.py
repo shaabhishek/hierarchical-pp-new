@@ -4,7 +4,7 @@ import pickle
 import pandas
 import numpy as np
 
-from synthetic_data import get_intervals
+from utils.synthetic_data import get_intervals
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -63,7 +63,7 @@ def compute_admit_times(data):
         patient_admit_times = np.pad(patient_admit_times, (0,max_visit_n-patient_visit_n), mode='constant')
         admit_times.append(patient_admit_times)
     admit_times = np.stack(admit_times).T#[:,:,np.newaxis]
-    admit_times = torch.tensor(admit_times).to(device)
+    admit_times = torch.tensor(admit_times).float().to(device)
     intervals = get_intervals(admit_times)
     admit_times = torch.stack([admit_times, intervals], dim=-1)
     return admit_times
@@ -89,7 +89,7 @@ def compute_markers(data):
         markers.append(patient_markers)
     # Shape = T x N x marker_dim
     markers = np.stack(markers).transpose((1,0,2))
-    markers = torch.tensor(markers)
+    markers = torch.tensor(markers).float().to(device)
     return markers
 
 def mimic_data_tensors(data=None):
