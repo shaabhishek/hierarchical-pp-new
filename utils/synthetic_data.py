@@ -32,16 +32,16 @@ def hawkes(intensity_fn, time_step=100):
                 break
     return history
 
-def get_intervals(timeseries, dim=0):
+def get_intervals(timeseries, time_dim=0):
     """
-        dim: axis of time
+        time_dim: axis of time
     """
-    if dim != 0:
-        timeseries = timeseries.transpose(0,dim)
+    if time_dim != 0:
+        timeseries = timeseries.transpose(0,time_dim)
     shifted = torch.cat([torch.zeros_like(timeseries[0:1]), timeseries[:-1]], dim=0)
     intervals = timeseries - shifted
-    if dim != 0:
-        intevals = intevals.transpose(0,dim)
+    if time_dim != 0:
+        intevals = intevals.transpose(0,time_dim)
     return intervals
 
 def generate_hawkes(time_step, num_sample, num_clusters):
