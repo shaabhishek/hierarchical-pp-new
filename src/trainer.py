@@ -11,7 +11,7 @@ from torch.distributions.kl import kl_divergence
 from torch.optim import Adam
 from rmtpp import rmtpp
 from hrmtpp import hrmtpp
-from utils_ import generate_mpp
+from utils.synthetic_data import generate_mpp
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
