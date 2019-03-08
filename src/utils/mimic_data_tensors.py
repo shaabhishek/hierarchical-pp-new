@@ -36,10 +36,15 @@ def mimic_data_to_df(data, colnames=None):
     flat_data = [icu_visit for data_i in data for icu_visit in data_i.values()]
     icu_df = pandas.DataFrame(flat_data)
     icu_df = mimic_correct_datatypes(icu_df)
+    # Make gender a 0/1 variable
     icu_df['GENDER'] = icu_df['GENDER'].apply(gender_to_categorical)
     
+    # Make ETHNICITY a one-hot feature set, removing the first column to ensure there is no linear dependence
     ethnicity_dummies = pandas.get_dummies(icu_df.ETHNICITY, drop_first=True, prefix='ETHNICITY_')
     icu_df = pandas.concat([icu_df.drop('ETHNICITY', axis=1), ethnicity_dummies], axis=1)
+    
+    # Center the AGE column
+    icu_df['AGE'] = (icu_df.AGE - icu_df.AGE.mean()) / icu_df.AGE.std()
     
     if colnames is None:
         return icu_df
@@ -63,7 +68,7 @@ def compute_admit_times(data):
         patient_admit_times = np.pad(patient_admit_times, (0,max_visit_n-patient_visit_n), mode='constant')
         admit_times.append(patient_admit_times)
     admit_times = np.stack(admit_times).T
-    admit_times = admit_times / admit_times.max()
+    admit_times = (admit_times - admit_times.min()) / (admit_times.max() - admit_times.min())
     admit_times = torch.tensor(admit_times).float().to(device)
     intervals = get_intervals(admit_times)
     admit_times = torch.stack([admit_times, intervals], dim=-1)
@@ -83,14 +88,14 @@ def compute_markers(data):
     group_patients = icu_df.groupby('SUBJECT_ID', )
     for patient_idx, patient_df_rows in group_patients.groups.items():
         # Get an array of shape  (T_i x marker_dim)
-        patient_markers = icu_df.iloc[patient_df_rows].values
+        patient_markers = icu_df.iloc[patient_df_rows].drop('SUBJECT_ID', axis=1).values
         t_i, marker_dim = patient_markers.shape
         # Get an array of shape  (T_max x marker_dim)
         patient_markers = np.pad(patient_markers, pad_width=((0,max_visit_n - t_i), (0,0)), mode='constant')
         markers.append(patient_markers)
     # Shape = T x N x marker_dim
     markers = np.stack(markers).transpose((1,0,2))
-    markers = torch.tensor(markers).float().to(device)
+    markers = torch.tensor(markers)
     return markers
 
 def mimic_data_tensors(data=None):
