@@ -10,7 +10,7 @@ from torch.distributions.normal import Normal
 from torch.distributions.kl import kl_divergence
 from torch.optim import Adam
 import matplotlib.pyplot as plt
-from utils_ import generate_mpp
+from utils.synthetic_data import generate_mpp
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 DEBUG = False
