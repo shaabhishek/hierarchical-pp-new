@@ -59,7 +59,7 @@ def generate_hawkes(time_step, num_sample, num_clusters):
         history[sample_idx] = timeseries
 
     history = torch.tensor(history).transpose(0,1)[1:]
-    intervals = get_intervals(history, dim=0)
+    intervals = get_intervals(history, time_dim=0)
     # intervals = intervals.clamp(0.1, 2.5)
     t = torch.stack([history, intervals], dim=2)
     
