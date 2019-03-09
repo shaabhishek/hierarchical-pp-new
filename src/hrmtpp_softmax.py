@@ -26,10 +26,28 @@ def one_hot_encoding(y, n_dims=None):
     y_one_hot = y_one_hot.view(*y.shape, -1)
     return Variable(y_one_hot) if isinstance(y, Variable) else y_one_hot
 
+def sample_gumbel(shape, eps=1e-20):
+    U = torch.rand(shape)
+    return -torch.log(-torch.log(U + eps) + eps)
 
-class hrmtpp_exact(nn.Module):
+
+def gumbel_softmax_sample(logits, temperature):
+    y = logits + sample_gumbel(logits.size())
+    return F.softmax(y / temperature, dim=-1)
+
+
+def gumbel_softmax(logits, temperature):
     """
-        Implementation of Proposed Hierarchichal Recurrent Marked Temporal Point Processes- Discrete latent Variable
+    ST-gumple-softmax
+    input: [*, n_class]
+    return: flatten --> [*, n_class] an one-hot vector
+    """
+    return gumbel_softmax_sample(logits, temperature)
+
+
+class hrmtpp_softmax(nn.Module):
+    """
+        Implementation of Proposed Discrete Hierarchichal Recurrent Marked Temporal Point Processes with Gumbel softmax Trick
         ToDo:
             1. Mask verify
             2. for categorical, x is TxBSx1. create embedding layer with one hot vector.
@@ -37,7 +55,7 @@ class hrmtpp_exact(nn.Module):
 
     """
 
-    def __init__(self, marker_type='real', marker_dim=20, n_cluster = 5,  latent_dim = 20, hidden_dim=128, x_given_t=False ):
+    def __init__(self, marker_type='real', marker_dim=20, n_cluster =5,  latent_dim = 20, hidden_dim=128, x_given_t=False ):
         super().__init__()
         """
             Input:
@@ -66,7 +84,6 @@ class hrmtpp_exact(nn.Module):
         self.shared_output_layers = [64]
         self.encoder_layers = [64, 64]
 
-        self.cluster_params = nn.Parameter(torch.randn(self.n_cluster, self.latent_dim ))#CxLD
 
         # setup layers
         self.embed_x, self.embed_time = self.create_input_embedding_layer()
@@ -78,6 +95,9 @@ class hrmtpp_exact(nn.Module):
     def assert_input(self):
         assert self.marker_type in {
             'real', 'categorical', 'binary'}, "Unknown Input type provided!"
+        if self.marker_type == 'binary' and marker_dim != 2:
+            self.marker_dim = 2
+            print("Setting marker dimension to 2 for binary input!")
 
     def create_rnn_network(self):
         if self.use_rnn_cell:
@@ -95,7 +115,8 @@ class hrmtpp_exact(nn.Module):
 
     def create_inference_network(self):
         encoder = nn.Sequential(
-            nn.Linear(2* self.hidden_dim,self.encoder_layers[-1]), nn.ReLU()#,
+            nn.Linear(2* self.hidden_dim,self.encoder_layers[-1]), nn.ReLU(),
+            nn.Linear(self.encoder_layers[-1], self.n_cluster)
             #nn.Linear(self.encoder_layers[0], self.encoder_layers[1]), nn.ReLU()
         )
         inference_mu = nn.Linear(self.encoder_layers[-1], self.latent_dim)
@@ -135,11 +156,11 @@ class hrmtpp_exact(nn.Module):
     def create_output_time_layer(self):
 
         h_influence =  nn.Linear(self.shared_output_layers[-1], 1, bias=False)
-        time_influence = nn.Parameter(0.01*torch.ones(1, 1, 1,1))
-        base_intensity =  nn.Parameter(torch.zeros(1, 1, 1, 1))
+        time_influence = nn.Parameter(0.01*torch.ones(1, 1, 1))
+        base_intensity =  nn.Parameter(torch.zeros(1, 1, 1))
         return h_influence, time_influence, base_intensity
 
-    def forward(self, x, t, anneal = 1., mask=None):
+    def forward(self, x, t, anneal = 1., temp =1., mask=None):
         """
             Input: 
                 x   : Tensor of shape TxBSxmarker_dim (if real)
@@ -151,14 +172,14 @@ class hrmtpp_exact(nn.Module):
                 loss : Tensor scalar
         """
         #TxBS and TxBS
-        time_log_likelihood, marker_log_likelihood = self._forward(x, t, mask)
+        time_log_likelihood, marker_log_likelihood, kl_loss = self._forward(x, t, temp, mask)
 
         if DEBUG:
-            print("Losses:", -time_log_likelihood.sum().item(),  -marker_log_likelihood.sum().item())
+            print("Losses:", -time_log_likelihood.sum().item(),  -marker_log_likelihood.sum().item(), kl_loss.sum().item())
         loss =  -1.* (time_log_likelihood + marker_log_likelihood)
         if mask is not None:
             loss = loss * mask
-        return loss.sum(), [-marker_log_likelihood.sum().item(), -time_log_likelihood.sum().item()]
+        return loss.sum()+ kl_loss.sum(), [-marker_log_likelihood.sum().item(), -time_log_likelihood.sum().item(), kl_loss.sum().item()]
 
     def run_forward_backward_rnn(self, x, t, mask):
         """
@@ -190,37 +211,55 @@ class hrmtpp_exact(nn.Module):
 
             h = torch.cat(outs, dim=0)  # shape = [T+1, batchsize, h]
 
+            phi_flipped = torch.flip(phi, [0])
+            if mask is not None:
+                mask_flipped = torch.flip(mask, [0])
+            reverse_outs = []
+            rh_t = torch.zeros(batch_size, self.hidden_dim).to(device)
+            reverse_outs.append(rh_t[None,:,:])
+            for seq in range(seq_length):
+                rh_t = self.backward_rnn_cell(phi_flipped[seq, :, :], rh_t)
+                if mask is None:
+                    reverse_outs.append(rh_t[None, :, :])
+                else:
+                    reverse_outs.append(rh_t[None, :, :] * mask_flipped[seq,:][None,:,None])# 1xBSxhidden_dim * 1xBSx1 Broadcasting
+
+            rh_flipped = torch.cat(reverse_outs, dim=0)  # shape = [T+1, batchsize, h]
+            rh = torch.flip(rh_flipped, [0])
+
             #Now for generation at time i we need h_{i-1}. For encoder network at time i, we need a_i in the reverse rnn
-            return h[:-1,:,:]
+            return h[:-1,:,:], rh[1:,:,:]
         else:
             # Run RNN over the concatenated sequence [marker_seq_emb, time_seq_emb]
             h_0 = torch.zeros(1, batch_size, self.hidden_dim).to(device)
             hidden_seq, _ = self.forward_rnn_cell(phi, h_0)
             h = torch.cat([h_0, hidden_seq], dim = 0)[:-1,:,:]
 
-            return h
+            phi_flipped = torch.flip(phi, [0])
+            rh_0 = torch.zeros(1,batch_size, self.hidden_dim).to(device)
+            r_hidden_seq, _ = self.backward_rnn_cell(phi_flipped, rh_0)
+            rh_flipped = torch.cat([rh_0, r_hidden_seq], dim = 0)
+            rh = torch.flip(rh_flipped, [0])[1:,:,:]
+
+            return h, rh
 
 
 
-    def preprocess_hidden_latent_state(self, h):
+    def preprocess_hidden_latent_state(self, h, z):
         """
             Input:
                 h : (T)xBSxhidden_dim
                 z : 1xBSxlatent_dim
-                cluster_params : CxD
+
             output:
                 out: TxBSxshared_output_layers[-1]
         """
-        T, bs, k = h.size(0), h.size(1), self.cluster_params.size(0)
-        repeat_vals = (T, bs, -1, -1)
-        h =h[:,:,None, :]
-        repeat_h = (-1,-1, k, -1)
-        z = self.cluster_params
-        z_broadcast = z.expand(*repeat_vals)#TxBSxCxlatent_dim
-        h = h.expand(*repeat_h) #TxBSxCxhidden_dim
+        T = h.size(0)
+        repeat_vals = (T, -1, -1)
+        z_broadcast = z.expand(*repeat_vals)
 
-        hz = torch.cat([h, z_broadcast], dim = -1) # TxBSxCx(latent_dim+hidden_dim)
-        return self.embed_hidden_state(hz)#TxBSxCx self.shared_output_layers[0]
+        hz = torch.cat([h, z_broadcast], dim = -1)
+        return self.embed_hidden_state(hz)
 
     def preprocess_input(self, x, t):
         """
@@ -235,7 +274,7 @@ class hrmtpp_exact(nn.Module):
                 phi_t : Tensor of shape TxBSx self.t_embedding_layer[-1]
                 phi   : Tensor of shape TxBS x (self.x_embedding_layer[-1] + self.t_embedding_layer[-1])
         """
-        if self.marker_type == 'real':
+        if self.marker_type != 'real':
             # Shape TxBSxmarker_dim
             x = one_hot_encoding(x[:, :, 0], self.marker_dim)
         phi_x = self.embed_x(x)
@@ -252,21 +291,19 @@ class hrmtpp_exact(nn.Module):
                 h : Tensor of shape (T)xBSxhidden_dim
                 h_b : Tensor of shape (T)xBSxhidden_dim
             output:
-                mu : TxBSxlatent_dim
-                log_var: TxBSxlatent_dim
+                logits : TxBSxcategorical_dim
+                
 
         """
-        hiddenlayer = self.inference_net(torch.cat([hs, back_hs], -1))
-        mu = self.inference_mu(hiddenlayer)
-        logvar = torch.clamp(self.inference_logvar(hiddenlayer), min = self.logvar_min)
-        return mu, logvar
+        logits = self.inference_net(torch.cat([hs, back_hs], -1))
+        return logits
 
     def reparameterize(self, mu, logvar):
         epsilon = torch.randn_like(mu)
         sigma = torch.exp(0.5 * logvar)
         return mu + epsilon.mul(sigma)
 
-    def _forward(self, x, t, mask):
+    def _forward(self, x, t, temp, mask):
         """
             Input: 
                 x   : Tensor of shape TxBSxmarker_dim (if real)
@@ -279,37 +316,24 @@ class hrmtpp_exact(nn.Module):
         """
 
         # Tensor of shape (T)xBSxhidden_dim
-        hs = self.run_forward_backward_rnn(x, t, mask)        
-        hz_embedded = self.preprocess_hidden_latent_state(hs) #hs : TxBSxH  , hz_embedded #TxBSxCx self.shared_output_layers[0]
-        time_log_likelihood = self.compute_point_log_likelihood(hz_embedded,  t) # TxBSxC
+        hs, back_hs = self.run_forward_backward_rnn(x, t, mask)
 
+        logits = self.encoder(hs, back_hs) #TxBSxcategorical_dim
+        z = gumbel_softmax(logits, temp)#TxBSxcategorical_dim
+
+        hz_embedded = self.preprocess_hidden_latent_state(hs, z)
+        time_log_likelihood = self.compute_point_log_likelihood(hz_embedded,  t)
         # marker generation layer. Ideally it should include time gap also.
-        # Tensor of shape TxBSx Cx marker_dim
+        # Tensor of shape TxBSx marker_dim
         marker_out_mu, marker_out_logvar = self.generate_marker(hz_embedded,  t)
         marker_log_likelihood = self.compute_marker_log_likelihood(x, marker_out_mu, marker_out_logvar)
-        
-        cluster_log_likelihood = marker_log_likelihood.sum(dim =-1) + time_log_likelihood #TxBSxC
-        prior = torch.ones(1,1,self.n_cluster) * (1./self.n_cluster)
-        prior_log = prior.log()
-        log_likelihood = cluster_log_likelihood+ prior_log #TxBSxC
-        posterior = self.posteror(log_likelihood)#TxBSxC
-
-        average_time_log_likelihood = torch.sum( time_log_likelihood*posterior[:,:,:,None], dim = [-1,-2])
-        average_marker_log_likelihood = torch.sum( marker_log_likelihood*posterior[:,:,:,None], dim = [-1,-2])#TxBS
 
 
-        return average_time_log_likelihood, average_marker_log_likelihood  # TxBS and TxBS
-    
-    def posterior(self, log_likelihood):
-        """
-            input:
-                log_likelihood: T x BS x C
-            output:
-                posterior_dist: T x BS x C
-        """
-        m = nn.Softmax(dim = -1)
-        return m(log_likelihood)
+        #KL divergence Loss
+        log_ratio = torch.log(logits * self.n_cluster + 1e-20)#TxBSxC
+        KLD = torch.sum(logits * log_ratio, dim=-1)#TxBS
 
+        return time_log_likelihood, marker_log_likelihood, kld_loss  # TxBS and TxBS
 
     def compute_marker_log_likelihood(self, x, mu, logvar):
         """
@@ -338,21 +362,20 @@ class hrmtpp_exact(nn.Module):
     def compute_point_log_likelihood(self, h, t):
         """
             Input:
-                h : Tensor of shape TxBSxCx self.shared_output_layers[-1]
+                h : Tensor of shape TxBSxself.shared_output_layers[-1]
                 t : Tensor of shape TxBSx2 [i,:,0] represents actual time at timestep i ,\
                     [i,:,1] represents time gap d_i = t_i- t_{i-1}
             Output:
-                log_f_t : tensor of shape TxBSxC
+                log_f_t : tensor of shape TxBS
 
         """
-        d_js = t[:, :, 1][:, :,None,  None]  # Shape TxBSx1x1 Time differences
+        d_js = t[:, :, 1][:, :, None]  # Shape TxBSx1 Time differences
 
+        past_influence = self.h_influence(h)  # TxBSx1
 
-        past_influence = self.h_influence(h)  # TxBSxCx1
-
-        # TxBSx1x1
+        # TxBSx1
         current_influence = self.time_influence * d_js
-        base_intensity = self.base_intensity  # 1x1x1x1
+        base_intensity = self.base_intensity  # 1x1x1
 
         term1 = past_influence + current_influence + base_intensity
         term2 = (past_influence + base_intensity).exp()
@@ -360,33 +383,30 @@ class hrmtpp_exact(nn.Module):
 
         log_f_t = term1 + \
             (1./self.time_influence) * (term2-term3)
-        return log_f_t[:, :, :,  0]  # TxBSxC
+        return log_f_t[:, :, 0]  # TxBS
 
     def generate_marker(self, h, t):
         """
             Input:
-                h : Tensor of shape (T)xBSxCx self.shared_output_layers[-1]
+                h : Tensor of shape (T)xBSxself.shared_output_layers[-1]
                 t : Tensor of shape TxBSx2 [i,:,0] represents actual time at timestep i ,\
                     [i,:,1] represents time gap d_i = t_i- t_{i-1}
             Output:
-                marker_out_mu : Tensor of shape T x BS x C x marker_dim
-                marker_out_logvar : Tensor of shape T x BS x C x marker_dim #None in case of non real marker
+                marker_out_mu : Tensor of shape T x BS x marker_dim
+                marker_out_logvar : Tensor of shape T x BS x marker_dim #None in case of non real marker
         """
         h_trimmed = h
-        K_cluster = h.size(2)
         if self.x_given_t:
-            d_js = t[:, :, 1][:, :, None, None]  # Shape TxBSx1x1 Time differences
-            repeat_vals = (-1,-1,K_cluster, -1)
-            d_js = d_js.expand(*repeat_vals)
+            d_js = t[:, :, 1][:, :, None]  # Shape TxBSx1 Time differences
             h_trimmed = torch.cat([h_trimmed, d_js], -1)
-        marker_out_mu = self.output_x_mu(h_trimmed)#TxBSxCx marker_dim
+        marker_out_mu = self.output_x_mu(h_trimmed)
 
         if self.marker_type == 'real':
-            marker_out_logvar = torch.clamp(self.output_x_logvar(h_trimmed), min = self.logvar_min) #TxBSxCx marker_dim
+            marker_out_logvar = torch.clamp(self.output_x_logvar(h_trimmed), min = self.logvar_min)
         else:
             marker_out_logvar = None
         return marker_out_mu, marker_out_logvar
 
 
 if __name__ == "__main__":
-    model = hrmtpp_exact()
+    model = hrmtpp()
