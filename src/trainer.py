@@ -40,7 +40,10 @@ def train(model, epoch, data, optimizer, batch_size, val_data, train_mask, val_m
     idxs = np.random.permutation(len(data['x']))
     for i in range(0, n_train, batch_size):
         anneal = min(1., epoch*.001)
-        loss, out = model(data['x'][:,i:i+batch_size, :], data['t'][:,i:i+batch_size,:], mask=train_mask[:,i:i+batch_size,:], anneal = anneal)
+        if train_mask is not None:
+            loss, out = model(data['x'][:,i:i+batch_size, :], data['t'][:,i:i+batch_size,:], mask=train_mask[:,i:i+batch_size,:], anneal = anneal)
+        else:
+            loss, out = model(data['x'][:,i:i+batch_size, :], data['t'][:,i:i+batch_size,:], mask=None, anneal = anneal)
         if train_losses_split is None:
             train_losses_split = np.zeros(len(out))
         train_losses_split += np.array(out)

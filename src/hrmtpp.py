@@ -75,9 +75,6 @@ class hrmtpp(nn.Module):
     def assert_input(self):
         assert self.marker_type in {
             'real', 'categorical', 'binary'}, "Unknown Input type provided!"
-        if self.marker_type == 'binary' and marker_dim != 2:
-            self.marker_dim = 2
-            print("Setting marker dimension to 2 for binary input!")
 
     def create_rnn_network(self):
         if self.use_rnn_cell:
@@ -253,7 +250,7 @@ class hrmtpp(nn.Module):
                 phi_t : Tensor of shape TxBSx self.t_embedding_layer[-1]
                 phi   : Tensor of shape TxBS x (self.x_embedding_layer[-1] + self.t_embedding_layer[-1])
         """
-        if self.marker_type != 'real':
+        if self.marker_type == 'categorical':
             # Shape TxBSxmarker_dim
             x = one_hot_encoding(x[:, :, 0], self.marker_dim)
         phi_x = self.embed_x(x)
@@ -333,11 +330,16 @@ class hrmtpp(nn.Module):
             return ll_loss
         else:
             seq_lengths, batch_size = x.size(0), x.size(1)
-            mu_ = mu.view(-1, self.marker_dim)  # T*BS x marker_dim
-            x_ = x.view(-1)  # (T*BS,)
-            loss = F.cross_entropy(mu_, x_, reduction='none').view(
-                seq_lengths, batch_size)
+            
+            if  self.marker_type == 'categorical':
+                mu_ = mu.view(-1, self.marker_dim)  # T*BS x marker_dim
+                x_ = x.view(-1)  # (T*BS,)
+                loss = F.cross_entropy(mu_, x_, reduction='none').view(
+                    seq_lengths, batch_size)
+            else:#binary
+                loss = F.binary_cross_entropy_with_logits(mu, x, reduction= 'None').sum(dim =-1)#TxBS
             return -loss
+
 
     def compute_point_log_likelihood(self, h, t):
         """
