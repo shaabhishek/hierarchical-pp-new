@@ -11,6 +11,10 @@ from torch.distributions.kl import kl_divergence
 from torch.optim import Adam
 from rmtpp import rmtpp
 from hrmtpp import hrmtpp
+from hrmtpp_exact import hrmtpp_exact
+from hrmtpp_softmax import hrmtpp_softmax
+from storn import storn
+from h_storn_softmax import h_storn_softmax
 from utils.synthetic_data import generate_mpp
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -67,7 +71,7 @@ def train(model, epoch, data, optimizer, batch_size, val_data, train_mask, val_m
     print()
 
 
-def trainer(model, data = None, val_data=None, train_mask=None, val_mask=None, lr= 1e-2, l2_reg=1e-2, epoch = 200, batch_size = 128):
+def trainer(model, data = None, val_data=None, train_mask=None, val_mask=None, lr= 1e-3, l2_reg=1e-2, epoch = 200, batch_size = 128):
     if data == None:
         data, val_data = generate_mpp()
 
@@ -78,7 +82,7 @@ def trainer(model, data = None, val_data=None, train_mask=None, val_mask=None, l
     return model
 
 if __name__ == "__main__":
-    model = hrmtpp().to(device)
+    model = h_storn_softmax(marker_type= 'binary').to(device)
     data, _ = generate_mpp()
     val_data, _ = generate_mpp(num_sample = 150)
     #import pdb; pdb.set_trace()

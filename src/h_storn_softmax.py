@@ -34,19 +34,20 @@ def gumbel_softmax(logits, temperature):
     return gumbel_softmax_sample(logits, temperature)
 
 
+
 def one_hot_encoding(y, n_dims=None):
     # Implement
     """ Take integer y (tensor or variable) with n dims and convert it to 1-hot representation with n+1 dims. """
-    y_tensor = y.data if isinstance(y, Variable) else y
+    y_tensor = y
     y_tensor = y_tensor.type(torch.LongTensor).view(-1, 1)
     n_dims = n_dims if n_dims is not None else int(torch.max(y_tensor)) + 1
     y_one_hot = torch.zeros(
         y_tensor.size()[0], n_dims).scatter_(1, y_tensor, 1)
     y_one_hot = y_one_hot.view(*y.shape, -1)
-    return Variable(y_one_hot) if isinstance(y, Variable) else y_one_hot
+    return y_one_hot
 
 
-class hstorn_softmax(nn.Module):
+class h_storn_softmax(nn.Module):
     """
         Implementation of Proposed Hierarchichal Recurrent Marked Temporal Point Processes
         ToDo:
@@ -93,7 +94,7 @@ class hstorn_softmax(nn.Module):
         self.h_influence, self.time_influence, self.base_intensity = self.create_output_time_layer()
 
         # Hierarchichal Layer
-        self.clsuter_rnn, self.inference_cluster, self.clsuter_decoder, self.output_z_mu, self.output_z_logvar = self.create_cluster_layer()
+        self.cluster_rnn, self.inference_cluster, self.cluster_decoder, self.output_z_mu, self.output_z_logvar = self.create_cluster_layer()
 
     def create_cluster_layer(self):
         cluster_encoder = nn.GRU(
@@ -110,9 +111,6 @@ class hstorn_softmax(nn.Module):
     def assert_input(self):
         assert self.marker_type in {
             'real', 'categorical', 'binary'}, "Unknown Input type provided!"
-        if self.marker_type == 'binary' and marker_dim != 2:
-            self.marker_dim = 2
-            print("Setting marker dimension to 2 for binary input!")
 
     def create_rnn_network(self):
         if self.use_rnn_cell:
@@ -247,13 +245,13 @@ class hstorn_softmax(nn.Module):
             # Run RNN over the concatenated sequence [marker_seq_emb, time_seq_emb]
             h_0 = torch.zeros(1, batch_size, self.hidden_dim).to(device)
             hidden_seq, _ = self.forward_rnn_cell(phi, h_0)
-            h = torch.cat([h_0, hidden_seq], dim=0)[:-1, :, :]
+            h = torch.cat([h_0, hidden_seq], dim=0)
 
             rh_0 = torch.zeros(1, batch_size, self.hidden_dim).to(device)
             r_hidden_seq, _ = self.backward_rnn_cell(phi, rh_0)
             rh = torch.cat([rh_0, r_hidden_seq], dim=0)
 
-            return h, rh, phi
+            return h[:-1, :, :], rh[1:, :, :], phi
 
     def preprocess_hidden_latent_state(self, h, z):
         """
@@ -280,7 +278,7 @@ class hstorn_softmax(nn.Module):
                 phi_t : Tensor of shape TxBSx self.t_embedding_layer[-1]
                 phi   : Tensor of shape TxBS x (self.x_embedding_layer[-1] + self.t_embedding_layer[-1])
         """
-        if self.marker_type != 'real':
+        if self.marker_type == 'categorical':
             # Shape TxBSxmarker_dim
             x = one_hot_encoding(x[:, :, 0], self.marker_dim)
         phi_x = self.embed_x(x)
@@ -314,8 +312,8 @@ class hstorn_softmax(nn.Module):
 
     def encoder_cluster_layer (self, z):#z dim is TxBSxlatent_dim
         batch_size = z.size(1)
-        h_0 = torch.zeros(1, batch_size, self.latent_dim).to(device)
-        hidden_seq, h = self.clsuter_rnn(z, h_0)#h is 2xBSxlatent_dim
+        h_0 = torch.zeros(2, batch_size, self.latent_dim).to(device)
+        hidden_seq, h = self.cluster_rnn(z, h_0)#h is 2xBSxlatent_dim
         h = torch.cat ([h[0,:,:],h[1,:,:]], dim =-1) #BSx 2latent_dim
 
         y = self.inference_cluster(h) # BSx K
@@ -328,7 +326,7 @@ class hstorn_softmax(nn.Module):
             y: BSxC
         """
         T = z.size(0)
-        hidden_state = self.inference_cluster(z[None,:,:]) #1xBSx100
+        hidden_state = self.cluster_decoder(y[None,:,:]) #1xBSx100
         repeat_vals = (T, -1,-1)
         hidden_state = hidden_state.expand(*repeat_vals)#TxBSx100
         out_mu_z = self.output_z_mu(hidden_state) #TxBSx latent_dim
@@ -359,14 +357,15 @@ class hstorn_softmax(nn.Module):
         z = self.reparameterize(mu, logvar)  # of shape TxBSxlatent_dim
 
         #Hierarchichal Layer
-        logits = self.encoder_cluster_layer(z) #TxBSxcategorical_dim
-        y  = gumbel_softmax(logits, temp)#TxBSxcategorical_dim
+        logits = self.encoder_cluster_layer(z) #BSxcategorical_dim
+        y  = gumbel_softmax(logits, temp)#BSxcategorical_dim
 
         #Decoder layer
-        z_log_likelihood = self.decoder_cluster_layer(z, y) #TxBS
+        z_log_likelihood = self.decoder_cluster_layer(z, y) #TxBSxC
         #KL divergence Loss
-        log_ratio = torch.log(logits * self.n_cluster + 1e-20)#TxBSxC
-        kl_cluster = torch.sum(logits * log_ratio, dim=-1)#TxBS
+        prob_ = F.softmax(logits, dim =-1)
+        log_ratio = torch.log(prob_ * self.n_cluster + 1e-20)#TxBSxC
+        kl_cluster = torch.sum(prob_ * log_ratio, dim=-1)#TxBS
 
 
         hz_embedded = self.preprocess_hidden_latent_state(hs, z)
@@ -405,10 +404,13 @@ class hstorn_softmax(nn.Module):
             return ll_loss
         else:
             seq_lengths, batch_size = x.size(0), x.size(1)
-            mu_ = mu.view(-1, self.marker_dim)  # T*BS x marker_dim
-            x_ = x.view(-1)  # (T*BS,)
-            loss = F.cross_entropy(mu_, x_, reduction='none').view(
-                seq_lengths, batch_size)
+            if self.type == 'categorical':
+                mu_ = mu.view(-1, self.marker_dim)  # T*BS x marker_dim
+                x_ = x.view(-1)  # (T*BS,)
+                loss = F.cross_entropy(mu_, x_, reduction='none').view(
+                    seq_lengths, batch_size)
+            else:
+                loss = F.binary_cross_entropy_with_logits(mu, x, reduction= 'none').sum(dim =-1)#TxBS
             return -loss
 
     def compute_point_log_likelihood(self, h, t):
@@ -434,7 +436,7 @@ class hstorn_softmax(nn.Module):
         term3 = term1.exp()
 
         log_f_t = term1 + \
-            (1./self.time_influence) * (term2-term3)
+            (1./(self.time_influence+1e-6)) * (term2-term3)
         return log_f_t[:, :, 0]  # TxBS
 
     def generate_marker(self, h, t):
@@ -462,4 +464,4 @@ class hstorn_softmax(nn.Module):
 
 
 if __name__ == "__main__":
-    model = hstorn_softmax()
+    model = h_storn_softmax()
