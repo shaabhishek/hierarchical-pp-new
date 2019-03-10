@@ -337,7 +337,7 @@ class hrmtpp(nn.Module):
                 loss = F.cross_entropy(mu_, x_, reduction='none').view(
                     seq_lengths, batch_size)
             else:#binary
-                loss = F.binary_cross_entropy_with_logits(mu, x, reduction= 'None').sum(dim =-1)#TxBS
+                loss = F.binary_cross_entropy_with_logits(mu, x, reduction= 'none').sum(dim =-1)#TxBS
             return -loss
 
 
