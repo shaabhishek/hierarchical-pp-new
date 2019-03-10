@@ -18,13 +18,13 @@ DEBUG = False
 def one_hot_encoding(y, n_dims=None):
     # Implement
     """ Take integer y (tensor or variable) with n dims and convert it to 1-hot representation with n+1 dims. """
-    y_tensor = y.data if isinstance(y, Variable) else y
+    y_tensor = y
     y_tensor = y_tensor.type(torch.LongTensor).view(-1, 1)
     n_dims = n_dims if n_dims is not None else int(torch.max(y_tensor)) + 1
     y_one_hot = torch.zeros(
         y_tensor.size()[0], n_dims).scatter_(1, y_tensor, 1)
     y_one_hot = y_one_hot.view(*y.shape, -1)
-    return Variable(y_one_hot) if isinstance(y, Variable) else y_one_hot
+    return y_one_hot
 
 
 class hrmtpp_exact(nn.Module):
@@ -71,7 +71,7 @@ class hrmtpp_exact(nn.Module):
         # setup layers
         self.embed_x, self.embed_time = self.create_input_embedding_layer()
         self.forward_rnn_cell, self.backward_rnn_cell = self.create_rnn_network()
-        self.inference_net, self.inference_mu, self.inference_logvar = self.create_inference_network()
+        
         self.embed_hidden_state, self.output_x_mu, self.output_x_logvar = self.create_output_marker_layer()
         self.h_influence, self.time_influence, self.base_intensity = self.create_output_time_layer()
 
@@ -92,15 +92,6 @@ class hrmtpp_exact(nn.Module):
             rnn_b = nn.GRU(
                 input_size=self.x_embedding_layer[-1] + self.t_embedding_layer[-1], hidden_size=self.hidden_dim)
             return rnn , rnn_b
-
-    def create_inference_network(self):
-        encoder = nn.Sequential(
-            nn.Linear(2* self.hidden_dim,self.encoder_layers[-1]), nn.ReLU()#,
-            #nn.Linear(self.encoder_layers[0], self.encoder_layers[1]), nn.ReLU()
-        )
-        inference_mu = nn.Linear(self.encoder_layers[-1], self.latent_dim)
-        inference_logvar = nn.Linear(self.encoder_layers[-1], self.latent_dim)
-        return encoder, inference_mu, inference_logvar
 
     def create_input_embedding_layer(self):
         x_module = nn.Sequential(
@@ -139,26 +130,7 @@ class hrmtpp_exact(nn.Module):
         base_intensity =  nn.Parameter(torch.zeros(1, 1, 1, 1))
         return h_influence, time_influence, base_intensity
 
-    def forward(self, x, t, anneal = 1., mask=None):
-        """
-            Input: 
-                x   : Tensor of shape TxBSxmarker_dim (if real)
-                     Tensor of shape TxBSx1(if categorical)
-                t   : Tensor of shape TxBSx2. [i,:,0] represents actual time at timestep i ,\
-                    [i,:,1] represents time gap d_i = t_i- t_{i-1}
-                mask: Tensor of shape TxBS If mask[t,i] =1 then that timestamp is present
-            Output:
-                loss : Tensor scalar
-        """
-        #TxBS and TxBS
-        time_log_likelihood, marker_log_likelihood = self._forward(x, t, mask)
 
-        if DEBUG:
-            print("Losses:", -time_log_likelihood.sum().item(),  -marker_log_likelihood.sum().item())
-        loss =  -1.* (time_log_likelihood + marker_log_likelihood)
-        if mask is not None:
-            loss = loss * mask
-        return loss.sum(), [-marker_log_likelihood.sum().item(), -time_log_likelihood.sum().item()]
 
     def run_forward_backward_rnn(self, x, t, mask):
         """
@@ -235,7 +207,7 @@ class hrmtpp_exact(nn.Module):
                 phi_t : Tensor of shape TxBSx self.t_embedding_layer[-1]
                 phi   : Tensor of shape TxBS x (self.x_embedding_layer[-1] + self.t_embedding_layer[-1])
         """
-        if self.marker_type == 'real':
+        if self.marker_type == 'categorical':
             # Shape TxBSxmarker_dim
             x = one_hot_encoding(x[:, :, 0], self.marker_dim)
         phi_x = self.embed_x(x)
@@ -243,63 +215,12 @@ class hrmtpp_exact(nn.Module):
         phi = torch.cat([phi_x, phi_t], -1)
         return phi_x, phi_t, phi
 
-    def encoder(self, hs, back_hs):
-        """
-            We do not need to compute mu of shape TxBSxLatent_dim. In case of static embedding only the first one will
-            be used. But any of them can be a unbiased estimator. Need to add all of them with penalty that they are from
-            same distribution
-            input:
-                h : Tensor of shape (T)xBSxhidden_dim
-                h_b : Tensor of shape (T)xBSxhidden_dim
-            output:
-                mu : TxBSxlatent_dim
-                log_var: TxBSxlatent_dim
-
-        """
-        hiddenlayer = self.inference_net(torch.cat([hs, back_hs], -1))
-        mu = self.inference_mu(hiddenlayer)
-        logvar = torch.clamp(self.inference_logvar(hiddenlayer), min = self.logvar_min)
-        return mu, logvar
 
     def reparameterize(self, mu, logvar):
         epsilon = torch.randn_like(mu)
         sigma = torch.exp(0.5 * logvar)
         return mu + epsilon.mul(sigma)
 
-    def _forward(self, x, t, mask):
-        """
-            Input: 
-                x   : Tensor of shape TxBSxmarker_dim (if real)
-                     Tensor of shape TxBSx1(if categorical)
-                t   : Tensor of shape TxBSx2 [i,:,0] represents actual time at timestep i ,\
-                    [i,:,1] represents time gap d_i = t_i- t_{i-1}
-                mask: Tensor of shape TxBS. If mask[t,i] =1 then that timestamp is present
-            Output:
-
-        """
-
-        # Tensor of shape (T)xBSxhidden_dim
-        hs = self.run_forward_backward_rnn(x, t, mask)        
-        hz_embedded = self.preprocess_hidden_latent_state(hs) #hs : TxBSxH  , hz_embedded #TxBSxCx self.shared_output_layers[0]
-        time_log_likelihood = self.compute_point_log_likelihood(hz_embedded,  t) # TxBSxC
-
-        # marker generation layer. Ideally it should include time gap also.
-        # Tensor of shape TxBSx Cx marker_dim
-        marker_out_mu, marker_out_logvar = self.generate_marker(hz_embedded,  t)
-        marker_log_likelihood = self.compute_marker_log_likelihood(x, marker_out_mu, marker_out_logvar)
-        
-        cluster_log_likelihood = marker_log_likelihood.sum(dim =-1) + time_log_likelihood #TxBSxC
-        prior = torch.ones(1,1,self.n_cluster) * (1./self.n_cluster)
-        prior_log = prior.log()
-        log_likelihood = cluster_log_likelihood+ prior_log #TxBSxC
-        posterior = self.posteror(log_likelihood)#TxBSxC
-
-        average_time_log_likelihood = torch.sum( time_log_likelihood*posterior[:,:,:,None], dim = [-1,-2])
-        average_marker_log_likelihood = torch.sum( marker_log_likelihood*posterior[:,:,:,None], dim = [-1,-2])#TxBS
-
-
-        return average_time_log_likelihood, average_marker_log_likelihood  # TxBS and TxBS
-    
     def posterior(self, log_likelihood):
         """
             input:
@@ -316,11 +237,14 @@ class hrmtpp_exact(nn.Module):
             Input:  
                     x   : Tensor of shape TxBSxmarker_dim (if real)
                      Tensor of shape TxBSx1(if categorical)
-                    mu : Tensor of shape T x BS x marker_dim
-                    logvar : Tensor of shape T x BS x marker_dim #None in case of non real marker
+                    mu : Tensor of shape T x BS xCx marker_dim
+                    logvar : Tensor of shape T x BS xCx marker_dim #None in case of non real marker
             Output:
-                    loss : TxBS
+                    loss : TxBSxC
         """
+        cluster_size = mu.size(2)
+        repeat_vals = (-1,-1,cluster_size, -1)
+        x = x[:,:,None,:].expand(*repeat_vals)#TxBSxCxMarker
         if self.marker_type == 'real':
             sigma = logvar.exp().sqrt()
             x_recon_dist = Normal(mu, sigma)
@@ -329,10 +253,14 @@ class hrmtpp_exact(nn.Module):
             return ll_loss
         else:
             seq_lengths, batch_size = x.size(0), x.size(1)
-            mu_ = mu.view(-1, self.marker_dim)  # T*BS x marker_dim
-            x_ = x.view(-1)  # (T*BS,)
-            loss = F.cross_entropy(mu_, x_, reduction='none').view(
-                seq_lengths, batch_size)
+            
+            if  self.marker_type == 'categorical':
+                mu_ = mu.view(-1, self.marker_dim)  # T*BS x marker_dim
+                x_ = x.view(-1)  # (T*BS*C,)
+                loss = F.cross_entropy(mu_, x_, reduction='none').view(
+                    seq_lengths, batch_size, cluster_size)
+            else:#binary
+                loss = F.binary_cross_entropy_with_logits(mu, x, reduction= 'none').sum(dim =-1)#TxBSxC
             return -loss
 
     def compute_point_log_likelihood(self, h, t):
@@ -359,7 +287,7 @@ class hrmtpp_exact(nn.Module):
         term3 = term1.exp()
 
         log_f_t = term1 + \
-            (1./self.time_influence) * (term2-term3)
+            (1./(self.time_influence+1e-6 )) * (term2-term3)
         return log_f_t[:, :, :,  0]  # TxBSxC
 
     def generate_marker(self, h, t):
@@ -386,6 +314,62 @@ class hrmtpp_exact(nn.Module):
         else:
             marker_out_logvar = None
         return marker_out_mu, marker_out_logvar
+
+    def _forward(self, x, t, mask):
+        """
+            Input: 
+                x   : Tensor of shape TxBSxmarker_dim (if real)
+                     Tensor of shape TxBSx1(if categorical)
+                t   : Tensor of shape TxBSx2 [i,:,0] represents actual time at timestep i ,\
+                    [i,:,1] represents time gap d_i = t_i- t_{i-1}
+                mask: Tensor of shape TxBS. If mask[t,i] =1 then that timestamp is present
+            Output:
+
+        """
+
+        # Tensor of shape (T)xBSxhidden_dim
+        hs = self.run_forward_backward_rnn(x, t, mask)        
+        hz_embedded = self.preprocess_hidden_latent_state(hs) #hs : TxBSxH  , hz_embedded #TxBSxCx self.shared_output_layers[0]
+        time_log_likelihood = self.compute_point_log_likelihood(hz_embedded,  t) # TxBSxC
+
+        # marker generation layer. Ideally it should include time gap also.
+        # Tensor of shape TxBSx Cx marker_dim
+        marker_out_mu, marker_out_logvar = self.generate_marker(hz_embedded,  t)
+        marker_log_likelihood = self.compute_marker_log_likelihood(x, marker_out_mu, marker_out_logvar)
+        
+        cluster_log_likelihood = marker_log_likelihood + time_log_likelihood #TxBSxC
+        prior = torch.ones(1,1,self.n_cluster) * (1./self.n_cluster)
+        prior_log = prior.log()
+        log_likelihood = cluster_log_likelihood+ prior_log #TxBSxC
+        log_posterior = self.posterior(log_likelihood).log()#TxBSxC
+
+
+        average_time_log_likelihood = torch.logsumexp( time_log_likelihood+ log_posterior, dim = -1)#TxBS
+        average_marker_log_likelihood = torch.sum(marker_log_likelihood+log_posterior, dim = -1)#TxBS
+
+
+        return average_time_log_likelihood, average_marker_log_likelihood  # TxBS and TxBS
+
+    def forward(self, x, t, anneal = 1., mask=None):
+        """
+            Input: 
+                x   : Tensor of shape TxBSxmarker_dim (if real)
+                     Tensor of shape TxBSx1(if categorical)
+                t   : Tensor of shape TxBSx2. [i,:,0] represents actual time at timestep i ,\
+                    [i,:,1] represents time gap d_i = t_i- t_{i-1}
+                mask: Tensor of shape TxBS If mask[t,i] =1 then that timestamp is present
+            Output:
+                loss : Tensor scalar
+        """
+        #TxBS and TxBS
+        time_log_likelihood, marker_log_likelihood = self._forward(x, t, mask)
+
+        if DEBUG:
+            print("Losses:", -time_log_likelihood.sum().item(),  -marker_log_likelihood.sum().item())
+        loss =  -1.* (time_log_likelihood + marker_log_likelihood)
+        if mask is not None:
+            loss = loss * mask
+        return loss.sum(), [-marker_log_likelihood.sum().item(), -time_log_likelihood.sum().item()]
 
 
 if __name__ == "__main__":
