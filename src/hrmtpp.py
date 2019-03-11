@@ -37,7 +37,7 @@ class hrmtpp(nn.Module):
 
     """
 
-    def __init__(self, marker_type='real', marker_dim=20, latent_dim = 20, hidden_dim=128, x_given_t=False ):
+    def __init__(self, marker_type='real', marker_dim=31, latent_dim = 20, hidden_dim=128, x_given_t=False ):
         super().__init__()
         """
             Input:

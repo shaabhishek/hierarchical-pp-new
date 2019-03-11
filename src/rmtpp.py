@@ -40,7 +40,7 @@ class rmtpp(nn.Module):
 
     """
 
-    def __init__(self, marker_type='real', marker_dim=20, hidden_dim=128, x_given_t=False, ):
+    def __init__(self, marker_type='real', marker_dim=31, hidden_dim=128, x_given_t=False, ):
         super().__init__()
         """
             Input:
@@ -216,7 +216,6 @@ class rmtpp(nn.Module):
 
         """
 
-        import pdb; pdb.set_trace()
         # Tensor of shape (T+1)xBSxself.shared_output_layers[-1]
         _, hidden_states = self.run_forward_rnn(x, t)
 
