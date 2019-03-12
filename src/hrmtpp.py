@@ -18,13 +18,13 @@ DEBUG = False
 def one_hot_encoding(y, n_dims=None):
     # Implement
     """ Take integer y (tensor or variable) with n dims and convert it to 1-hot representation with n+1 dims. """
-    y_tensor = y.data if isinstance(y, Variable) else y
+    y_tensor = y
     y_tensor = y_tensor.type(torch.LongTensor).view(-1, 1)
     n_dims = n_dims if n_dims is not None else int(torch.max(y_tensor)) + 1
     y_one_hot = torch.zeros(
         y_tensor.size()[0], n_dims).scatter_(1, y_tensor, 1)
     y_one_hot = y_one_hot.view(*y.shape, -1)
-    return Variable(y_one_hot) if isinstance(y, Variable) else y_one_hot
+    return y_one_hot
 
 
 class hrmtpp(nn.Module):
@@ -364,7 +364,7 @@ class hrmtpp(nn.Module):
         term3 = term1.exp()
 
         log_f_t = term1 + \
-            (1./self.time_influence) * (term2-term3)
+            (1./(self.time_influence+1e-6)) * (term2-term3)
         return log_f_t[:, :, 0]  # TxBS
 
     def generate_marker(self, h, t):
