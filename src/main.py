@@ -15,7 +15,10 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
     ### ================================== model initialization ==================================
     model = load_model(params).to(device)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr = params.lr)
+    if params.reg == 'l2':
+        optimizer = torch.optim.Adam(model.parameters(), lr = params.lr, weight_decay= params.l2)
+    else:
+        optimizer = torch.optim.Adam(model.parameters(), lr = params.lr)
 
     for parameters in model.parameters():
         print(parameters.size())
@@ -35,8 +38,9 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
     best_valid_loss = 0
 
     for idx in range(params.max_iter):
+        params.iter = idx +1
         #### Loss is the ELBO, accuracy is for categorical/binary marker, AUC is for binary/categorical marker.  Time RMSE is w.r.t expectation. marker rmse for real marker####
-        train_loss, train_time_rmse, train_accuracy, train_auc, train_marker_rmse = train(model, params, optimizer, train_x_data, train_t_data, label='Train')
+        train_loss, train_time_rmse, train_accuracy, train_auc, train_marker_rmse = train(model, params, optimizer, train_x_data, train_t_data,  label='Train')
         valid_loss, valid_time_rmse, valid_accuracy, valid_auc, valid_marker_rmse = test(model,  params, optimizer, valid_x_data, valid_t_data, label='Valid')
 
         print('epoch', idx + 1)
@@ -124,6 +128,7 @@ if __name__ == '__main__':
 
     ###Validation Parameter###
     parser.add_argument('--max_iter', type=int, default=200, help='number of iterations')
+    parser.add_argument('--anneal_iter', type=int, default=100, help='number of iteration over which anneal goes to 1')
     parser.add_argument('--hidden_dim', type=int, default=128, help='rnn hidden dim')
     parser.add_argument('--maxgradnorm', type=float, default=50.0, help='maximum gradient norm')
     parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
@@ -143,6 +148,7 @@ if __name__ == '__main__':
     parser.add_argument('--train_test', type=bool, default=True, help='enable testing')
     parser.add_argument('--show', type=bool, default=True, help='print progress')
     parser.add_argument('--data_dir', type=str, default='../data/', help='data directory')
+    parser.add_argument('--best_epoch', type=int, default=10, help='best epoch')
 
 
 
@@ -161,9 +167,14 @@ if __name__ == '__main__':
 
     
     # Read data
-
+    
+    #Set Seed for reproducibility
     seedNum =1337
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    torch.manual_seed(seedNum)
     np.random.seed(seedNum)
+
     if not params.test:
         d = vars(params)
         for key in d:
@@ -193,7 +204,7 @@ if __name__ == '__main__':
     else:
         test_data_path = params.data_dir + "/" + params.data_name  +"_test1.pkl"
         test_x_data, test_t_data = load_data(test_data_path)
-        best_epoch = 10
+        best_epoch = params.best_epoch
         file_name = 'b' + str(params.batch_size) + \
                     '_gn' + str(params.maxgradnorm) + '_h' + str(params.hidden_dim) + \
                     '_l2' + str(params.l2) + '_l' + str(params.latent_dim) + \
