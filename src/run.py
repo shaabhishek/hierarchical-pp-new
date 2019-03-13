@@ -15,6 +15,9 @@ def compute_accuracy(all_target, all_pred):
 
 def train(net, params, optimizer, x_data, t_data, label):
     """
+    net: PyTorch model class
+    params: Namespace class with hyperparameter values
+    optimizer: an optimizer object e.g torch.optim.Adam()
     x_data: N, (t_i,D), A list of numpy array.
     t_data: N, (t_i, 2), A list of numpy array.
     """
