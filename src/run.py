@@ -26,8 +26,8 @@ def train(net, params, optimizer, x_data, t_data, label):
     # Shuffle the data
     shuffled_ind = np.arange(len(x_data))
     np.random.shuffle(shuffled_ind)
-    x_data = x_data[shuffled_ind]
-    t_data = t_data[shuffled_ind]
+    x_data = [x_data[i] for i in shuffled_ind]
+    t_data = [t_data[i] for i in shuffled_ind]
     time_mse, time_mse_count = 0., 0.
     marker_mse, marker_mse_count = 0., 0.
     marker_acc, marker_acc_count = 0., 0.
