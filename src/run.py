@@ -29,7 +29,7 @@ def train(net, params, optimizer, x_data, t_data, label):
     t_data: N, (t_i, 2), A list of numpy array.
     """
     net.train()
-    N = int(math.floor(len(x_data) / params.batch_size))
+    N_batches = int(math.floor(len(x_data) / params.batch_size))
     # Shuffle the data
     x_data, t_data = shuffle_data(x_data, t_data)
     time_mse, time_mse_count = 0., 0.
@@ -39,15 +39,15 @@ def train(net, params, optimizer, x_data, t_data, label):
 
     if params.show:
         from utils.helper import ProgressBar
-        bar = ProgressBar(label, max=N)
+        bar = ProgressBar(label, max=N_batches)
         
-    for idx in range(N):
+    for b_idx in range(N_batches):
         if params.show: bar.next()
         optimizer.zero_grad()
         
 
-        unpad_input_x = x_data[idx*params.batch_size:(idx+1)*params.batch_size]
-        unpad_input_t = t_data[idx*params.batch_size:(idx+1)*params.batch_size]
+        unpad_input_x = x_data[b_idx*params.batch_size:(b_idx+1)*params.batch_size]
+        unpad_input_t = t_data[b_idx*params.batch_size:(b_idx+1)*params.batch_size]
 
         seq_len = [len(lst) for lst in unpad_input_x]
         max_seq_len = max(seq_len)
@@ -61,10 +61,7 @@ def train(net, params, optimizer, x_data, t_data, label):
             input_t[:seq_len[idx], idx, : ] = unpad_input_t[idx]
             input_mask[:seq_len[idx], idx, : ] = 1.
 
-
-
-        
-
+        # Convert numpy ndarrays to torch Tensors
         if params.marker_type == 'real':
             input_x = torch.from_numpy(input_x).float().to(device)    
         else:
@@ -73,11 +70,11 @@ def train(net, params, optimizer, x_data, t_data, label):
         input_mask = torch.from_numpy(input_mask).float().to(device)
 
         #If annealing, pass it here using params.iter
-        loss, meta_info = net(input_x, input_t, input_mask)
+        loss, meta_info = net(input_x, input_t, mask=input_mask)
         loss.backward()
 
         total_loss += loss.detach()
-        time_mse+= meta_info["time_mse"]
+        time_mse += meta_info["time_mse"]
         time_mse_count += meta_info["time_mse_count"]
         if params.marker_type == 'real':
             marker_mse +=  meta_info["marker_mse"]
@@ -112,7 +109,7 @@ def test(net, params,  optimizer,  x_data, t_data, label):
     t_data: N, (t_i, 2), A list of numpy array.
     """
     net.train()
-    N = int(math.floor(len(x_data) / params.batch_size))
+    N_batches = int(math.floor(len(x_data) / params.batch_size))
     # Shuffle the data
     x_data, t_data = shuffle_data(x_data, t_data)
     time_mse, time_mse_count = 0., 0.
@@ -122,14 +119,14 @@ def test(net, params,  optimizer,  x_data, t_data, label):
 
     if params.show:
         from utils.helper import ProgressBar
-        bar = ProgressBar(label, max=N)
+        bar = ProgressBar(label, max=N_batches)
         
-    for idx in range(N):
+    for b_idx in range(N_batches):
         if params.show: bar.next()
         
 
-        unpad_input_x = x_data[idx*params.batch_size:(idx+1)*params.batch_size]
-        unpad_input_t = t_data[idx*params.batch_size:(idx+1)*params.batch_size]
+        unpad_input_x = x_data[b_idx*params.batch_size:(b_idx+1)*params.batch_size]
+        unpad_input_t = t_data[b_idx*params.batch_size:(b_idx+1)*params.batch_size]
 
         seq_len = [len(lst) for lst in unpad_input_x]
         max_seq_len = max(seq_len)
