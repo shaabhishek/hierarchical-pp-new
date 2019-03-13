@@ -12,6 +12,15 @@ from utils.model_loader import load_model
 
 
 def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_data, valid_t_data):
+    """
+        Input:
+            params: Namespace class with hyperparameter values
+            file_name: file to save the model
+            train_x_data: list of length num_data_train, each element is numpy array of shape T_i x marker_dim
+            train_t_data: list of length num_data_train, each element is numpy array of shape T_i x 2
+            valid_x_data: list of length num_data_val, each element is numpy array of shape T_i x marker_dim
+            valid_t_data: list of length num_data_val, each element is numpy array of shape T_i x 2
+    """
     ### ================================== model initialization ==================================
     model = load_model(params).to(device)
 
