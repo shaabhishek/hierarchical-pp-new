@@ -13,7 +13,7 @@ def compute_accuracy(all_target, all_pred):
     return metrics.accuracy_score(all_target, all_pred)
 
 
-def train(net, params,  optimizer,  x_data, t_data, label):
+def train(net, params,  x_data, t_data, label):
     """
     x_data: N, (t_i,D), A list of numpy array.
     t_data: N, (t_i, 2), A list of numpy array.
