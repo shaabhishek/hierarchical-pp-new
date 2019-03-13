@@ -6,7 +6,7 @@ import torch
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 from run import train, test
-from utils.data_loader import load_data
+#from utils.data_loader import load_data
 from utils.model_loader import load_model
 
 
@@ -116,7 +116,7 @@ def test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch):
     checkpoint = torch.load(os.path.join('model', params.save, params.model_name, file_name)+ '_'+str(best_epoch))
     model.load_state_dict(checkpoint['model_state_dict'])
     
-    test_loss, test_time_rmse, test_accuracy, test_auc, test_marker_rmse = test(model, params, test_x_data, test_t_data, label='Test')
+    test_loss, test_time_rmse, test_accuracy, test_auc, test_marker_rmse = test(model, params, optimizer, test_x_data, test_t_data, label='Test')
     print("\ntest_auc\t", test_auc)
     print("test_accuracy\t", test_accuracy)
     print("test_loss\t", test_loss)
