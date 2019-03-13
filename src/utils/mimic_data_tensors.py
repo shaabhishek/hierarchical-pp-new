@@ -60,19 +60,21 @@ def compute_admit_times(data):
     """
     max_visit_n = max([len(data_i) for data_i in data])
     admit_times = []
+    len_admit_times = []
     for data_i in data:
         patient_admit_times = [icu_visit['ADMITTIME'] for icu_visit in data_i.values()]
         # Convert the date times str -> datetime64 -> int
         patient_admit_times = np.array(patient_admit_times).astype(np.datetime64).astype('int')
-        patient_visit_n = len(patient_admit_times)
-        patient_admit_times = np.pad(patient_admit_times, (0,max_visit_n-patient_visit_n), mode='constant')
+        t_i = len(patient_admit_times)
+        len_admit_times.append(t_i)
+        patient_admit_times = np.pad(patient_admit_times, (0,max_visit_n - t_i), mode='constant')
         admit_times.append(patient_admit_times)
     admit_times = np.stack(admit_times).T
     admit_times = (admit_times - admit_times.min()) / (admit_times.max() - admit_times.min())
     admit_times = torch.tensor(admit_times).float().to(device)
     intervals = get_intervals(admit_times)
     admit_times = torch.stack([admit_times, intervals], dim=-1)
-    return admit_times
+    return admit_times, len_admit_times
 
 def compute_markers(data):
     """
@@ -98,20 +100,41 @@ def compute_markers(data):
     markers = torch.tensor(markers).float().to(device)
     return markers
 
+def create_mask(lengths):
+    """
+        Input:
+            lengths: list of size N=num_samples
+            
+        Return:
+            mask: tensor of shape T_max x N x 1
+    """
+    # Convert lengths to a row vector
+    length_max = max(lengths)
+    num_samples = len(lengths)
+    lengths = torch.tensor(lengths, device=device).view(1,-1)
+    
+    mask = (torch.arange(length_max, device=device).view(-1,1).repeat(1,num_samples) < lengths).float()
+    mask = mask.view(*mask.shape,1)
+    return mask
+
 def mimic_data_tensors(data=None):
     if data==None:
         raw_file = './../data/dump/mimic.pickle'
         with open(raw_file, 'rb') as handle:
             data = pickle.load(handle)
-    
-    admit_times = compute_admit_times(data)
+
+    admit_times, lengths = compute_admit_times(data)
+    mask = create_mask(lengths)
+    # This is necessary because of the way in which intervals are created,
+    # the last interval value is the -ve of the last time value, and
+    # occurs at the time t_{i+1}
+    admit_times = admit_times*mask
     markers = compute_markers(data)
     data_dict = {
         't': admit_times,
         'x': markers
     }
-    return data_dict
-
+    return data_dict, mask
 
 if __name__ == "__main__":
     import pdb; pdb.set_trace()
