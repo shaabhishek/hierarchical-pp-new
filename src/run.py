@@ -12,6 +12,13 @@ def compute_accuracy(all_target, all_pred):
     all_pred[all_pred <= 0.5] = 0.0
     return metrics.accuracy_score(all_target, all_pred)
 
+def shuffle_data(x_data, t_data):
+    shuffled_ind = np.arange(len(x_data))
+    np.random.shuffle(shuffled_ind)
+    x_data = [x_data[i] for i in shuffled_ind]
+    t_data = [t_data[i] for i in shuffled_ind]
+    return x_data, t_data
+
 
 def train(net, params, optimizer, x_data, t_data, label):
     """
@@ -24,10 +31,7 @@ def train(net, params, optimizer, x_data, t_data, label):
     net.train()
     N = int(math.floor(len(x_data) / params.batch_size))
     # Shuffle the data
-    shuffled_ind = np.arange(len(x_data))
-    np.random.shuffle(shuffled_ind)
-    x_data = [x_data[i] for i in shuffled_ind]
-    t_data = [t_data[i] for i in shuffled_ind]
+    x_data, t_data = shuffle_data(x_data, t_data)
     time_mse, time_mse_count = 0., 0.
     marker_mse, marker_mse_count = 0., 0.
     marker_acc, marker_acc_count = 0., 0.
@@ -47,12 +51,14 @@ def train(net, params, optimizer, x_data, t_data, label):
 
         seq_len = [len(lst) for lst in unpad_input_x]
         max_seq_len = max(seq_len)
+        # Shape = T_max_batch x BS x marker_dim
         input_x = np.zeros( max_seq_len, len(unpad_input_x), unpad_input_x[0].shape[1])
+        # Shape = T_max_batch x BS x 2
         input_t = np.zeros( max_seq_len, len(unpad_input_x), unpad_input_t[0].shape[1])
         input_mask = np.zeros( max_seq_len, len(unpad_input_x), 1)
         for idx in range(len(unpad_input_x)):
-            input_x[:seq_len[idx],  idx, : ] = unpad_input_x[idx]
-            input_t[:seq_len[idx], idx,  : ] = unpad_input_t[idx]
+            input_x[:seq_len[idx], idx, : ] = unpad_input_x[idx]
+            input_t[:seq_len[idx], idx, : ] = unpad_input_t[idx]
             input_mask[:seq_len[idx], idx, : ] = 1.
 
 
@@ -108,10 +114,7 @@ def test(net, params,  optimizer,  x_data, t_data, label):
     net.train()
     N = int(math.floor(len(x_data) / params.batch_size))
     # Shuffle the data
-    shuffled_ind = np.arange(len(x_data))
-    np.random.shuffle(shuffled_ind)
-    x_data = x_data[shuffled_ind]
-    t_data = t_data[shuffled_ind]
+    x_data, t_data = shuffle_data(x_data, t_data)
     time_mse, time_mse_count = 0., 0.
     marker_mse, marker_mse_count = 0., 0.
     marker_acc, marker_acc_count = 0., 0.
