@@ -182,7 +182,7 @@ if __name__ == '__main__':
         file_name = 'b' + str(params.batch_size) + \
                     '_gn' + str(params.maxgradnorm) + '_h' + str(params.hidden_dim) + \
                     '_l2' + str(params.l2) + '_l' + str(params.latent_dim) + \
-                    '_lr' + str(params.init_lr) + '_c' + str(params.n_cluster) + \
+                    '_lr' + str(params.lr) + '_c' + str(params.n_cluster) + \
                     '_xt' + str(params.x_given_t) + '_r' + str(params.reg) + \
                     '_s'+str(seedNum) 
 
@@ -208,7 +208,7 @@ if __name__ == '__main__':
         file_name = 'b' + str(params.batch_size) + \
                     '_gn' + str(params.maxgradnorm) + '_h' + str(params.hidden_dim) + \
                     '_l2' + str(params.l2) + '_l' + str(params.latent_dim) + \
-                    '_lr' + str(params.init_lr) + '_c' + str(params.n_cluster) + \
+                    '_lr' + str(params.lr) + '_c' + str(params.n_cluster) + \
                     '_xt' + str(params.x_given_t) + '_r' + str(params.reg) + \
                     '_s'+str(seedNum)
         test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch)
