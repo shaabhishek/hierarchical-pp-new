@@ -1,6 +1,7 @@
 name: hpp
 channels:
   - pytorch
+  - conda-forge
   - defaults
 dependencies:
   - appnope=0.1.0=py37_0
@@ -9,7 +10,7 @@ dependencies:
   - backcall=0.1.0=py37_0
   - blas=1.0=mkl
   - bleach=3.1.0=py37_0
-  - ca-certificates=2019.1.23=0
+  - ca-certificates=2019.3.9=hecc5488_0
   - certifi=2019.3.9=py37_0
   - cffi=1.12.2=py37hb5b8e2f_1
   - cycler=0.10.0=py37_0
@@ -68,6 +69,7 @@ dependencies:
   - pexpect=4.6.0=py37_0
   - pickleshare=0.7.5=py37_0
   - pip=19.0.3=py37_0
+  - progress=1.5=py37_0
   - prometheus_client=0.6.0=py37_0
   - prompt_toolkit=2.0.9=py37_0
   - ptyprocess=0.6.0=py37_0

@@ -10,5 +10,5 @@ from h_storn_softmax import h_storn_softmax
 
 def load_model(params):
     if params.model == 'rmtpp':
-        model = rmtpp(marker_type= params.marker_type, marker_dim = params.marker_dim, hidden_dim = params.hidden_dim,x_given_t = params.x_given_t)
+        model = rmtpp(marker_type= params.marker_type, marker_dim = params.marker_dim, time_dim=params.time_dim, hidden_dim = params.hidden_dim,x_given_t = params.x_given_t)
     return model

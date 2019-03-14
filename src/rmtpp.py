@@ -10,8 +10,6 @@ from torch.distributions.normal import Normal
 from torch.distributions.kl import kl_divergence
 from torch.optim import Adam
 import matplotlib.pyplot as plt
-from utils.synthetic_data import generate_mpp
-from utils.mimic_data_tensors import mimic_data_tensors
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -40,7 +38,7 @@ class rmtpp(nn.Module):
 
     """
 
-    def __init__(self, marker_type='real', marker_dim=31, hidden_dim=128, x_given_t=False, ):
+    def __init__(self, marker_type='real', marker_dim=31, time_dim=2, hidden_dim=128, x_given_t=False, ):
         super().__init__()
         """
             Input:
@@ -53,6 +51,7 @@ class rmtpp(nn.Module):
 
         self.marker_type = marker_type
         self.marker_dim = marker_dim
+        self.time_dim = time_dim
         self.hidden_dim = hidden_dim
         self.x_given_t = x_given_t
         self.use_rnn_cell = False
@@ -92,9 +91,9 @@ class rmtpp(nn.Module):
             #          self.x_embedding_layer[1]), nn.ReLU()
         )
 
-        #t_module = nn.Linear(2, self.t_embedding_layer[0])
+        #t_module = nn.Linear(self.time_dim, self.t_embedding_layer[0])
         t_module = nn.Sequential(
-            nn.Linear(2, self.t_embedding_layer[0]),
+            nn.Linear(self.time_dim, self.t_embedding_layer[0]),
             nn.ReLU(),
             nn.Linear(self.t_embedding_layer[0], self.t_embedding_layer[0])
         )
@@ -130,7 +129,7 @@ class rmtpp(nn.Module):
             Input: 
                 x   : Tensor of shape TxBSxmarker_dim (if real)
                      Tensor of shape TxBSx1(if categorical)
-                t   : Tensor of shape TxBSx2. [i,:,0] represents actual time at timestep i ,\
+                t   : Tensor of shape TxBSxtime_dim. [i,:,0] represents actual time at timestep i ,\
                     [i,:,1] represents time gap d_i = t_i- t_{i-1}
                 mask: Tensor of shape TxBS If mask[t,i] =1 then that timestamp is present
             Output:
@@ -151,7 +150,7 @@ class rmtpp(nn.Module):
             Input: 
                 x   : Tensor of shape TxBSxmarker_dim (if real)
                      Tensor of shape TxBSx1(if categorical)
-                t   : Tensor of shape TxBSx2 [i,:,0] represents actual time at timestep i ,\
+                t   : Tensor of shape TxBSxtime_dim [i,:,0] represents actual time at timestep i ,\
                     [i,:,1] represents time gap d_i = t_i- t_{i-1}
             Output:
                 h : Tensor of shape (T+1)xBSxhidden_dim
@@ -185,7 +184,7 @@ class rmtpp(nn.Module):
             Input: 
                 x   : Tensor of shape TxBSxmarker_dim (if real)
                      Tensor of shape TxBSx1(if categorical)
-                t   : Tensor of shape TxBSx2. [i,:,0] represents actual time at timestep i ,\
+                t   : Tensor of shape TxBSxtime_dim. [i,:,0] represents actual time at timestep i ,\
                     [i,:,1] represents time gap d_i = t_i- t_{i-1}
 
             Output:
@@ -206,7 +205,7 @@ class rmtpp(nn.Module):
             Input: 
                 x   : Tensor of shape TxBSxmarker_dim (if real)
                      Tensor of shape TxBSx1(if categorical)
-                t   : Tensor of shape TxBSx2 [i,:,0] represents actual time at timestep i ,\
+                t   : Tensor of shape TxBSxtime_dim [i,:,0] represents actual time at timestep i ,\
                     [i,:,1] represents time gap d_i = t_i- t_{i-1}
                 mask: Tensor of shape TxBSx1. If mask[t,i,0] =1 then that timestamp is present
             Output:
@@ -260,7 +259,7 @@ class rmtpp(nn.Module):
         """
             Input:
                 h : Tensor of shape (T+1)xBSxself.shared_output_layers[-1]
-                t : Tensor of shape TxBSx2 [i,:,0] represents actual time at timestep i ,\
+                t : Tensor of shape TxBSxtime_dim [i,:,0] represents actual time at timestep i ,\
                     [i,:,1] represents time gap d_i = t_i- t_{i-1}
             Output:
                 log_f_t : tensor of shape TxBS
@@ -287,7 +286,7 @@ class rmtpp(nn.Module):
         """
             Input:
                 h : Tensor of shape (T+1)xBSxself.shared_output_layers[-1]
-                t : Tensor of shape TxBSx2 [i,:,0] represents actual time at timestep i ,\
+                t : Tensor of shape TxBSxtime_dim [i,:,0] represents actual time at timestep i ,\
                     [i,:,1] represents time gap d_i = t_i- t_{i-1}
             Output:
                 marker_out_mu : Tensor of shape T x BS x marker_dim

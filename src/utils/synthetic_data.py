@@ -160,7 +160,7 @@ def plot_process(timeseries):
     plt.plot(time, intensities)
     plt.scatter(history, np.zeros_like(history))
 
-def test_val_split(data, mask=None, val_ratio=0.2):
+def train_val_split(data, mask=None, val_ratio=0.2):
     """
         Input:
             data: dict with keys 'x' and 't'.
