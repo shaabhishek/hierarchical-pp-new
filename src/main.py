@@ -6,7 +6,7 @@ import torch
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 from run import train, test
-#from utils.data_loader import load_data
+from utils.data_loader import load_data
 from utils.model_loader import load_model
 
 
@@ -196,8 +196,8 @@ if __name__ == '__main__':
                     '_s'+str(seedNum) 
 
         #Data should reside in this path for all datasets. Ideally 5 cross fold validation.
-        train_data_path = params.data_dir + "/" + params.data_name + "_train1.pkl"
-        valid_data_path = params.data_dir + "/" + params.data_name + "_valid1.pkl"
+        train_data_path = params.data_dir + params.data_name + "_train1.pkl"
+        valid_data_path = params.data_dir + params.data_name + "_valid1.pkl"
         #That pkl file should give two list of x and t. It should not be tensor.
         train_x_data, train_t_data = load_data(train_data_path)
         valid_x_data, valid_t_data = load_data(valid_data_path)
