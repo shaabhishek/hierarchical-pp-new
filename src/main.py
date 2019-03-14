@@ -166,7 +166,8 @@ if __name__ == '__main__':
     params = parser.parse_args()
     ###Fixed parameter###
     if params.data_name == 'mimic':
-        params.marker_dim = 20
+        params.marker_dim = 217
+        params.time_dim = 3
         params.marker_type = 'binary'
         parser.load = 'mimic'
         parser.save = 'mimic'
@@ -196,8 +197,8 @@ if __name__ == '__main__':
                     '_s'+str(seedNum) 
 
         #Data should reside in this path for all datasets. Ideally 5 cross fold validation.
-        train_data_path = params.data_dir + params.data_name + "_train1.pkl"
-        valid_data_path = params.data_dir + params.data_name + "_valid1.pkl"
+        train_data_path = params.data_dir + params.data_name + "_train.pkl"
+        valid_data_path = params.data_dir + params.data_name + "_valid.pkl"
         #That pkl file should give two list of x and t. It should not be tensor.
         train_x_data, train_t_data = load_data(train_data_path)
         valid_x_data, valid_t_data = load_data(valid_data_path)
