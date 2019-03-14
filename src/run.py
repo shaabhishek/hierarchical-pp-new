@@ -30,6 +30,7 @@ def train(net, params, optimizer, x_data, t_data, label):
     """
     net.train()
     N_batches = int(math.floor(len(x_data) / params.batch_size))
+    batch_size = params.batch_size
     # Shuffle the data
     x_data, t_data = shuffle_data(x_data, t_data)
     time_mse, time_mse_count = 0., 0.
@@ -44,28 +45,27 @@ def train(net, params, optimizer, x_data, t_data, label):
     for b_idx in range(N_batches):
         if params.show: bar.next()
         optimizer.zero_grad()
-        
 
-        unpad_input_x = x_data[b_idx*params.batch_size:(b_idx+1)*params.batch_size]
-        unpad_input_t = t_data[b_idx*params.batch_size:(b_idx+1)*params.batch_size]
+        unpad_input_x = x_data[b_idx*batch_size:(b_idx+1)*batch_size]
+        unpad_input_t = t_data[b_idx*batch_size:(b_idx+1)*batch_size]
 
         seq_len = [len(lst) for lst in unpad_input_x]
         max_seq_len = max(seq_len)
         # Shape = T_max_batch x BS x marker_dim
-        input_x = np.zeros( max_seq_len, len(unpad_input_x), unpad_input_x[0].shape[1])
-        # Shape = T_max_batch x BS x 2
-        input_t = np.zeros( max_seq_len, len(unpad_input_x), unpad_input_t[0].shape[1])
-        input_mask = np.zeros( max_seq_len, len(unpad_input_x), 1)
-        for idx in range(len(unpad_input_x)):
+        input_x = np.zeros( (max_seq_len, batch_size, unpad_input_x[0].shape[1]) )
+        # Shape = T_max_batch x BS x 3
+        input_t = np.zeros( (max_seq_len, batch_size, unpad_input_t[0].shape[1]) )
+        input_mask = np.zeros( (max_seq_len, batch_size) )
+        for idx in range(batch_size):
             input_x[:seq_len[idx], idx, : ] = unpad_input_x[idx]
             input_t[:seq_len[idx], idx, : ] = unpad_input_t[idx]
-            input_mask[:seq_len[idx], idx, : ] = 1.
+            input_mask[:seq_len[idx], idx ] = 1.
 
         # Convert numpy ndarrays to torch Tensors
         if params.marker_type == 'real':
             input_x = torch.from_numpy(input_x).float().to(device)    
         else:
-            input_x = torch.from_numpy(input_x).long().to(device)
+            input_x = torch.from_numpy(input_x).float().to(device)
         input_t = torch.from_numpy(input_t).float().to(device)
         input_mask = torch.from_numpy(input_mask).float().to(device)
 
@@ -110,6 +110,7 @@ def test(net, params,  optimizer,  x_data, t_data, label):
     """
     net.train()
     N_batches = int(math.floor(len(x_data) / params.batch_size))
+    batch_size = params.batch_size
     # Shuffle the data
     x_data, t_data = shuffle_data(x_data, t_data)
     time_mse, time_mse_count = 0., 0.
@@ -125,22 +126,19 @@ def test(net, params,  optimizer,  x_data, t_data, label):
         if params.show: bar.next()
         
 
-        unpad_input_x = x_data[b_idx*params.batch_size:(b_idx+1)*params.batch_size]
-        unpad_input_t = t_data[b_idx*params.batch_size:(b_idx+1)*params.batch_size]
+        unpad_input_x = x_data[b_idx*batch_size:(b_idx+1)*batch_size]
+        unpad_input_t = t_data[b_idx*batch_size:(b_idx+1)*batch_size]
 
         seq_len = [len(lst) for lst in unpad_input_x]
         max_seq_len = max(seq_len)
-        input_x = np.zeros( max_seq_len, len(unpad_input_x), unpad_input_x[0].shape[1])
-        input_t = np.zeros( max_seq_len, len(unpad_input_x), unpad_input_t[0].shape[1])
-        input_mask = np.zeros( max_seq_len, len(unpad_input_x), 1)
-        for idx in range(len(unpad_input_x)):
+        input_x = np.zeros( (max_seq_len, batch_size, unpad_input_x[0].shape[1]) )
+        input_t = np.zeros( (max_seq_len, batch_size, unpad_input_t[0].shape[1]) )
+        input_mask = np.zeros( (max_seq_len, batch_size) )
+        for idx in range(batch_size):
             input_x[:seq_len[idx],  idx, : ] = unpad_input_x[idx]
             input_t[:seq_len[idx], idx,  : ] = unpad_input_t[idx]
-            input_mask[:seq_len[idx], idx, : ] = 1.
+            input_mask[:seq_len[idx], idx ] = 1.
 
-
-
-        
 
         if params.marker_type == 'real':
             input_x = torch.from_numpy(input_x).float().to(device)    
