@@ -339,7 +339,7 @@ class hrmtpp_exact(nn.Module):
         
         cluster_log_likelihood = marker_log_likelihood + time_log_likelihood #TxBSxC
         prior = torch.ones(1,1,self.n_cluster) * (1./self.n_cluster)
-        prior_log = prior.log()
+        prior_log = prior.log().to(device)
         log_likelihood = cluster_log_likelihood+ prior_log #TxBSxC
         log_posterior = self.posterior(log_likelihood).log()#TxBSxC
 
