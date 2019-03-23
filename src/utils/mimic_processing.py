@@ -169,10 +169,10 @@ def compute_times(data):
         # Compute the intervals
         shifted = np.concatenate([np.zeros_like(admit_times[0:1]), admit_times[:-1]], axis=0)
         intervals = admit_times - shifted
-        # Convert nanoseconds to hours
+        # Convert nanoseconds to years
         t_data_i = np.stack([admit_times.values.astype(int),
                            visit_durations.values.astype(int),
-                           intervals.values.astype(int)]).T / (1e9*3600*24)
+                           intervals.values.astype(int)]).T / (1e9*3600*24*365.25)
         t_data.append(t_data_i)
     return t_data
 
