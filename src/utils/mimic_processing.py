@@ -164,13 +164,15 @@ def compute_times(data):
         t_data_i = icu_df.iloc[patient_df_rows][['ADMITTIME', 'INTIME', 'OUTTIME']]
         admit_times = t_data_i.ADMITTIME
         visit_durations = t_data_i.OUTTIME - t_data_i.INTIME
+        # import pdb; pdb.set_trace()
         
         # Compute the intervals
         shifted = np.concatenate([np.zeros_like(admit_times[0:1]), admit_times[:-1]], axis=0)
         intervals = admit_times - shifted
+        # Convert nanoseconds to hours
         t_data_i = np.stack([admit_times.values.astype(int),
                            visit_durations.values.astype(int),
-                           intervals.values.astype(int)]).T
+                           intervals.values.astype(int)]).T / (1e9*3600*24)
         t_data.append(t_data_i)
     return t_data
 
