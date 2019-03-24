@@ -267,6 +267,24 @@ class storn(nn.Module):
         sigma = torch.exp(0.5 * logvar)
         return mu + epsilon.mul(sigma)
 
+    def compute_hidden_states(self, x, t, mask):
+        """
+        Input: 
+                x   : Tensor of shape TxBSxmarker_dim (if real)
+                     Tensor of shape TxBSx1(if categorical)
+                t   : Tensor of shape TxBSxtime_dim. [i,:,0] represents actual time at timestep i ,\
+                    [i,:,1] represents time gap d_i = t_i- t_{i-1}
+        Output:
+                hz : Tensor of shape (T)xBSxself.shared_output_layers[-1]
+        """
+        hs, recog_hs, phi = self.run_forward_backward_rnn(x, t, mask)
+
+        mu, logvar = self.encoder(recog_hs, phi ) #TxBSxlatent_dim
+        z = self.reparameterize(mu, logvar)#of shape TxBSxlatent_dim
+
+        hz_embedded = self.preprocess_hidden_latent_state(hs, z)
+        return hz_embedded
+
     def _forward(self, x, t, mask):
         """
             Input: 
