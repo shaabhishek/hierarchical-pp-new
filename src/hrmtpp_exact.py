@@ -314,7 +314,20 @@ class hrmtpp_exact(nn.Module):
         else:
             marker_out_logvar = None
         return marker_out_mu, marker_out_logvar
+    def compute_hidden_states(self, x, t, mask):
+        """
+        Input: 
+                x   : Tensor of shape TxBSxmarker_dim (if real)
+                     Tensor of shape TxBSx1(if categorical)
+                t   : Tensor of shape TxBSxtime_dim. [i,:,0] represents actual time at timestep i ,\
+                    [i,:,1] represents time gap d_i = t_i- t_{i-1}
+        Output:
+                hz : Tensor of shape (T)xBSxself.shared_output_layers[-1]
+        """
+        hs = self.run_forward_backward_rnn(x, t, mask) 
+        hz_embedded = self.preprocess_hidden_latent_state(hs) #hs : TxBSxH  , hz_embedded #TxBSxCx self.shared_output_layers[0]
 
+        return hz_embedded
     def _forward(self, x, t, mask):
         """
             Input: 

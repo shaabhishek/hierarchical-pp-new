@@ -37,21 +37,21 @@ def compute_point_log_likelihood(model, h, d_js):
         return log_f_t  # TxBSxCx(N+1)
 
 
-def compute_time_expectation(model, x, t, N = 1000, tol = 0.02, max_try = 5):
+def compute_time_expectation(model, x, t, mask = None, N = 1000, tol = 0.02, max_try = 5):
     """
         Compute numerical integration.
         Input: 
             model: Torch.nn module
             x : Torch of shape TxBSxmarker_dim
             t : Torch of shape TxBSx2. Last column is indexed by [actual time point, interval]
-            mask is not needed here. Mask at the computation
+            mask is needed here.
         Output:
             y : Torch of shape TxBS
     """
     seq_len, batch_size = x.size(0), x.size(1)
 
     #Instead of x,t pass hz_embedded which can be used for both marker comutation as well as time computation
-    hz_embedded = model.compute_hidden_states(x,t)
+    hz_embedded = model.compute_hidden_states(x,t, mask)
 
     actual_interval = t[:,:,1][:,:,None, None]#TxBSx1x1
     d_max = actual_interval.max()

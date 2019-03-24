@@ -174,21 +174,25 @@ class rmtpp(nn.Module):
                 h_t = self.rnn_cell(phi[seq, :, :], h_t)
                 outs.append(h_t[None, :, :])
             h = torch.cat(outs, dim=0)  # shape = [T+1, batchsize, h]
-        return h, self.preprocess_hidden_state(h)
+        return h[:-1,:,:], self.preprocess_hidden_state(h)[:-1,:,:]
 
     def preprocess_hidden_state(self, h):
         return self.embed_hidden_state(h)
 
-    def compute_hidden_states(self, x, t):
+    def compute_hidden_states(self, x, t, mask):
         """
         Input: 
                 x   : Tensor of shape TxBSxmarker_dim (if real)
                      Tensor of shape TxBSx1(if categorical)
                 t   : Tensor of shape TxBSxtime_dim. [i,:,0] represents actual time at timestep i ,\
                     [i,:,1] represents time gap d_i = t_i- t_{i-1}
+                
+                mask: does not matter
+        Output:
+                hz : Tensor of shape (T)xBSxself.shared_output_layers[-1]
         """
         _, hidden_states = self.run_forward_rnn(x, t)
-        return hidden_states[:-1, :, :]
+        return hidden_states
 
 
     def preprocess_input(self, x, t):
@@ -277,7 +281,7 @@ class rmtpp(nn.Module):
                 log_f_t : tensor of shape TxBS
 
         """
-        h_trimmed = h[:-1, :, :]  # TxBSxself.shared_output_layers[-1]
+        h_trimmed = h # TxBSxself.shared_output_layers[-1]
         d_js = t[:, :, 1][:, :, None]  # Shape TxBSx1 Time differences
 
         past_influence = self.h_influence(h_trimmed)  # TxBSx1

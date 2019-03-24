@@ -219,7 +219,23 @@ class hrmtpp(nn.Module):
 
             return h, rh
 
+    def compute_hidden_states(self, x, t, mask):
+        """
+        Input: 
+                x   : Tensor of shape TxBSxmarker_dim (if real)
+                     Tensor of shape TxBSx1(if categorical)
+                t   : Tensor of shape TxBSxtime_dim. [i,:,0] represents actual time at timestep i ,\
+                    [i,:,1] represents time gap d_i = t_i- t_{i-1}
+        Output:
+                hz : Tensor of shape (T)xBSxself.shared_output_layers[-1]
+        """
+        hs, back_hs = self.run_forward_backward_rnn(x, t, mask)
 
+        mu, logvar = self.encoder(hs, back_hs) #TxBSxlatent_dim
+        z = self.reparameterize(mu[0,:,:], logvar[0,:,:])[None,:,:]#of shape 1xBSxlatent_dim
+
+        hz_embedded = self.preprocess_hidden_latent_state(hs, z)
+        return hz_embedded
 
     def preprocess_hidden_latent_state(self, h, z):
         """

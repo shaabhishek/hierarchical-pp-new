@@ -295,7 +295,23 @@ class hrmtpp_softmax(nn.Module):
         epsilon = torch.randn_like(mu)
         sigma = torch.exp(0.5 * logvar)
         return mu + epsilon.mul(sigma)
+    def compute_hidden_states(self, x, t, mask, temp = 1.):
+        """
+        Input: 
+                x   : Tensor of shape TxBSxmarker_dim (if real)
+                     Tensor of shape TxBSx1(if categorical)
+                t   : Tensor of shape TxBSxtime_dim. [i,:,0] represents actual time at timestep i ,\
+                    [i,:,1] represents time gap d_i = t_i- t_{i-1}
+        Output:
+                hz : Tensor of shape (T)xBSxself.shared_output_layers[-1]
+        """
+        hs, h_last, rh_last = self.run_forward_backward_rnn(x, t, mask)
+        logits = self.encoder(h_last, rh_last) #1xBSxcategorical_dim
+        z = gumbel_softmax(logits, temp)#1xBSxcategorical_dim
 
+        hz_embedded = self.preprocess_hidden_latent_state(hs, z)
+
+        return hz_embedded
     def _forward(self, x, t, temp, mask):
         """
             Input: 
