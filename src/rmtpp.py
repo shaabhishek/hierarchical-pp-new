@@ -179,6 +179,18 @@ class rmtpp(nn.Module):
     def preprocess_hidden_state(self, h):
         return self.embed_hidden_state(h)
 
+    def compute_hidden_states(self, x, t):
+        """
+        Input: 
+                x   : Tensor of shape TxBSxmarker_dim (if real)
+                     Tensor of shape TxBSx1(if categorical)
+                t   : Tensor of shape TxBSxtime_dim. [i,:,0] represents actual time at timestep i ,\
+                    [i,:,1] represents time gap d_i = t_i- t_{i-1}
+        """
+        _, hidden_states = self.run_forward_rnn(x, t)
+        return hidden_states[:-1, :, :]
+
+
     def preprocess_input(self, x, t):
         """
             Input: 

@@ -44,7 +44,7 @@ def compute_time_expectation(model, x, t, N = 1000, tol = 0.02, max_try = 5):
             model: Torch.nn module
             x : Torch of shape TxBSxmarker_dim
             t : Torch of shape TxBSx2. Last column is indexed by [actual time point, interval]
-            mask : Torch of shape TxBS
+            mask is not needed here. Mask at the computation
         Output:
             y : Torch of shape TxBS
     """
