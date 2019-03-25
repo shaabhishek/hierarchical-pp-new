@@ -6,8 +6,6 @@ def compute_point_log_likelihood(model, h, d_js):
         """
             Input:
                 h : Tensor of shape TxBSxCx self.shared_output_layers[-1]
-                tj : Tensor of shape TxBSx2 [j,:,0] represents actual time at timestep j ,\
-                    [i,:,1] represents time gap d_i = t_i- t_{i-1}
                 d_js: Tensor of shape TxBSx1x(N+1) [j,:,:,k] represents the k*delta_x in trapezoidal rule
                 [j,:,:,0] is 0
                 https://en.wikipedia.org/wiki/Trapezoidal_rule#Uniform_grid

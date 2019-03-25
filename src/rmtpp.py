@@ -301,17 +301,19 @@ class rmtpp(nn.Module):
     def generate_marker(self, h, t):
         """
             Input:
-                h : Tensor of shape (T+1)xBSxself.shared_output_layers[-1]
+                h : Tensor of shape TxBSxself.shared_output_layers[-1]
                 t : Tensor of shape TxBSxtime_dim [i,:,0] represents actual time at timestep i ,\
                     [i,:,1] represents time gap d_i = t_i- t_{i-1}
             Output:
                 marker_out_mu : Tensor of shape T x BS x marker_dim
                 marker_out_logvar : Tensor of shape T x BS x marker_dim #None in case of non real marker
         """
-        h_trimmed = h[:-1, :, :]
+        # h_trimmed = h[:-1, :, :]
+        h_trimmed = h
         if self.x_given_t:
             d_js = t[:, :, 1][:, :, None]  # Shape TxBSx1 Time differences
             h_trimmed = torch.cat([h_trimmed, d_js], -1)
+        
         marker_out_mu = self.output_x_mu(h_trimmed)
 
         if self.marker_type == 'real':
