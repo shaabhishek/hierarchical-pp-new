@@ -111,9 +111,14 @@ class rmtpp(nn.Module):
         l = self.shared_output_layers[-1]
         if self.x_given_t:
             l += 1
-        x_module_mu = nn.Linear(l, self.marker_dim)
         if self.marker_type == 'real':
+            x_module_mu = nn.Linear(l, self.marker_dim)
             x_module_logvar = nn.Linear(l, self.marker_dim)
+        elif self.marker_type == 'binary':
+            x_module_mu = nn.Sequential(
+                nn.Linear(l, self.marker_dim),
+                nn.Sigmoid())
+            
 
         return embed_module, x_module_mu, x_module_logvar
 
