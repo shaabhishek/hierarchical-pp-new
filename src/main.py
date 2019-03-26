@@ -209,11 +209,11 @@ if __name__ == '__main__':
         print("\n")
         best_epoch = train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_data, valid_t_data)
         if params.train_test:
-            test_data_path = params.data_dir + "/" + params.data_name + "_valid.pkl"
+            test_data_path = params.data_dir + "/" + params.data_name + "_test.pkl"
             test_x_data, test_t_data = load_data(test_data_path)
             test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch)
     else:
-        test_data_path = params.data_dir + "/" + params.data_name  +"_valid.pkl"
+        test_data_path = params.data_dir + "/" + params.data_name  +"_test.pkl"
         test_x_data, test_t_data = load_data(test_data_path)
         best_epoch = params.best_epoch
         file_name = ''

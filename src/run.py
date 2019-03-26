@@ -37,6 +37,7 @@ def train(net, params, optimizer, x_data, t_data, label):
     marker_mse, marker_mse_count = 0., 0.
     marker_acc, marker_acc_count = 0., 0.
     total_loss = 0.
+    total_sequence = 0.
 
     if params.show:
         from utils.helper import ProgressBar
@@ -50,6 +51,7 @@ def train(net, params, optimizer, x_data, t_data, label):
         unpad_input_t = t_data[b_idx*batch_size:(b_idx+1)*batch_size]
 
         seq_len = [len(lst) for lst in unpad_input_x]
+        total_sequence += sum(seq_len)
         max_seq_len = max(seq_len)
         # Shape = T_max_batch x BS x marker_dim
         input_x = np.zeros( (max_seq_len, len(seq_len), unpad_input_x[0].shape[1]) )
@@ -92,6 +94,7 @@ def train(net, params, optimizer, x_data, t_data, label):
     if params.show: bar.finish()
 
     time_rmse = (time_mse/time_mse_count)** 0.5
+    total_loss /= total_sequence
     if params.marker_type == 'real':
         marker_rmse = (marker_mse/marker_mse_count)** 0.5
         accuracy = None
@@ -118,6 +121,7 @@ def test(net, params,  optimizer,  x_data, t_data, label):
     marker_mse, marker_mse_count = 0., 0.
     marker_acc, marker_acc_count = 0., 0.
     total_loss = 0.
+    total_sequence =0
 
     if params.show:
         from utils.helper import ProgressBar
@@ -131,6 +135,7 @@ def test(net, params,  optimizer,  x_data, t_data, label):
         unpad_input_t = t_data[b_idx*batch_size:(b_idx+1)*batch_size]
 
         seq_len = [len(lst) for lst in unpad_input_x]
+        total_sequence += sum(seq_len)
         max_seq_len = max(seq_len)
         input_x = np.zeros( (max_seq_len, len(seq_len), unpad_input_x[0].shape[1]) )
         input_t = np.zeros( (max_seq_len, len(seq_len), unpad_input_t[0].shape[1]) )
@@ -173,5 +178,5 @@ def test(net, params,  optimizer,  x_data, t_data, label):
         accuracy = marker_acc/marker_acc_count
         auc = None
         marker_rmse = None
-
+    total_loss /= total_sequence
     return total_loss, time_rmse, accuracy, auc, marker_rmse

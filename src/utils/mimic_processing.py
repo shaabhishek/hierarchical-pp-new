@@ -170,11 +170,24 @@ def compute_times(data):
         shifted = np.concatenate([np.zeros_like(admit_times[0:1]), admit_times[:-1]], axis=0)
         intervals = admit_times - shifted
         # Convert nanoseconds to years
+        #changing inervals at index 1 and visit duration at index 2
         t_data_i = np.stack([admit_times.values.astype(int),
-                           visit_durations.values.astype(int),
-                           intervals.values.astype(int)]).T / (1e9*3600*24*365.25)
+                           intervals.values.astype(int),
+                           visit_durations.values.astype(int)]).T / (1e9*3600*24*365.25)
         t_data.append(t_data_i)
     return t_data
+
+def fix_normalize_time(data):
+    N = len(data)
+    admit_times = np.concatenate([i[:,0] for i in data])
+    interval_times = np.concatenate([i[1:,1] for i in data])
+    mean_admit_time, std_admit_time = np.mean(admit_times), np.std(admit_times)
+    mean_interval_time, std_interval_time = np.mean(interval_times), np.std(interval_times)
+
+    for idx in range(N):
+        data[idx][:,0] = (data[idx][:,0]-mean_admit_time)/std_admit_time
+        data[idx][0,1] = mean_interval_time
+    return data
 
 def save_mimic_data(data=None):
     """
@@ -189,6 +202,7 @@ def save_mimic_data(data=None):
             data = pickle.load(handle)
 
     t_data = compute_times(data)
+    t_data = fix_normalize_time(t_data)
     x_data = compute_markers(data)
     assert(np.all([t_data[idx].shape[1] == 3 for idx in range(100)]))
     assert(np.all([x_data[idx].shape[0] == t_data[idx].shape[0] for idx in range(100)]))
@@ -197,14 +211,17 @@ def save_mimic_data(data=None):
         't': t_data,
         'x': x_data
     }
-    
-    train_dict, val_dict = train_val_split(data_dict, val_ratio=0.2)
+    #Train-Valid-Test Split of 60-20-20
+    train_dict, extra_dict = train_val_split(data_dict, val_ratio=0.4)
+    val_dict, test_dict = train_val_split(extra_dict, val_ratio=0.5)
     assert(len(train_dict['x']) == len(train_dict['t']))
     assert(len(val_dict['x']) == len(val_dict['t']))
-    assert(len(train_dict['x']) + len(val_dict['x']) == len(data_dict['x']))
+    assert(len(test_dict['x']) == len(test_dict['t']))
+    assert(len(train_dict['x']) + len(val_dict['x'])+ len(test_dict['x']) == len(data_dict['x']))
 
     train_path_data = '../data/mimic_train.pkl'
     valid_path_data = '../data/mimic_valid.pkl'
+    test_path_data = '../data/mimic_test.pkl'
 
     print("Saving training data to {}".format(train_path_data))
     with open(train_path_data, 'wb') as handle:
@@ -212,7 +229,10 @@ def save_mimic_data(data=None):
     print("Saving validation data to {}".format(valid_path_data))
     with open(valid_path_data, 'wb') as handle:
         pickle.dump(val_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    return train_path_data, valid_path_data
+    print("Saving testing data to {}".format(test_path_data))
+    with open(test_path_data, 'wb') as handle:
+        pickle.dump(test_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    return train_path_data, valid_path_data, test_path_data
 
 
 if __name__ == "__main__":
@@ -224,4 +244,4 @@ if __name__ == "__main__":
     # else:
     #     data = preprocess_raw_data()
     # print(len(data))
-    save_mimic_data()
+    print(save_mimic_data())
