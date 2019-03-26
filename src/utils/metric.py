@@ -35,7 +35,7 @@ def compute_point_log_likelihood(model, h, d_js):
         return log_f_t  # TxBSxCx(N+1)
 
 
-def compute_time_expectation(model, x, t, mask = None, N = 1000, tol = 0.02, max_try = 5):
+def compute_time_expectation(model, x, t, mask = None, N = 10000, tol = 0.01, max_try = 3):
     """
         Compute numerical integration.
         Input: 
@@ -53,7 +53,7 @@ def compute_time_expectation(model, x, t, mask = None, N = 1000, tol = 0.02, max
 
     actual_interval = t[:,:,1][:,:,None, None]#TxBSx1x1
     d_max = actual_interval.max()
-    init_max = 2.
+    init_max = 3.
     init_N = N
     try_count = 1
     init_tol = tol +1.

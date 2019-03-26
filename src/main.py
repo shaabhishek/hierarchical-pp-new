@@ -65,15 +65,15 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
             os.makedirs('model')
         if not os.path.isdir(os.path.join('model', params.save)):
             os.makedirs(os.path.join('model', params.save))
-        if not os.path.isdir(os.path.join('model', params.save, params.model_name)):
-            os.makedirs(os.path.join('model', params.save, params.model_name))
+        if not os.path.isdir(os.path.join('model', params.save, params.model)):
+            os.makedirs(os.path.join('model', params.save, params.model))
         #net.save_checkpoint(prefix=os.path.join('model', params.save, file_name), epoch=idx+1)
         torch.save({'epoch':idx,
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     'loss': train_loss,
                     },
-                     os.path.join('model', params.save, params.model_name, file_name)+'_'+ str(idx+1)
+                     os.path.join('model', params.save, params.model, file_name)+'_'+ str(idx+1)
                     )
 
         if params.marker_type != 'real':
@@ -100,10 +100,10 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
         os.makedirs('result')
     if not os.path.isdir(os.path.join('result', params.save)):
         os.makedirs(os.path.join('result', params.save))
-    if not os.path.isdir(os.path.join('result', params.save, params.model_name)):
-            os.makedirs(os.path.join('result', params.save, params.model_name))
+    if not os.path.isdir(os.path.join('result', params.save, params.model)):
+            os.makedirs(os.path.join('result', params.save, params.model))
 
-    f_save_log = open(os.path.join('result', params.save,params.model_name,  file_name), 'w')
+    f_save_log = open(os.path.join('result', params.save,params.model,  file_name), 'w')
     f_save_log.write("valid_auc:\n" + str(all_valid_auc) + "\n\n")
     f_save_log.write("train_auc:\n" + str(all_train_auc) + "\n\n")
     f_save_log.write("valid_loss:\n" + str(all_valid_loss) + "\n\n")
@@ -122,21 +122,23 @@ def test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch):
     model = load_model(params).to(device)
 
 
-    checkpoint = torch.load(os.path.join('model', params.save, params.model_name, file_name)+ '_'+str(best_epoch))
+    checkpoint = torch.load(os.path.join('model', params.save, params.model, file_name)+ '_'+str(best_epoch))
     model.load_state_dict(checkpoint['model_state_dict'])
     
-    test_loss, test_time_rmse, test_accuracy, test_auc, test_marker_rmse = test(model, params,  test_x_data, test_t_data, label='Test')
-    print("\ntest_auc\t", test_auc)
-    print("test_accuracy\t", test_accuracy)
+    test_loss, test_time_rmse, test_accuracy, test_auc, test_marker_rmse = test(model, params, None, test_x_data, test_t_data, label='Test')
+    if params.marker_type != 'real':
+        print("\ntest_auc\t", test_auc)
+        print("test_accuracy\t", test_accuracy)
+    else:
+        print("train_marker_rmse\t" , test_marker_rmse)
     print("test_loss\t", test_loss)
-    print("train_marker_rmse\t" + test_marker_rmse)
-    print("train_time_rmse\t" + test_time_rmse)
+    print("train_time_rmse\t" , test_time_rmse)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Script to test Marked Point Process.')
 
     ###Validation Parameter###
-    parser.add_argument('--max_iter', type=int, default=200, help='number of iterations')
+    parser.add_argument('--max_iter', type=int, default=10, help='number of iterations')
     parser.add_argument('--anneal_iter', type=int, default=100, help='number of iteration over which anneal goes to 1')
     parser.add_argument('--hidden_dim', type=int, default=128, help='rnn hidden dim')
     parser.add_argument('--maxgradnorm', type=float, default=50.0, help='maximum gradient norm')
@@ -158,6 +160,7 @@ if __name__ == '__main__':
     parser.add_argument('--show', type=bool, default=True, help='print progress')
     parser.add_argument('--data_dir', type=str, default='../data/', help='data directory')
     parser.add_argument('--best_epoch', type=int, default=10, help='best epoch')
+    parser.add_argument('--seed', type=int, default=1, help='seed')
 
 
 
@@ -169,8 +172,8 @@ if __name__ == '__main__':
         params.marker_dim = 217
         params.time_dim = 3
         params.marker_type = 'binary'
-        parser.load = 'mimic'
-        parser.save = 'mimic'
+        params.load = 'mimic'
+        params.save = 'mimic'
 
     else:#different dataset. Encode those details.
         pass
@@ -179,22 +182,20 @@ if __name__ == '__main__':
     # Read data
     
     #Set Seed for reproducibility
-    seedNum =1337
+    seedNum =params.seed
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     torch.manual_seed(seedNum)
     np.random.seed(seedNum)
+    file_name_identifier = [['_b', params.batch_size],['_h',params.hidden_dim ] , ['_l2', params.l2], ['_l', params.latent_dim], ['_gn', params.maxgradnorm], ['_lr', params.lr], ['_c',params.n_cluster],['_xt', params.x_given_t], ['_r',params.reg], ['_s',params.seed   ]  ]
 
     if not params.test:
         d = vars(params)
         for key in d:
             print('\t', key, '\t', d[key])
-        file_name = 'b' + str(params.batch_size) + \
-                    '_gn' + str(params.maxgradnorm) + '_h' + str(params.hidden_dim) + \
-                    '_l2' + str(params.l2) + '_l' + str(params.latent_dim) + \
-                    '_lr' + str(params.lr) + '_c' + str(params.n_cluster) + \
-                    '_xt' + str(params.x_given_t) + '_r' + str(params.reg) + \
-                    '_s'+str(seedNum) 
+        file_name = ''
+        for item_ in file_name_identifier:
+            file_name = file_name+item_[0]+ str(item_[1])
 
         #Data should reside in this path for all datasets. Ideally 5 cross fold validation.
         train_data_path = params.data_dir + params.data_name + "_train.pkl"
@@ -208,17 +209,15 @@ if __name__ == '__main__':
         print("\n")
         best_epoch = train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_data, valid_t_data)
         if params.train_test:
-            test_data_path = params.data_dir + "/" + params.data_name + "_test1.pkl"
+            test_data_path = params.data_dir + "/" + params.data_name + "_valid.pkl"
             test_x_data, test_t_data = load_data(test_data_path)
             test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch)
     else:
-        test_data_path = params.data_dir + "/" + params.data_name  +"_test1.pkl"
+        test_data_path = params.data_dir + "/" + params.data_name  +"_valid.pkl"
         test_x_data, test_t_data = load_data(test_data_path)
         best_epoch = params.best_epoch
-        file_name = 'b' + str(params.batch_size) + \
-                    '_gn' + str(params.maxgradnorm) + '_h' + str(params.hidden_dim) + \
-                    '_l2' + str(params.l2) + '_l' + str(params.latent_dim) + \
-                    '_lr' + str(params.lr) + '_c' + str(params.n_cluster) + \
-                    '_xt' + str(params.x_given_t) + '_r' + str(params.reg) + \
-                    '_s'+str(seedNum)
+        file_name = ''
+        for item_ in file_name_identifier:
+            file_name = file_name+item_[0]+ str(item_[1])
+
         test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch)

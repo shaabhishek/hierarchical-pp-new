@@ -48,7 +48,7 @@ class rmtpp(nn.Module):
                 hidden_dim : hidden dimension is gru cell
                 x_given_t : whether to condition marker given time gap. For RMTPP set it false.
         """
-
+        self.model_name = 'rmtpp'#Use this for all model to decide run time behavior
         self.marker_type = marker_type
         self.marker_dim = marker_dim
         self.time_dim = time_dim
@@ -139,6 +139,7 @@ class rmtpp(nn.Module):
                 mask: Tensor of shape TxBS If mask[t,i] =1 then that timestamp is present
             Output:
                 loss : Tensor scalar
+                meta_info : dict of results
         """
         #TxBS and TxBS
         time_log_likelihood, marker_log_likelihood = self._forward(
@@ -148,7 +149,10 @@ class rmtpp(nn.Module):
         loss = -1. * (time_log_likelihood + marker_log_likelihood)
         if mask is not None:
             loss = loss * mask
-        return loss.sum(), [-marker_log_likelihood.sum().item(), -time_log_likelihood.sum().item() ]
+        loss = loss.sum()
+        meta_info = {"marker_ll":-marker_log_likelihood.sum().detach().cpu(), "time_ll":-time_log_likelihood.sum().detach().cpu(), 
+        "time_mse": 0. , "time_mse_count": 1. , "marker_mse":0., "marker_mse_count":1., "marker_acc":0. , "marker_acc_count": 1., "true_ll":  -loss.detach().cpu()}
+        return loss, meta_info
 
     def run_forward_rnn(self, x, t):
         """
@@ -273,7 +277,7 @@ class rmtpp(nn.Module):
                 loss = F.cross_entropy(mu_, x_, reduction='none').view(
                     seq_lengths, batch_size)
             else:#binary
-                loss = F.binary_cross_entropy_with_logits(mu, x, reduction= 'none').sum(dim =-1)#TxBS
+                loss = F.binary_cross_entropy(mu, x, reduction= 'none').sum(dim =-1)#TxBS
             return -loss
 
     def compute_point_log_likelihood(self, h, t):

@@ -29,7 +29,7 @@ def train(net, params, optimizer, x_data, t_data, label):
     t_data: N, (t_i, 2), A list of numpy array.
     """
     net.train()
-    N_batches = int(math.floor(len(x_data) / params.batch_size))
+    N_batches = int(math.ceil(len(x_data) / params.batch_size))
     batch_size = params.batch_size
     # Shuffle the data
     x_data, t_data = shuffle_data(x_data, t_data)
@@ -52,11 +52,11 @@ def train(net, params, optimizer, x_data, t_data, label):
         seq_len = [len(lst) for lst in unpad_input_x]
         max_seq_len = max(seq_len)
         # Shape = T_max_batch x BS x marker_dim
-        input_x = np.zeros( (max_seq_len, batch_size, unpad_input_x[0].shape[1]) )
+        input_x = np.zeros( (max_seq_len, len(seq_len), unpad_input_x[0].shape[1]) )
         # Shape = T_max_batch x BS x 3
-        input_t = np.zeros( (max_seq_len, batch_size, unpad_input_t[0].shape[1]) )
-        input_mask = np.zeros( (max_seq_len, batch_size) )
-        for idx in range(batch_size):
+        input_t = np.zeros( (max_seq_len, len(seq_len), unpad_input_t[0].shape[1]) )
+        input_mask = np.zeros( (max_seq_len, len(seq_len)) )
+        for idx in range(len(seq_len)):
             input_x[:seq_len[idx], idx, : ] = unpad_input_x[idx]
             input_t[:seq_len[idx], idx, : ] = unpad_input_t[idx]
             input_mask[:seq_len[idx], idx ] = 1.
@@ -73,7 +73,8 @@ def train(net, params, optimizer, x_data, t_data, label):
         loss, meta_info = net(input_x, input_t, mask=input_mask)
         loss.backward()
 
-        total_loss += loss.detach()
+        total_loss += loss.detach().cpu().numpy()
+        
         time_mse += meta_info["time_mse"]
         time_mse_count += meta_info["time_mse_count"]
         if params.marker_type == 'real':
@@ -109,7 +110,7 @@ def test(net, params,  optimizer,  x_data, t_data, label):
     t_data: N, (t_i, 2), A list of numpy array.
     """
     net.train()
-    N_batches = int(math.floor(len(x_data) / params.batch_size))
+    N_batches = int(math.ceil(len(x_data) / params.batch_size))
     batch_size = params.batch_size
     # Shuffle the data
     x_data, t_data = shuffle_data(x_data, t_data)
@@ -131,10 +132,10 @@ def test(net, params,  optimizer,  x_data, t_data, label):
 
         seq_len = [len(lst) for lst in unpad_input_x]
         max_seq_len = max(seq_len)
-        input_x = np.zeros( (max_seq_len, batch_size, unpad_input_x[0].shape[1]) )
-        input_t = np.zeros( (max_seq_len, batch_size, unpad_input_t[0].shape[1]) )
-        input_mask = np.zeros( (max_seq_len, batch_size) )
-        for idx in range(batch_size):
+        input_x = np.zeros( (max_seq_len, len(seq_len), unpad_input_x[0].shape[1]) )
+        input_t = np.zeros( (max_seq_len, len(seq_len), unpad_input_t[0].shape[1]) )
+        input_mask = np.zeros( (max_seq_len, len(seq_len)) )
+        for idx in range(len(seq_len)):
             input_x[:seq_len[idx],  idx, : ] = unpad_input_x[idx]
             input_t[:seq_len[idx], idx,  : ] = unpad_input_t[idx]
             input_mask[:seq_len[idx], idx ] = 1.
@@ -143,14 +144,14 @@ def test(net, params,  optimizer,  x_data, t_data, label):
         if params.marker_type == 'real':
             input_x = torch.from_numpy(input_x).float().to(device)    
         else:
-            input_x = torch.from_numpy(input_x).long().to(device)
+            input_x = torch.from_numpy(input_x).float().to(device)
         input_t = torch.from_numpy(input_t).float().to(device)
         input_mask = torch.from_numpy(input_mask).float().to(device)
 
         with torch.no_grad():
             loss, meta_info = net(input_x, input_t, input_mask)
 
-        total_loss += loss.detach()
+        total_loss += loss.detach().cpu().numpy()
         time_mse+= meta_info["time_mse"]
         time_mse_count += meta_info["time_mse_count"]
         if params.marker_type == 'real':
