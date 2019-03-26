@@ -2,6 +2,25 @@ import torch
 import numpy as np
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+def get_marker_metric(marker_type, marker_out_mu, x, mask, metric_dict):
+    #mask TxBS
+    if marker_type == 'real':
+        #Compute MSE
+        out = (marker_out_mu-x)**2.
+        out = out *mask[:,:,None]
+        metric_dict['marker_mse'] = out.sum().detach().cpu().numpy()
+        metric_dict['marker_mse_count'] = mask.sum().detach().cpu().numpy()
+    elif marker_type == 'binary':
+        out = (marker_out_mu) >0.5
+        true_out = x >0.5
+        acc = (out == true_out)* (mask[:,:,None]== 1.) *true_out
+        metric_dict['marker_acc'] = acc.sum().detach().cpu().numpy()
+        metric_dict['marker_acc_count'] = (true_out * (mask[:,:,None] ==1.)).sum().detach().numpy()
+    else:
+        pass
+        #implement categorical
+        
+
 def compute_point_log_likelihood(model, h, d_js):
         """
             Input:
@@ -35,7 +54,7 @@ def compute_point_log_likelihood(model, h, d_js):
         return log_f_t  # TxBSxCx(N+1)
 
 
-def compute_time_expectation(model, x, t, mask = None, N = 10000, tol = 0.01, max_try = 3):
+def compute_time_expectation(model, hz_embedded , t, mask , N = 10000, tol = 0.01, max_try = 3):
     """
         Compute numerical integration.
         Input: 
@@ -46,10 +65,7 @@ def compute_time_expectation(model, x, t, mask = None, N = 10000, tol = 0.01, ma
         Output:
             y : Torch of shape TxBS
     """
-    seq_len, batch_size = x.size(0), x.size(1)
-
-    #Instead of x,t pass hz_embedded which can be used for both marker comutation as well as time computation
-    hz_embedded = model.compute_hidden_states(x,t, mask)
+    seq_len, batch_size = t.size(0), t.size(1)
 
     actual_interval = t[:,:,1][:,:,None, None]#TxBSx1x1
     d_max = actual_interval.max()
@@ -57,32 +73,24 @@ def compute_time_expectation(model, x, t, mask = None, N = 10000, tol = 0.01, ma
     init_N = N
     try_count = 1
     init_tol = tol +1.
-    while(try_count<max_try and init_tol<tol):
-        try_count += 1
-        delta_x = (d_max* init_max )/N
-        d_js = (torch.arange(0, N).float().to(device)*delta_x)[None,None,None,:]#1x1x1xN
-        #Add a dummy row for the actual time
-        #Interval starts from 0 to max
-        repeat_val = (seq_len,batch_size,-1,-1)
-        d_js = d_js.expand(*repeat_val)#TxBSx1xN
-        time_log_likelihood = compute_point_log_likelihood(model, hz_embedded, d_js) #TxBSx1xN
+    delta_x = (d_max* init_max )/N
+    d_js = (torch.arange(0, N).float().to(device)*delta_x)[None,None,None,:]#1x1x1xN
+    #Add a dummy row for the actual time
+    #Interval starts from 0 to max
+    repeat_val = (seq_len,batch_size,-1,-1)
+    d_js = d_js.expand(*repeat_val)#TxBSx1xN
+    time_log_likelihood = compute_point_log_likelihood(model, hz_embedded, d_js) #TxBSx1xN
 
-        time_likelihood = time_log_likelihood.exp()[:,:,0,:]#TxBSxN (Maybe should be using some stable version of that)
-        #Check whether prob sums to 1 or not. If sum< 1, increase integration max limit. If sum>1. Increase N.
-        sum_probs = time_likelihood.sum(dim =[2])*delta_x #TxBS
-        mean_t_prob = sum_probs.mean()
-        if(mean_t_prob>1.+tol and try_count<max_try):
-            init_N *= 2
-            continue
-        elif(mean_t_prob<1.-tol and try_count<max_try):
-            init_max *=2.
-            continue
-        #Compute Expectation
-        #t*f(t)
-        g = time_likelihood * d_js[:,:,0,:]*delta_x# TxBSxN
-        expectation = g.sum(dim =-1)#TxBS
-        print("tolerance achieved: ", mean_t_prob-1.)
-        return expectation #TxBS
+    time_likelihood = time_log_likelihood.exp()[:,:,0,:]#TxBSxN (Maybe should be using some stable version of that)
+    #Check whether prob sums to 1 or not. If sum< 1, increase integration max limit. If sum>1. Increase N.
+    sum_probs = time_likelihood.sum(dim =[2])*delta_x #TxBS
+    mean_t_prob = sum_probs.mean()
+    #Compute Expectation
+    #t*f(t)
+    g = time_likelihood * d_js[:,:,0,:]*delta_x# TxBSxN
+    expectation = g.sum(dim =-1)#TxBS
+    #print("tolerance achieved: ", mean_t_prob-1.)
+    return expectation #TxBS
 
 
 

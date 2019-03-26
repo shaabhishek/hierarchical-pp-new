@@ -15,6 +15,13 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 DEBUG = False
 
+#Move it to utils
+from utils.metric import get_marker_metric, compute_time_expectation
+
+
+
+
+
 def one_hot_encoding(y, n_dims=None):
     # Implement
     """ Take integer y (tensor or variable) with n dims and convert it to 1-hot representation with n+1 dims. """
@@ -114,7 +121,7 @@ class rmtpp(nn.Module):
         if self.marker_type == 'real':
             x_module_mu = nn.Linear(l, self.marker_dim)
             x_module_logvar = nn.Linear(l, self.marker_dim)
-        elif self.marker_type == 'binary':
+        elif self.marker_type == 'binary':#Fix binary
             x_module_mu = nn.Sequential(
                 nn.Linear(l, self.marker_dim),
                 nn.Sigmoid())
@@ -129,7 +136,7 @@ class rmtpp(nn.Module):
         base_intensity =  nn.Parameter(torch.zeros(1, 1, 1))
         return h_influence, time_influence, base_intensity
 
-    def forward(self, x, t,anneal = 1., mask=None):
+    def forward(self, x, t,anneal = 1., mask= None):
         """
             Input: 
                 x   : Tensor of shape TxBSxmarker_dim (if real)
@@ -142,7 +149,7 @@ class rmtpp(nn.Module):
                 meta_info : dict of results
         """
         #TxBS and TxBS
-        time_log_likelihood, marker_log_likelihood = self._forward(
+        time_log_likelihood, marker_log_likelihood, metric_dict = self._forward(
             x, t, mask)
         if DEBUG:
             print("Losses:", marker_log_likelihood.sum().item(),  time_log_likelihood.sum().item())
@@ -150,9 +157,8 @@ class rmtpp(nn.Module):
         if mask is not None:
             loss = loss * mask
         loss = loss.sum()
-        meta_info = {"marker_ll":-marker_log_likelihood.sum().detach().cpu(), "time_ll":-time_log_likelihood.sum().detach().cpu(), 
-        "time_mse": 0. , "time_mse_count": 1. , "marker_mse":0., "marker_mse_count":1., "marker_acc":0. , "marker_acc_count": 1., "true_ll":  -loss.detach().cpu()}
-        return loss, meta_info
+        meta_info = {"marker_ll":-marker_log_likelihood.sum().detach().cpu(), "time_ll":-time_log_likelihood.sum().detach().cpu(), "true_ll":  -loss.detach().cpu()}
+        return loss, {**meta_info, **metric_dict}
 
     def run_forward_rnn(self, x, t):
         """
@@ -237,7 +243,7 @@ class rmtpp(nn.Module):
 
         """
 
-        # Tensor of shape (T+1)xBSxself.shared_output_layers[-1]
+        # Tensor of shape (T)xBSxself.shared_output_layers[-1]
         _, hidden_states = self.run_forward_rnn(x, t)
 
         # marker generation layer. Ideally it should include time gap also.
@@ -245,12 +251,21 @@ class rmtpp(nn.Module):
         marker_out_mu, marker_out_logvar = self.generate_marker(
             hidden_states, t)
 
+        metric_dict = {}
+        with torch.no_grad():
+            get_marker_metric(self.marker_type, marker_out_mu, x, mask, metric_dict)
+            expected_t = compute_time_expectation(self, hidden_states, t, mask)
+            time_mse = (expected_t- t[:,:,1])**2. * mask
+            metric_dict['time_mse'] = time_mse.sum().detach().cpu().numpy()
+            metric_dict['time_mse_count'] = mask.sum().detach().cpu().numpy()
+
         time_log_likelihood = self.compute_point_log_likelihood(
             hidden_states, t)
         marker_log_likelihood = self.compute_marker_log_likelihood(
             x, marker_out_mu, marker_out_logvar)
 
-        return time_log_likelihood, marker_log_likelihood  # TxBS and TxBS
+        return time_log_likelihood, marker_log_likelihood, metric_dict  # TxBS and TxBS
+    
 
     def compute_marker_log_likelihood(self, x, mu, logvar):
         """

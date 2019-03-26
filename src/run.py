@@ -154,7 +154,7 @@ def test(net, params,  optimizer,  x_data, t_data, label):
         input_mask = torch.from_numpy(input_mask).float().to(device)
 
         with torch.no_grad():
-            loss, meta_info = net(input_x, input_t, input_mask)
+            loss, meta_info = net(input_x, input_t, mask= input_mask)
 
         total_loss += loss.detach().cpu().numpy()
         time_mse+= meta_info["time_mse"]
