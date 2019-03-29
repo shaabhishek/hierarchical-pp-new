@@ -127,11 +127,13 @@ def stackex_data_to_df(data, colnames=None):
     unique_marker_labels = stackex_df['marker'].unique()
     stackex_df['marker'] = stackex_df['marker'].apply(lambda x: np.argwhere(x==unique_marker_labels).item())
     
-    # Sort values first by userid and then by timestamp..
-    stackex_df = stackex_df.sort_values(by=['userid', 'timestamp', 'marker'], axis='rows')
+    # Remove userid's with duplicate timestamps as per the RMTPP paper
+    # Also remove userid's with length > 200
+    group_users = stackex_df.groupby('userid')
+    stackex_df = group_users.filter(lambda x: (len(x)<200) and ~np.any(x.duplicated('timestamp')))
     
-    # Remove duplicates userid - timestamp pairs as per the RMTPP paper
-    stackex_df = stackex_df.drop_duplicates(subset=['userid', 'timestamp'], keep=False)
+#     Sort values first by userid and then by timestamp..
+    stackex_df = stackex_df.sort_values(by=['userid', 'timestamp', 'marker'], axis='rows')
     
     return stackex_df
 
