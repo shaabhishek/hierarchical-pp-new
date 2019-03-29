@@ -91,6 +91,8 @@ def train(net, params, optimizer, x_data, t_data, label):
             norm = torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm = params.maxgradnorm)
         optimizer.step()
 
+    optimizer.zero_grad()
+
     if params.show: bar.finish()
 
     time_rmse = (time_mse/time_mse_count)** 0.5
@@ -112,7 +114,7 @@ def test(net, params,  optimizer,  x_data, t_data, label):
     x_data: N, (t_i,D), A list of numpy array.
     t_data: N, (t_i, 2), A list of numpy array.
     """
-    net.train()
+    net.eval()
     N_batches = int(math.ceil(len(x_data) / params.batch_size))
     batch_size = params.batch_size
     # Shuffle the data
