@@ -198,6 +198,7 @@ def save_stackex_data(data=None):
             print('Data didnt load')
 
     stackex_df = stackex_data_to_df(data)
+    assert(len(stackex_df[stackex_df.duplicated(subset=['userid', 'timestamp'])]['userid'])==0)
     t_data = compute_times(data, stackex_df)
     t_data = fix_normalize_time(t_data)
     x_data = compute_markers(data, stackex_df)
