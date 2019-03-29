@@ -91,16 +91,3 @@ def compute_time_expectation(model, hz_embedded , t, mask , N = 10000, tol = 0.0
     expectation = g.sum(dim =-1)#TxBS
     #print("tolerance achieved: ", mean_t_prob-1.)
     return expectation #TxBS
-
-
-
-
-
-        
-        
-
- 
-
-
-
-
