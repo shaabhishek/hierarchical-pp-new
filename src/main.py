@@ -174,6 +174,12 @@ if __name__ == '__main__':
         params.marker_type = 'binary'
         params.load = 'mimic'
         params.save = 'mimic'
+    elif params.data_name == 'stackexchange':
+        params.marker_dim = 1
+        params.time_dim = 2
+        params.marker_type = 'binary'
+        params.load = 'stackexchange'
+        params.save = 'stackexchange'
 
     else:#different dataset. Encode those details.
         pass
