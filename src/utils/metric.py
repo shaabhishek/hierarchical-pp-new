@@ -15,7 +15,7 @@ def get_marker_metric(marker_type, marker_out_mu, x, mask, metric_dict):
         true_out = x >0.5
         acc = (out == true_out)* (mask[:,:,None]== 1.) *true_out
         metric_dict['marker_acc'] = acc.sum().detach().cpu().numpy()
-        metric_dict['marker_acc_count'] = (true_out * (mask[:,:,None] ==1.)).sum().detach().numpy()
+        metric_dict['marker_acc_count'] = (true_out * (mask[:,:,None] ==1.)).sum().detach().cpu().numpy()
     else:
         pass
         #implement categorical
