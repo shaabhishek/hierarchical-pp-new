@@ -45,7 +45,8 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
     all_valid_time_rmse = {}
     all_train_time_rmse = {}
     best_valid_loss = 0
-
+    best_epoch = 1
+    
     for idx in range(params.max_iter):
         params.iter = idx +1
         #### Loss is the ELBO, accuracy is for categorical/binary marker, AUC is for binary/categorical marker.  Time RMSE is w.r.t expectation. marker rmse for real marker####
