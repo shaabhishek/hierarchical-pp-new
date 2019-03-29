@@ -102,7 +102,7 @@ class rmtpp(nn.Module):
         t_module = nn.Sequential(
             nn.Linear(self.time_dim, self.t_embedding_layer[0]),
             nn.ReLU(),
-            nn.Dropout(p=0.5)
+            nn.Dropout(p=0.5),
             nn.Linear(self.t_embedding_layer[0], self.t_embedding_layer[0])
         )
         return x_module, t_module
