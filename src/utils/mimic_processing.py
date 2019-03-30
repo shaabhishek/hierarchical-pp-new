@@ -161,7 +161,7 @@ def compute_times(data):
     
     group_patients = icu_df.groupby('SUBJECT_ID')
     for patient_idx, patient_df_rows in group_patients.groups.items():
-        t_data_i = icu_df.loc[patient_df_rows][['ADMITTIME', 'INTIME', 'OUTTIME']].astype('int') / (10**9 * 3600 * 24 * 365.25)
+        t_data_i = icu_df.loc[patient_df_rows][['ADMITTIME', 'INTIME', 'OUTTIME']].astype('int') / (10**9 * 3600 * 24)
         admit_times = t_data_i.ADMITTIME
         visit_durations = t_data_i.OUTTIME - t_data_i.INTIME
         # import pdb; pdb.set_trace()
