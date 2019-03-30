@@ -13,9 +13,11 @@ def get_marker_metric(marker_type, marker_out_mu, x, mask, metric_dict):
     elif marker_type == 'binary':
         out = (marker_out_mu) >0.5
         true_out = x >0.5
-        acc = (out == true_out)* (mask[:,:,None]== 1.) *true_out
+        # acc = (out == true_out)* (mask[:,:,None]== 1.) *true_out
+        acc = (out == true_out)*(mask[:,:,None]== 1.)
         metric_dict['marker_acc'] = acc.sum().detach().cpu().numpy()
-        metric_dict['marker_acc_count'] = (true_out * (mask[:,:,None] ==1.)).sum().detach().cpu().numpy()
+        # metric_dict['marker_acc_count'] = (true_out * (mask[:,:,None] ==1.)).sum().detach().cpu().numpy()
+        metric_dict['marker_acc_count'] = (torch.ones_like(x).to(device)*mask[:,:,None]).sum().cpu().numpy()
     else:
         pass
         #implement categorical

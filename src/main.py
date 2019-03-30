@@ -93,7 +93,7 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
         
 
         # output the epoch with the best validation auc
-        if valid_loss > best_valid_loss :
+        if (valid_loss is None) or (valid_loss < best_valid_loss) :
             best_valid_loss = valid_loss
             best_epoch = idx+1
 
