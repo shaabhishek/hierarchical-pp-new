@@ -59,7 +59,7 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
             print("valid_accuracy\t", valid_accuracy, "\ttrain_accuracy\t", train_accuracy)
         else:
             print("valid_marker_rmse\t", valid_marker_rmse, "\ttrain_marker_rmse\t", train_marker_rmse)
-        print("valid_marker_rmse\t", valid_time_rmse, "\ttrain_time_rmse\t", train_time_rmse)
+        print("valid_time_rmse\t", valid_time_rmse, "\ttrain_time_rmse\t", train_time_rmse)
         print("valid_loss\t", valid_loss, "\ttrain_loss\t", train_loss)
 
         if not os.path.isdir('model'):
