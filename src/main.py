@@ -131,9 +131,9 @@ def test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch):
         print("\ntest_auc\t", test_auc)
         print("test_accuracy\t", test_accuracy)
     else:
-        print("train_marker_rmse\t" , test_marker_rmse)
+        print("test_marker_rmse\t" , test_marker_rmse)
     print("test_loss\t", test_loss)
-    print("train_time_rmse\t" , test_time_rmse)
+    print("test_time_rmse\t" , test_time_rmse)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Script to test Marked Point Process.')
