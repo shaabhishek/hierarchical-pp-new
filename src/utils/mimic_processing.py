@@ -161,19 +161,23 @@ def compute_times(data):
     
     group_patients = icu_df.groupby('SUBJECT_ID')
     for patient_idx, patient_df_rows in group_patients.groups.items():
-        t_data_i = icu_df.iloc[patient_df_rows][['ADMITTIME', 'INTIME', 'OUTTIME']]
+        t_data_i = icu_df.loc[patient_df_rows][['ADMITTIME', 'INTIME', 'OUTTIME']].astype('int') / (10**9 * 3600 * 24 * 365.25)
         admit_times = t_data_i.ADMITTIME
         visit_durations = t_data_i.OUTTIME - t_data_i.INTIME
         # import pdb; pdb.set_trace()
         
         # Compute the intervals
-        shifted = np.concatenate([np.zeros_like(admit_times[0:1]), admit_times[:-1]], axis=0)
-        intervals = admit_times - shifted
+        # Shift creates a NaT value at the first entry. Replace it with a zero in the end
+        admit_intervals = admit_times - admit_times.shift(periods=1)
+        admit_intervals.iloc[0] = 0
+
+        # shifted = np.concatenate([np.zeros_like(admit_times[0:1]), admit_times[:-1]], axis=0)
+        # intervals = admit_times - shifted
         # Convert nanoseconds to days
         #changing inervals at index 1 and visit duration at index 2
-        t_data_i = np.stack([admit_times.values.astype(int),
-                           intervals.values.astype(int),
-                           visit_durations.values.astype(int)]).T / (1e9*3600*24)
+        t_data_i = np.stack([admit_times.values,
+                           admit_intervals.values,
+                           visit_durations.values]).T
         t_data.append(t_data_i)
     return t_data
 
@@ -182,7 +186,7 @@ def fix_normalize_time(data):
     admit_times = np.concatenate([i[:,0] for i in data])
     interval_times = np.concatenate([i[1:,1] for i in data])
     mean_admit_time, std_admit_time = np.mean(admit_times), np.std(admit_times)
-    mean_interval_time, std_interval_time = np.mean(interval_times), np.std(interval_times)
+    mean_interval_time, std_interval_time = np.median(interval_times), np.std(interval_times)
 
     for idx in range(N):
         data[idx][:,0] = (data[idx][:,0]-mean_admit_time)/std_admit_time
