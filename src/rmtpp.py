@@ -246,6 +246,7 @@ class rmtpp(nn.Module):
 
         # Tensor of shape (T)xBSxself.shared_output_layers[-1]
         _, hidden_states = self.run_forward_rnn(x, t)
+        T, bs = x.size(0), x.size(1)
 
         # marker generation layer. Ideally it should include time gap also.
         # Tensor of shape TxBSx marker_dim
@@ -256,12 +257,15 @@ class rmtpp(nn.Module):
         with torch.no_grad():
             get_marker_metric(self.marker_type, marker_out_mu, x, mask, metric_dict)
             expected_t = compute_time_expectation(self, hidden_states, t, mask)
-            time_mse = torch.abs(expected_t- t[:,:,1]) * mask
+            time_mse = torch.abs(expected_t- t[:,:,1])[1:, :] * mask[1:, :]
             metric_dict['time_mse'] = time_mse.sum().detach().cpu().numpy()
-            metric_dict['time_mse_count'] = mask.sum().detach().cpu().numpy()
+            metric_dict['time_mse_count'] = mask[1:,:].sum().detach().cpu().numpy()
 
         time_log_likelihood = self.compute_point_log_likelihood(
             hidden_states, t)
+        #Pad initial Time point with 0
+        zero_pad = torch.zeros(1, bs).to(device)
+        time_log_likelihood = torch.cat([zero_pad, time_log_likelihood[1:,:]], dim =0)
         marker_log_likelihood = self.compute_marker_log_likelihood(
             x, marker_out_mu, marker_out_logvar)
 
