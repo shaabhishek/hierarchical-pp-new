@@ -9,7 +9,7 @@ import torch.nn.utils.rnn as rnnutils
 from torch.distributions.normal import Normal
 from torch.distributions.kl import kl_divergence
 from torch.optim import Adam
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -133,8 +133,8 @@ class rmtpp(nn.Module):
     def create_output_time_layer(self):
 
         h_influence =  nn.Linear(self.shared_output_layers[-1], 1, bias=False)
-        time_influence = nn.Parameter(0.00001*torch.ones(1, 1, 1))
-        base_intensity =  nn.Parameter(torch.zeros(1, 1, 1))
+        time_influence = nn.Parameter(0.005*torch.ones(1, 1, 1))
+        base_intensity =  nn.Parameter(torch.zeros(1, 1, 1)-8.)
         return h_influence, time_influence, base_intensity
 
     def forward(self, x, t,anneal = 1., mask= None):
