@@ -95,7 +95,7 @@ def train(net, params, optimizer, x_data, t_data, label):
 
     if params.show: bar.finish()
 
-    time_rmse = (time_mse/time_mse_count)** 0.5
+    time_rmse = (time_mse/time_mse_count)#** 0.5
     total_loss /= total_sequence
     if params.marker_type == 'real':
         marker_rmse = (marker_mse/marker_mse_count)** 0.5
@@ -171,7 +171,7 @@ def test(net, params,  optimizer,  x_data, t_data, label):
 
     if params.show: bar.finish()
 
-    time_rmse = (time_mse/time_mse_count)** 0.5
+    time_rmse = (time_mse/time_mse_count)#** 0.5
     if params.marker_type == 'real':
         marker_rmse = (marker_mse/marker_mse_count)** 0.5
         accuracy = None

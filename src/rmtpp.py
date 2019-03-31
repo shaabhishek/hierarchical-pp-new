@@ -256,7 +256,7 @@ class rmtpp(nn.Module):
         with torch.no_grad():
             get_marker_metric(self.marker_type, marker_out_mu, x, mask, metric_dict)
             expected_t = compute_time_expectation(self, hidden_states, t, mask)
-            time_mse = (expected_t- t[:,:,1])**2. * mask
+            time_mse = torch.abs(expected_t- t[:,:,1]) * mask
             metric_dict['time_mse'] = time_mse.sum().detach().cpu().numpy()
             metric_dict['time_mse_count'] = mask.sum().detach().cpu().numpy()
 
