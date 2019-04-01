@@ -154,7 +154,7 @@ if __name__ == '__main__':
     
 
     ###Helper Parameter###
-    parser.add_argument('--model', type=str, default='rmtpp', help='model name')
+    parser.add_argument('--model', type=str, default='rnnpp', help='model name')
     parser.add_argument('--data_name', type=str, default='mimic', help='data set name')
 
     parser.add_argument('--test', type=bool, default=False, help='enable testing')
