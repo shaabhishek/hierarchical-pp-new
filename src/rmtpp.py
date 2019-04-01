@@ -45,7 +45,7 @@ class rmtpp(nn.Module):
 
     """
 
-    def __init__(self, marker_type='real', marker_dim=31, time_dim=2, hidden_dim=128, x_given_t=False,base_intensity = 0.,time_influence = 1., gamma = 1. ):
+    def __init__(self, marker_type='real', marker_dim=31, time_dim=2, hidden_dim=128, x_given_t=False,base_intensity = 0.,time_influence = 1., gamma = 1., time_loss = 'intensity' ):
         super().__init__()
         """
             Input:
@@ -62,6 +62,7 @@ class rmtpp(nn.Module):
         self.hidden_dim = hidden_dim
         self.x_given_t = x_given_t
         self.gamma = gamma
+        self.time_loss = time_loss
         self.use_rnn_cell = False
         self.assert_input()
 
@@ -85,7 +86,7 @@ class rmtpp(nn.Module):
             )
         # For tractivility of conditional intensity time module is a dic where forward needs to be defined
         self.embed_hidden_state, self.output_x_mu, self.output_x_logvar = self.create_output_marker_layer()
-        self.h_influence, self.time_influence, self.base_intensity = self.create_output_time_layer(base_intensity, time_influence)
+        self.create_output_time_layer(base_intensity, time_influence)
 
     def assert_input(self):
         assert self.marker_type in {
@@ -132,11 +133,15 @@ class rmtpp(nn.Module):
         return embed_module, x_module_mu, x_module_logvar
 
     def create_output_time_layer(self, b, ti):
-
-        h_influence =  nn.Linear(self.shared_output_layers[-1], 1, bias=False)
-        time_influence = nn.Parameter(ti*torch.ones(1, 1, 1))#0.005*
-        base_intensity =  nn.Parameter(torch.zeros(1, 1, 1)-b)#-8
-        return h_influence, time_influence, base_intensity
+        if self.time_loss == 'intensity':
+            h_influence =  nn.Linear(self.shared_output_layers[-1], 1, bias=False)
+            time_influence = nn.Parameter(ti*torch.ones(1, 1, 1))#0.005*
+            base_intensity =  nn.Parameter(torch.zeros(1, 1, 1)-b)#-8
+            self.h_influence, self.time_influence, self.base_intensity =  h_influence, time_influence, base_intensity
+        else:
+            self.time_mu =   nn.Linear(self.shared_output_layers[-1], 1)
+            self.time_logvar =   nn.Linear(self.shared_output_layers[-1], 1)
+        return 
 
     def forward(self, x, t,anneal = 1., mask= None):
         """
@@ -258,15 +263,19 @@ class rmtpp(nn.Module):
             hidden_states, t)
 
         metric_dict = {}
+        time_log_likelihood, mu_time = self.compute_point_log_likelihood(
+            hidden_states, t)
         with torch.no_grad():
             get_marker_metric(self.marker_type, marker_out_mu, x, mask, metric_dict)
-            expected_t = compute_time_expectation(self, hidden_states, t, mask)
-            time_mse = torch.abs(expected_t- t[:,:,1])[1:, :] * mask[1:, :]
+            if self.time_loss == 'intensity':
+                expected_t = compute_time_expectation(self, hidden_states, t, mask)
+                time_mse = torch.abs(expected_t- t[:,:,1])[1:, :] * mask[1:, :]
+            else:
+                time_mse = torch.abs(mu_time[:,:,0]- t[:,:,1])[1:, :] * mask[1:, :]
             metric_dict['time_mse'] = time_mse.sum().detach().cpu().numpy()
             metric_dict['time_mse_count'] = mask[1:,:].sum().detach().cpu().numpy()
 
-        time_log_likelihood = self.compute_point_log_likelihood(
-            hidden_states, t)
+        
         #Pad initial Time point with 0
         zero_pad = torch.zeros(1, bs).to(device)
         time_log_likelihood = torch.cat([zero_pad, time_log_likelihood[1:,:]], dim =0)
@@ -317,24 +326,33 @@ class rmtpp(nn.Module):
         h_trimmed = h # TxBSxself.shared_output_layers[-1]
         d_js = t[:, :, 1][:, :, None]  # Shape TxBSx1 Time differences
 
-        past_influence = self.h_influence(h_trimmed)  # TxBSx1
+        if self.time_loss == 'intensity':
+            past_influence = self.h_influence(h_trimmed)  # TxBSx1
 
-        # TxBSx1
-        if self.time_influence>0:
-            ti = torch.clamp(self.time_influence, min = 1e-5)
+            # TxBSx1
+            if self.time_influence>0:
+                ti = torch.clamp(self.time_influence, min = 1e-5)
+            else:
+                ti = torch.clamp(self.time_influence, max = -1e-5)
+            current_influence = ti * d_js
+            base_intensity = self.base_intensity  # 1x1x1
+
+            
+            term1 = past_influence + current_influence + base_intensity
+            term2 = (past_influence + base_intensity).exp()
+            term3 = term1.exp()
+
+            log_f_t = term1 + \
+                (1./(ti)) * (term2-term3)
+            return log_f_t[:, :, 0], None # TxBS
         else:
-            ti = torch.clamp(self.time_influence, max = -1e-5)
-        current_influence = ti * d_js
-        base_intensity = self.base_intensity  # 1x1x1
-
-        
-        term1 = past_influence + current_influence + base_intensity
-        term2 = (past_influence + base_intensity).exp()
-        term3 = term1.exp()
-
-        log_f_t = term1 + \
-            (1./(ti)) * (term2-term3)
-        return log_f_t[:, :, 0]  # TxBS
+            mu_time =  self.time_mu(h_trimmed)#TxBSx1
+            logvar_time =  self.time_logvar(h_trimmed)#TxBSx1
+            sigma_time = logvar_time.exp().sqrt() + self.sigma_min#TxBSx1
+            time_recon_dist = Normal(mu_time, sigma_time)
+            ll_loss = (time_recon_dist.log_prob(d_js)
+                        ).sum(dim=-1)#TxBS
+            return ll_loss, mu_time
 
 
     def generate_marker(self, h, t):
