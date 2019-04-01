@@ -12,7 +12,7 @@ from torch.optim import Adam
 import matplotlib.pyplot as plt
 # import pdb; pdb.set_trace()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+from utils.metric import get_marker_metric, compute_time_expectation
 DEBUG = False
 
 def one_hot_encoding(y, n_dims=None):
@@ -37,7 +37,7 @@ class hrmtpp(nn.Module):
 
     """
 
-    def __init__(self, marker_type='real', marker_dim=31, latent_dim = 20, hidden_dim=128, x_given_t=False ):
+    def __init__(self, latent_dim = 20, marker_type='real', marker_dim=31, time_dim=2, hidden_dim=128, x_given_t=False,base_intensity = 0.,time_influence = 1., gamma = 1., time_loss = 'intensity'):
         super().__init__()
         """
             Input:
@@ -53,11 +53,15 @@ class hrmtpp(nn.Module):
         self.marker_dim = marker_dim
         self.hidden_dim = hidden_dim
         self.latent_dim = latent_dim
+        self.time_dim = time_dim
         self.x_given_t = x_given_t
         self.use_rnn_cell = False
+        self.time_loss = time_loss
+        self.gamma = gamma
         self.assert_input()
 
         self.logvar_min = np.log(1e-4)
+        self.sigma_min = 1e-2
 
         # Set up layer dimensions. This is only hidden layers dimensions
         self.x_embedding_layer = [64]
@@ -70,7 +74,7 @@ class hrmtpp(nn.Module):
         self.forward_rnn_cell, self.backward_rnn_cell = self.create_rnn_network()
         self.inference_net, self.inference_mu, self.inference_logvar = self.create_inference_network()
         self.embed_hidden_state, self.output_x_mu, self.output_x_logvar = self.create_output_marker_layer()
-        self.h_influence, self.time_influence, self.base_intensity = self.create_output_time_layer()
+        self.create_output_time_layer(base_intensity, time_influence)
 
     def assert_input(self):
         assert self.marker_type in {
@@ -107,8 +111,9 @@ class hrmtpp(nn.Module):
         )
 
         t_module = nn.Sequential(
-            nn.Linear(2, self.t_embedding_layer[0]),
+            nn.Linear(self.time_dim, self.t_embedding_layer[0]),
             nn.ReLU(),
+            nn.Dropout(p=0.5),
             nn.Linear(self.t_embedding_layer[0], self.t_embedding_layer[0])
         )
         return x_module, t_module
@@ -129,12 +134,16 @@ class hrmtpp(nn.Module):
 
         return embed_module, x_module_mu, x_module_logvar
 
-    def create_output_time_layer(self):
-
-        h_influence =  nn.Linear(self.shared_output_layers[-1], 1, bias=False)
-        time_influence = nn.Parameter(0.01*torch.ones(1, 1, 1))
-        base_intensity =  nn.Parameter(torch.zeros(1, 1, 1))
-        return h_influence, time_influence, base_intensity
+    def create_output_time_layer(self, b, ti):
+        if self.time_loss == 'intensity':
+            h_influence =  nn.Linear(self.shared_output_layers[-1], 1, bias=False)
+            time_influence = nn.Parameter(ti*torch.ones(1, 1, 1))#0.005*
+            base_intensity =  nn.Parameter(torch.zeros(1, 1, 1)-b)#-8
+            self.h_influence, self.time_influence, self.base_intensity =  h_influence, time_influence, base_intensity
+        else:
+            self.time_mu =   nn.Linear(self.shared_output_layers[-1], 1)
+            self.time_logvar =   nn.Linear(self.shared_output_layers[-1], 1)
+        return 
 
     def forward(self, x, t, anneal = 1., mask=None):
         """
@@ -148,14 +157,16 @@ class hrmtpp(nn.Module):
                 loss : Tensor scalar
         """
         #TxBS and TxBS
-        time_log_likelihood, marker_log_likelihood, kl_loss = self._forward(x, t, mask)
+        time_log_likelihood, marker_log_likelihood, kl_loss, metric_dict = self._forward(x, t, mask)
 
-        if DEBUG:
-            print("Losses:", -time_log_likelihood.sum().item(),  -marker_log_likelihood.sum().item(), kl_loss.sum().item())
-        loss =  -1.* (time_log_likelihood + marker_log_likelihood)
-        if mask is not None:
-            loss = loss * mask
-        return loss.sum()+ kl_loss.sum(), [-marker_log_likelihood.sum().item(), -time_log_likelihood.sum().item(), kl_loss.sum().item()]
+        marker_loss = (-1.* marker_log_likelihood *mask).sum()
+        time_loss = (-1. *time_log_likelihood *mask).sum()
+        kl_loss = kl_loss.sum()
+
+        loss = self.gamma*time_loss + marker_loss + anneal* kl_loss
+        true_loss = time_loss + marker_loss +kl_loss
+        meta_info = {"marker_ll":marker_loss.detach().cpu(), "time_ll":time_loss.detach().cpu(), "kl_loss":kl_loss.detach().cpu(), "true_ll": true_loss.detach().cpu()}
+        return loss, {**meta_info, **metric_dict}
 
     def run_forward_backward_rnn(self, x, t, mask):
         """
@@ -315,18 +326,31 @@ class hrmtpp(nn.Module):
         mu, logvar = self.encoder(hs, back_hs) #TxBSxlatent_dim
         z = self.reparameterize(mu[0,:,:], logvar[0,:,:])[None,:,:]#of shape 1xBSxlatent_dim
 
+        
         hz_embedded = self.preprocess_hidden_latent_state(hs, z)
-        time_log_likelihood = self.compute_point_log_likelihood(hz_embedded,  t)
         # marker generation layer. Ideally it should include time gap also.
         # Tensor of shape TxBSx marker_dim
         marker_out_mu, marker_out_logvar = self.generate_marker(hz_embedded,  t)
         marker_log_likelihood = self.compute_marker_log_likelihood(x, marker_out_mu, marker_out_logvar)
 
+        
+        time_log_likelihood, mu_time = self.compute_point_log_likelihood(hz_embedded,  t)
+        metric_dict = {}
+        with torch.no_grad():
+            get_marker_metric(self.marker_type, marker_out_mu, x, mask, metric_dict)
+            if self.time_loss == 'intensity':
+                expected_t = compute_time_expectation(self, hz_embedded, t, mask)
+                time_mse = torch.abs(expected_t- t[:,:,1])[1:, :] * mask[1:, :]
+            else:
+                time_mse = torch.abs(mu_time[:,:,0]- t[:,:,1])[1:, :] * mask[1:, :]
+            metric_dict['time_mse'] = time_mse.sum().detach().cpu().numpy()
+            metric_dict['time_mse_count'] = mask[1:,:].sum().detach().cpu().numpy()
+
         posterior_dist = Normal(mu[0,:,:], logvar[0,:,:].exp().sqrt())
         prior_dist = Normal(0, 1)
         kld_loss = kl_divergence(posterior_dist, prior_dist)#Shape BSxlatent_dim
 
-        return time_log_likelihood, marker_log_likelihood, kld_loss  # TxBS and TxBS
+        return time_log_likelihood, marker_log_likelihood, kld_loss, metric_dict  # TxBS and TxBS
 
     def compute_marker_log_likelihood(self, x, mu, logvar):
         """
@@ -360,28 +384,43 @@ class hrmtpp(nn.Module):
     def compute_point_log_likelihood(self, h, t):
         """
             Input:
-                h : Tensor of shape TxBSxself.shared_output_layers[-1]
-                t : Tensor of shape TxBSx2 [i,:,0] represents actual time at timestep i ,\
+                h : Tensor of shape (T+1)xBSxself.shared_output_layers[-1]
+                t : Tensor of shape TxBSxtime_dim [i,:,0] represents actual time at timestep i ,\
                     [i,:,1] represents time gap d_i = t_i- t_{i-1}
             Output:
                 log_f_t : tensor of shape TxBS
 
         """
+        h_trimmed = h # TxBSxself.shared_output_layers[-1]
         d_js = t[:, :, 1][:, :, None]  # Shape TxBSx1 Time differences
 
-        past_influence = self.h_influence(h)  # TxBSx1
+        if self.time_loss == 'intensity':
+            past_influence = self.h_influence(h_trimmed)  # TxBSx1
 
-        # TxBSx1
-        current_influence = self.time_influence * d_js
-        base_intensity = self.base_intensity  # 1x1x1
+            # TxBSx1
+            if self.time_influence>0:
+                ti = torch.clamp(self.time_influence, min = 1e-5)
+            else:
+                ti = torch.clamp(self.time_influence, max = -1e-5)
+            current_influence = ti * d_js
+            base_intensity = self.base_intensity  # 1x1x1
 
-        term1 = past_influence + current_influence + base_intensity
-        term2 = (past_influence + base_intensity).exp()
-        term3 = term1.exp()
+            
+            term1 = past_influence + current_influence + base_intensity
+            term2 = (past_influence + base_intensity).exp()
+            term3 = term1.exp()
 
-        log_f_t = term1 + \
-            (1./(self.time_influence+1e-6)) * (term2-term3)
-        return log_f_t[:, :, 0]  # TxBS
+            log_f_t = term1 + \
+                (1./(ti)) * (term2-term3)
+            return log_f_t[:, :, 0], None # TxBS
+        else:
+            mu_time =  self.time_mu(h_trimmed)#TxBSx1
+            logvar_time =  self.time_logvar(h_trimmed)#TxBSx1
+            sigma_time = logvar_time.exp().sqrt() + self.sigma_min#TxBSx1
+            time_recon_dist = Normal(mu_time, sigma_time)
+            ll_loss = (time_recon_dist.log_prob(d_js)
+                        ).sum(dim=-1)#TxBS
+            return ll_loss, mu_time
 
     def generate_marker(self, h, t):
         """
