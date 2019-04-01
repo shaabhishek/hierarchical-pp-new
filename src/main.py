@@ -24,7 +24,7 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
     ### ================================== model initialization ==================================
     model = load_model(params).to(device)
 
-    if params.reg == 'l2':
+    if params.l2 >0.:
         optimizer = torch.optim.Adam(model.parameters(), lr = params.lr, weight_decay= params.l2)
     else:
         optimizer = torch.optim.Adam(model.parameters(), lr = params.lr)
@@ -59,7 +59,7 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
             print("valid_accuracy\t", valid_accuracy, "\ttrain_accuracy\t", train_accuracy)
         else:
             print("valid_marker_rmse\t", valid_marker_rmse, "\ttrain_marker_rmse\t", train_marker_rmse)
-        print("valid_time_rmse\t", valid_time_rmse, "\ttrain_time_rmse\t", train_time_rmse)
+        print("valid_time_mae\t", valid_time_rmse, "\ttrain_time_mae\t", train_time_rmse)
         print("valid_loss\t", valid_loss, "\ttrain_loss\t", train_loss)
 
         if not os.path.isdir('model'):
@@ -139,16 +139,17 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Script to test Marked Point Process.')
 
     ###Validation Parameter###
-    parser.add_argument('--max_iter', type=int, default=10, help='number of iterations')
+    parser.add_argument('--max_iter', type=int, default=100, help='number of iterations')
     parser.add_argument('--anneal_iter', type=int, default=100, help='number of iteration over which anneal goes to 1')
     parser.add_argument('--hidden_dim', type=int, default=128, help='rnn hidden dim')
-    parser.add_argument('--maxgradnorm', type=float, default=50.0, help='maximum gradient norm')
+    parser.add_argument('--maxgradnorm', type=float, default=10.0, help='maximum gradient norm')
     parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
+    parser.add_argument('--gamma', type=float, default=0.1, help='tradeoff of time and marker in loss. marker loss + gamma * time loss')
     parser.add_argument('--l2', type=float, default=1e-3, help='regularizer with weight decay parameter')
     parser.add_argument('--batch_size', type=int, default=32, help='the batch size')
     parser.add_argument('--latent_dim', type=int, default=20, help='latent dim')
     parser.add_argument('--x_given_t', type=bool, default=False, help='whether x given t')
-    parser.add_argument('--reg', type=str, default='l2', help='regularization')
+    #parser.add_argument('--reg', type=str, default='l2', help='regularization')
     parser.add_argument('--n_cluster', type=int, default=10, help='number of cluster')
     
 
@@ -171,6 +172,8 @@ if __name__ == '__main__':
     ###Fixed parameter###
     if params.data_name == 'mimic':
         params.marker_dim = 217
+        params.base_intensity = -8.
+        params.time_influence = 0.005
         params.time_dim = 3
         params.marker_type = 'binary'
         params.load = 'mimic'
@@ -194,7 +197,7 @@ if __name__ == '__main__':
     torch.backends.cudnn.benchmark = False
     torch.manual_seed(seedNum)
     np.random.seed(seedNum)
-    file_name_identifier = [['_b', params.batch_size],['_h',params.hidden_dim ] , ['_l2', params.l2], ['_l', params.latent_dim], ['_gn', params.maxgradnorm], ['_lr', params.lr], ['_c',params.n_cluster],['_xt', params.x_given_t], ['_r',params.reg], ['_s',params.seed   ]  ]
+    file_name_identifier = [['_b', params.batch_size],['_h',params.hidden_dim ] , ['_l2', params.l2], ['_l', params.latent_dim], ['_gn', params.maxgradnorm], ['_lr', params.lr], ['_c',params.n_cluster],['_xt', params.x_given_t], ['_s',params.seed   ]  ]
 
     if not params.test:
         d = vars(params)

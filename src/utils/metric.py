@@ -43,7 +43,11 @@ def compute_point_log_likelihood(model, h, d_js):
 
 
         # TxBSx1x1
-        current_influence = model.time_influence * d_js#TxBSx1xN
+        if model.time_influence>0:
+            ti = torch.clamp(model.time_influence, min = 1e-5)
+        else:
+            ti = torch.clamp(model.time_influence, max = -1e-5)
+        current_influence = ti * d_js#TxBSx1xN
         base_intensity = model.base_intensity[:,:,:, None]  # 1x1x1x1
         #print(past_influence.shape,current_influence.shape, base_intensity.shape)
 
@@ -52,7 +56,7 @@ def compute_point_log_likelihood(model, h, d_js):
         term3 = term1.exp()
 
         log_f_t = term1 + \
-            (1./(model.time_influence+1e-6 )) * (term2-term3)
+            (1./(ti )) * (term2-term3)
         return log_f_t  # TxBSxCx(N+1)
 
 

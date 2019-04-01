@@ -75,7 +75,7 @@ def train(net, params, optimizer, x_data, t_data, label):
         loss, meta_info = net(input_x, input_t, mask=input_mask)
         loss.backward()
 
-        total_loss += loss.detach().cpu().numpy()
+        total_loss += meta_info['true_ll'].numpy()
         
         time_mse += meta_info["time_mse"]
         time_mse_count += meta_info["time_mse_count"]
@@ -87,7 +87,7 @@ def train(net, params, optimizer, x_data, t_data, label):
             marker_acc_count += meta_info["marker_acc_count"]
 
         
-        if params.reg == 'maxgradnorm':
+        if params.maxgradnorm >0:
             norm = torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm = params.maxgradnorm)
         optimizer.step()
 
@@ -158,7 +158,7 @@ def test(net, params,  optimizer,  x_data, t_data, label):
         with torch.no_grad():
             loss, meta_info = net(input_x, input_t, mask= input_mask)
 
-        total_loss += loss.detach().cpu().numpy()
+        total_loss += meta_info['true_ll'].numpy()
         time_mse+= meta_info["time_mse"]
         time_mse_count += meta_info["time_mse_count"]
         if params.marker_type == 'real':
