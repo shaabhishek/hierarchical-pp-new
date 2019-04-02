@@ -172,7 +172,7 @@ def preprocess_input(model, x, t):
     """
     if model.marker_type == 'categorical':
         # Shape TxBSxmarker_dim
-        x = one_hot_encoding(x[:, :, 0], model.marker_dim)
+        x = one_hot_encoding(x[:, :], model.marker_dim)
     phi_x = model.embed_x(x)
     phi_t = model.embed_time(t)
     phi = torch.cat([phi_x, phi_t], -1)

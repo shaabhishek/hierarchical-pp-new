@@ -54,18 +54,26 @@ def train(net, params, optimizer, x_data, t_data, label):
         total_sequence += sum(seq_len)
         max_seq_len = max(seq_len)
         # Shape = T_max_batch x BS x marker_dim
-        input_x = np.zeros( (max_seq_len, len(seq_len), unpad_input_x[0].shape[1]) )
+
+        
+        if params.marker_type == 'categorical':
+            input_x = np.zeros( (max_seq_len, len(seq_len)) )
+        else:
+            input_x = np.zeros( (max_seq_len, len(seq_len), unpad_input_x[0].shape[1]) )
         # Shape = T_max_batch x BS x 3
         input_t = np.zeros( (max_seq_len, len(seq_len), unpad_input_t[0].shape[1]) )
         input_mask = np.zeros( (max_seq_len, len(seq_len)) )
         for idx in range(len(seq_len)):
-            input_x[:seq_len[idx], idx, : ] = unpad_input_x[idx]
+            if params.marker_type == 'categorical':
+                input_x[:seq_len[idx], idx ] = unpad_input_x[idx]    
+            else:
+                input_x[:seq_len[idx], idx, : ] = unpad_input_x[idx]
             input_t[:seq_len[idx], idx, : ] = unpad_input_t[idx]
             input_mask[:seq_len[idx], idx ] = 1.
 
         # Convert numpy ndarrays to torch Tensors
-        if params.marker_type == 'real':
-            input_x = torch.from_numpy(input_x).float().to(device)    
+        if params.marker_type == 'categorical':
+            input_x = torch.from_numpy(input_x).long().to(device)   
         else:
             input_x = torch.from_numpy(input_x).float().to(device)
         input_t = torch.from_numpy(input_t).float().to(device)
@@ -139,17 +147,24 @@ def test(net, params,  optimizer,  x_data, t_data, label):
         seq_len = [len(lst) for lst in unpad_input_x]
         total_sequence += sum(seq_len)
         max_seq_len = max(seq_len)
-        input_x = np.zeros( (max_seq_len, len(seq_len), unpad_input_x[0].shape[1]) )
+
+        if params.marker_type == 'categorical':
+            input_x = np.zeros( (max_seq_len, len(seq_len)) )
+        else:
+            input_x = np.zeros( (max_seq_len, len(seq_len), unpad_input_x[0].shape[1]) )
         input_t = np.zeros( (max_seq_len, len(seq_len), unpad_input_t[0].shape[1]) )
         input_mask = np.zeros( (max_seq_len, len(seq_len)) )
         for idx in range(len(seq_len)):
-            input_x[:seq_len[idx],  idx, : ] = unpad_input_x[idx]
+            if params.marker_type == 'categorical':
+                input_x[:seq_len[idx], idx ] = unpad_input_x[idx]    
+            else:
+                input_x[:seq_len[idx], idx, : ] = unpad_input_x[idx]
             input_t[:seq_len[idx], idx,  : ] = unpad_input_t[idx]
             input_mask[:seq_len[idx], idx ] = 1.
 
 
-        if params.marker_type == 'real':
-            input_x = torch.from_numpy(input_x).float().to(device)    
+        if params.marker_type == 'categorical':
+            input_x = torch.from_numpy(input_x).long().to(device)    
         else:
             input_x = torch.from_numpy(input_x).float().to(device)
         input_t = torch.from_numpy(input_t).float().to(device)
