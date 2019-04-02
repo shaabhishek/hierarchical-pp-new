@@ -171,7 +171,7 @@ def compute_times(data, stackex_df=None):
 
     for user_idx, user_df_rows in group_users.groups.items():
         user_times = stackex_df.loc[user_df_rows]['timestamp']
-        user_times = user_times.astype('int') / (10**9 * 3600 * 24 * 365.25)
+        user_times = user_times.astype('int') / (10**9 * 3600 * 24 )
         # Shift creates a NaT value at the first entry. Replace it with a zero in the end
         user_intervals = user_times - user_times.shift(periods=1)
         user_intervals.iloc[0] = 0
