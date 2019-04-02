@@ -40,10 +40,10 @@ def create_input_embedding_layer(model):
 
     #t_module = nn.Linear(self.time_dim, self.t_embedding_layer[0])
     t_module = nn.Sequential(
-        nn.Linear(model.time_dim, model.t_embedding_layer[0]),
-        nn.ReLU(),
-        nn.Dropout(p=0.5),
-        nn.Linear(model.t_embedding_layer[0], model.t_embedding_layer[0])
+        nn.Linear(model.time_dim, model.t_embedding_layer[0])#,
+        #nn.ReLU(),
+        #nn.Dropout(p=0.5),
+        #nn.Linear(model.t_embedding_layer[0], model.t_embedding_layer[0])
     )
     return x_module, t_module
 

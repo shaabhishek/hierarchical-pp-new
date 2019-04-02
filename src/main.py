@@ -156,8 +156,6 @@ if __name__ == '__main__':
     ###Helper Parameter###
     parser.add_argument('--model', type=str, default='rmtpp', help='model name')
     parser.add_argument('--time_loss', type=str, default='intensity', help='whether to use normal loss or intensity loss')
-    parser.add_argument('--data_name', type=str, default='stackexchange', help='data set name')
-
     parser.add_argument('--test', type=bool, default=False, help='enable testing')
     parser.add_argument('--train_test', type=bool, default=True, help='enable testing')
     parser.add_argument('--show', type=bool, default=True, help='print progress')
@@ -168,7 +166,7 @@ if __name__ == '__main__':
 
 
 
-
+    parser.add_argument('--data_name', type=str, default='stackexchange', help='data set name')
     params = parser.parse_args()
     ###Fixed parameter###
     if params.data_name == 'mimic':
