@@ -176,7 +176,7 @@ if __name__ == '__main__':
         params.base_intensity = -8.
         params.time_influence = 0.005
         params.time_dim = 3
-        params.marker_type = 'binary'
+        params.marker_type = 'categorical'
         params.load = 'mimic'
         params.save = 'mimic'
     elif params.data_name == 'stackexchange':

@@ -67,7 +67,11 @@ def create_output_marker_layer(model):
         x_module_mu = nn.Sequential(
             nn.Linear(l, model.marker_dim),
             nn.Sigmoid())
-        
+    elif model.marker_type == 'categorical':
+        x_module_mu = nn.Sequential(
+            nn.Linear(l, model.marker_dim),
+            nn.Softmax(dim=-1)
+        )
 
     return embed_module, x_module_mu, x_module_logvar    
 

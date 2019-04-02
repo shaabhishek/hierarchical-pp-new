@@ -159,7 +159,7 @@ def compute_markers(data):
     group_patients = icu_df.groupby('SUBJECT_ID')
     for patient_idx, patient_df_rows in group_patients.groups.items():
         # Get an array of shape  (T_i x marker_dim)
-        patient_markers = _markers[patient_df_rows]
+        patient_markers = _markers[patient_df_rows].argmax(1)
         x_data.append(patient_markers)
     return x_data
 
