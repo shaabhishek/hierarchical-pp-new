@@ -3,7 +3,7 @@ import os
 import csv
 import pickle
 import pandas
-from sklearn.preprocessing import MultiLabelBinarizer
+from sklearn.preprocessing import OneHotEncoder
 from helper import train_val_split
 
 
@@ -134,22 +134,32 @@ def compute_markers(data):
     x_data = []
     icu_df = mimic_data_to_df(data)
     
-
+    flat_icd9_codes = list(code for patient_codes in icu_df.ICD9_CODE for code in patient_codes)
+    freqs_icd9 = pandas.value_counts(flat_icd9_codes)
+    
+    # Set the threshold frequency to be 150 to define 'high freq diseases'
     # Restricting the icd9 codes to those
-    # which have occurrence frequency of more than 80 (= 217 / 3126 codes)
-    _mlb = MultiLabelBinarizer()
-    _markers = _mlb.fit_transform(icu_df.ICD9_CODE)
-    codes_subset = _mlb.classes_[(_markers.sum(0) > 80)]
-    # Use code_subset to select only the high freq icd9 codes
-    # This WILL throw a warning (because we're skipping many codes) but that's okay
-    mlb = MultiLabelBinarizer(codes_subset)
-    markers_multilabel = mlb.fit_transform(icu_df.ICD9_CODE)
+    # which have occurrence frequency of more than threshold freq
+    hifreq_icd9_codes = freqs_icd9[freqs_icd9 > 150].index
+    set_icd9_codes = set(hifreq_icd9_codes)
+
+    def get_primary_icd9(icd9_list):
+        for x_i in icd9_list:
+            if x_i in set_icd9_codes:
+                return x_i
+        return 'OTHER'
+    icu_df['ICD9_CODE'] = icu_df.ICD9_CODE.apply(get_primary_icd9)
+
+    icu_df = icu_df.reset_index(drop=True)
+
+    # Make the disease as one-hot
+    _onehotencoder = OneHotEncoder(sparse=False)
+    _markers = _onehotencoder.fit_transform(icu_df.ICD9_CODE.values.reshape(-1,1))
 
     group_patients = icu_df.groupby('SUBJECT_ID')
     for patient_idx, patient_df_rows in group_patients.groups.items():
         # Get an array of shape  (T_i x marker_dim)
-        patient_markers = markers_multilabel[patient_df_rows]
-        t_i, marker_dim = patient_markers.shape
+        patient_markers = _markers[patient_df_rows]
         x_data.append(patient_markers)
     return x_data
 
@@ -261,32 +271,32 @@ if __name__ == "__main__":
     # else:
     #     data = preprocess_raw_data()
     # print(len(data))
-    #print(save_mimic_data())
-    raw_file = './../data/dump/mimic.pickle'
-    with open(raw_file, 'rb') as handle:
-        data = pickle.load(handle)
-    values = [v['ICD9_CODE'] for data_i in data for v in data_i.values()] 
-    count = {}
-    for v in values:
-        for j in v:
-            if j not in count:
-                count[j]=1
-            else:
-                count[j] += 1
-    ls = set([k for k, v in  count.items() if v>150])
-    print(len(ls))
+    print(save_mimic_data())
+    # raw_file = './../data/dump/mimic.pickle'
+    # with open(raw_file, 'rb') as handle:
+    #     data = pickle.load(handle)
+    # values = [v['ICD9_CODE'] for data_i in data for v in data_i.values()] 
+    # count = {}
+    # for v in values:
+    #     for j in v:
+    #         if j not in count:
+    #             count[j]=1
+    #         else:
+    #             count[j] += 1
+    # ls = set([k for k, v in  count.items() if v>150])
+    # print(len(ls))
 
-    f_count =0
-    o_count =0
-    for v in values:
-        if v[0] in ls:
-            f_count +=1
-            continue
-        else:
-            for j in v:
-                if j in ls:
-                    o_count +=1
-                    break
-    print(f_count, o_count, len(values)- (f_count+o_count))
+    # f_count =0
+    # o_count =0
+    # for v in values:
+    #     if v[0] in ls:
+    #         f_count +=1
+    #         continue
+    #     else:
+    #         for j in v:
+    #             if j in ls:
+    #                 o_count +=1
+    #                 break
+    # print(f_count, o_count, len(values)- (f_count+o_count))
 
     

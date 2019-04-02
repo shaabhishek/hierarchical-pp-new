@@ -172,7 +172,7 @@ if __name__ == '__main__':
     params = parser.parse_args()
     ###Fixed parameter###
     if params.data_name == 'mimic':
-        params.marker_dim = 217
+        params.marker_dim = 111
         params.base_intensity = -8.
         params.time_influence = 0.005
         params.time_dim = 3
