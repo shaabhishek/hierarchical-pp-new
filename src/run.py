@@ -65,7 +65,7 @@ def train(net, params, optimizer, x_data, t_data, label):
         input_mask = np.zeros( (max_seq_len, len(seq_len)) )
         for idx in range(len(seq_len)):
             if params.marker_type == 'categorical':
-                input_x[:seq_len[idx], idx ] = unpad_input_x[idx]    
+                input_x[:seq_len[idx], idx ] = unpad_input_x[idx].reshape(-1)    
             else:
                 input_x[:seq_len[idx], idx, : ] = unpad_input_x[idx]
             input_t[:seq_len[idx], idx, : ] = unpad_input_t[idx]
@@ -156,7 +156,7 @@ def test(net, params,  optimizer,  x_data, t_data, label):
         input_mask = np.zeros( (max_seq_len, len(seq_len)) )
         for idx in range(len(seq_len)):
             if params.marker_type == 'categorical':
-                input_x[:seq_len[idx], idx ] = unpad_input_x[idx]    
+                input_x[:seq_len[idx], idx ] = unpad_input_x[idx].reshape(-1)        
             else:
                 input_x[:seq_len[idx], idx, : ] = unpad_input_x[idx]
             input_t[:seq_len[idx], idx,  : ] = unpad_input_t[idx]
