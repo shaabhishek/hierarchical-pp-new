@@ -4,6 +4,7 @@ import pandas
 import xml.etree.ElementTree as ET
 import datetime
 import os
+from sklearn.preprocessing import OneHotEncoder
 
 from helper import train_val_split
 from mimic_processing import fix_normalize_time
@@ -112,33 +113,33 @@ def process_elements(data):
 def stackex_correct_datatypes(stackex_df):
 
     # TIMES
-    stackex_df['timestamp'] = stackex_df['timestamp'].astype('datetime64[ms]')
+    stackex_df['timestamp'] = stackex_df['timestamp'].astype('datetime64')
 
     # INTS
     stackex_df['userid'] = stackex_df['userid'].astype('int')
     return stackex_df
 
-def stackex_data_to_df(data, colnames=None):
+def stackex_data_to_df(data, time_threshold, colnames=None):
     flat_data = [{'userid':idx_user, 'marker': x, 'timestamp': t} for idx_user, data_user in data.items() for x,t in data_user]
     stackex_df = pandas.DataFrame(flat_data)
     stackex_df = stackex_correct_datatypes(stackex_df)
     
-    # Make marker a categorical variable
-    unique_marker_labels = stackex_df['marker'].unique()
-    stackex_df['marker'] = stackex_df['marker'].apply(lambda x: np.argwhere(x==unique_marker_labels).item())
-    
     # Remove userid's with duplicate timestamps as per the RMTPP paper
     # Also remove userid's with length > 200
     group_users = stackex_df.groupby('userid')
-    stackex_df = group_users.filter(lambda x: (len(x)<200) and ~np.any(x.duplicated('timestamp')))
+    stackex_df = group_users.filter(lambda x: (len(x)<time_threshold) and ~np.any(x.duplicated('timestamp')))
+    
+    # Make marker a categorical variable
+    # unique_marker_labels = stackex_df['marker'].unique()
+    # stackex_df['marker'] = stackex_df['marker'].apply(lambda x: np.argwhere(x==unique_marker_labels).item())
     
 #     Sort values first by userid and then by timestamp..
     stackex_df = stackex_df.sort_values(by=['userid', 'timestamp', 'marker'], axis='rows')
-    
+    stackex_df = stackex_df.reset_index(drop=True)
     return stackex_df
 
 
-def compute_markers(data, stackex_df=None):
+def compute_markers(data, time_threshold, stackex_df):
     """
         Input: 
             data: dict of lists, where each key is a user and each value is a list of [x, t] entries for the user
@@ -147,17 +148,19 @@ def compute_markers(data, stackex_df=None):
     """
     x_data = []
     if stackex_df is None:
-        stackex_df = stackex_data_to_df(data)
-    group_users = stackex_df.groupby('userid')
+        stackex_df = stackex_data_to_df(data, time_threshold)
 
+    group_users = stackex_df.groupby('userid')
+    _onehotencoder = OneHotEncoder(sparse=True)
+    _markers = _onehotencoder.fit_transform(stackex_df.marker.values.reshape(-1,1))
     for user_idx, user_df_rows in group_users.groups.items():
-        user_markers = stackex_df.loc[user_df_rows]['marker']
-        user_markers = user_markers.values.reshape(len(user_df_rows),-1)
+        user_markers = _markers[user_df_rows].argmax(1)
+        user_markers = user_markers.getA().flatten()
     #     t_i, marker_dim = user_markers.shape # marker_dim will be 1 here
         x_data.append(user_markers)
     return x_data
 
-def compute_times(data, stackex_df=None):
+def compute_times(data, time_threshold, stackex_df):
     """
         Input: 
             data: dict of lists, where each key is a user and each value is a list of [x, t] entries for the user
@@ -166,7 +169,7 @@ def compute_times(data, stackex_df=None):
     """
     t_data = []
     if stackex_df is None:
-        stackex_df = stackex_data_to_df(data)
+        stackex_df = stackex_data_to_df(data, time_threshold)
     group_users = stackex_df.groupby('userid')
 
     for user_idx, user_df_rows in group_users.groups.items():
@@ -181,7 +184,7 @@ def compute_times(data, stackex_df=None):
     return t_data
 
 
-def save_stackex_data(data=None):
+def save_stackex_data(time_threshold, data=None):
     """
     Saves the data as a dict with keys 'x' and 't' into a file with path='path_data'
     The values of the keys are x_data and t_data:
@@ -199,11 +202,11 @@ def save_stackex_data(data=None):
         except:
             print('Data didnt load')
 
-    stackex_df = stackex_data_to_df(data)
+    stackex_df = stackex_data_to_df(data, time_threshold)
     assert(len(stackex_df[stackex_df.duplicated(subset=['userid', 'timestamp'])]['userid'])==0)
-    t_data = compute_times(data, stackex_df)
+    t_data = compute_times(data, time_threshold, stackex_df)
     t_data = fix_normalize_time(t_data)
-    x_data = compute_markers(data, stackex_df)
+    x_data = compute_markers(data, time_threshold, stackex_df)
     assert(np.all([t_data[idx].shape[1] == 2 for idx in range(100)]))
     assert(np.all([x_data[idx].shape[0] == t_data[idx].shape[0] for idx in range(100)]))
 
@@ -214,6 +217,7 @@ def save_stackex_data(data=None):
     #Train-Valid-Test Split of 60-20-20
     train_dict, extra_dict = train_val_split(data_dict, val_ratio=0.4)
     val_dict, test_dict = train_val_split(extra_dict, val_ratio=0.5)
+    print(len(train_dict['x']), len(val_dict['x']), len(test_dict['x']))
     assert(len(train_dict['x']) == len(train_dict['t']))
     assert(len(val_dict['x']) == len(val_dict['t']))
     assert(len(test_dict['x']) == len(test_dict['t']))
@@ -235,7 +239,9 @@ def save_stackex_data(data=None):
     return train_path_data, valid_path_data, test_path_data
 
 if __name__ == "__main__":
-    print(save_stackex_data())
+    # only users with a series length less than time_threshold are chosen
+    time_threshold = 200
+    print(save_stackex_data(time_threshold))
 
 
 
