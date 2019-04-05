@@ -242,9 +242,3 @@ if __name__ == "__main__":
     # only users with a series length less than time_threshold are chosen
     time_threshold = 200
     print(save_stackex_data(time_threshold))
-
-
-
-
-
-
