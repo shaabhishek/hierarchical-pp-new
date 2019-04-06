@@ -127,7 +127,7 @@ def compute_point_log_likelihood(model, h, t):
 
     """
     h_trimmed = h # TxBSxself.shared_output_layers[-1]
-    d_js = t[:, :, 1][:, :, None]  # Shape TxBSx1 Time differences
+    d_js = t[:, :, 0][:, :, None]  # Shape TxBSx1 Time differences
 
     if model.time_loss == 'intensity':
         past_influence = model.h_influence(h_trimmed)  # TxBSx1

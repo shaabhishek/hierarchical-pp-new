@@ -186,7 +186,7 @@ class rmtpp(nn.Module):
             get_marker_metric(self.marker_type, marker_out_mu, x, mask, metric_dict)
             if self.time_loss == 'intensity':
                 expected_t = compute_time_expectation(self, hidden_states, t, mask)
-                time_mse = torch.abs(expected_t- t[:,:,1])[1:, :] * mask[1:, :]
+                time_mse = torch.abs(expected_t- t[:,:,0])[1:, :] * mask[1:, :]
             else:
                 time_mse = torch.abs(mu_time[:,:,0]- t[:,:,1])[1:, :] * mask[1:, :]
             metric_dict['time_mse'] = time_mse.sum().detach().cpu().numpy()

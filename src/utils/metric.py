@@ -79,7 +79,7 @@ def compute_time_expectation(model, hz_embedded , t, mask , N = 10000, tol = 0.0
     """
     seq_len, batch_size = t.size(0), t.size(1)
 
-    actual_interval = t[:,:,1][:,:,None, None]#TxBSx1x1
+    actual_interval = t[:,:,0][:,:,None, None]#TxBSx1x1
     d_max = actual_interval.max()
     init_max = 3.
     init_N = N

@@ -139,12 +139,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Script to test Marked Point Process.')
 
     ###Validation Parameter###
-    parser.add_argument('--max_iter', type=int, default=50, help='number of iterations')
+    parser.add_argument('--max_iter', type=int, default=500, help='number of iterations')
     parser.add_argument('--anneal_iter', type=int, default=100, help='number of iteration over which anneal goes to 1')
     parser.add_argument('--hidden_dim', type=int, default=128, help='rnn hidden dim')
     parser.add_argument('--maxgradnorm', type=float, default=10.0, help='maximum gradient norm')
     parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
-    parser.add_argument('--gamma', type=float, default=.0, help='tradeoff of time and marker in loss. marker loss + gamma * time loss')
+    parser.add_argument('--gamma', type=float, default=.1, help='tradeoff of time and marker in loss. marker loss + gamma * time loss')
     parser.add_argument('--l2', type=float, default=1e-2, help='regularizer with weight decay parameter')
     parser.add_argument('--batch_size', type=int, default=32, help='the batch size')
     parser.add_argument('--latent_dim', type=int, default=20, help='latent dim')
@@ -154,7 +154,7 @@ if __name__ == '__main__':
     
 
     ###Helper Parameter###
-    parser.add_argument('--model', type=str, default='rmtpp', help='model name')
+    parser.add_argument('--model', type=str, default='hrmtpp', help='model name')
     parser.add_argument('--time_loss', type=str, default='intensity', help='whether to use normal loss or intensity loss')
     parser.add_argument('--test', type=bool, default=False, help='enable testing')
     parser.add_argument('--train_test', type=bool, default=True, help='enable testing')
@@ -166,25 +166,26 @@ if __name__ == '__main__':
 
 
 
-    parser.add_argument('--data_name', type=str, default='stackexchange', help='data set name')
+    parser.add_argument('--data_name', type=str, default='mimic2', help='data set name')
     params = parser.parse_args()
+    params.cv_idx = 1
     ###Fixed parameter###
-    if params.data_name == 'mimic':
-        params.marker_dim = 111
-        params.base_intensity = -8.
-        params.time_influence = 0.005
-        params.time_dim = 3
+    if params.data_name == 'mimic2':
+        params.marker_dim = 75
+        params.base_intensity = -0.
+        params.time_influence = 1.
+        params.time_dim = 1
         params.marker_type = 'categorical'
-        params.load = 'mimic'
-        params.save = 'mimic'
-    elif params.data_name == 'stackexchange':
-        params.marker_dim = 26
-        params.time_dim = 2
+        params.load = 'mimic2'
+        params.save = 'mimic2'
+    elif params.data_name == 'so':
+        params.marker_dim = 22
+        params.time_dim = 1
         params.base_intensity = -5.
         params.time_influence = 0.01
         params.marker_type = 'categorical'
-        params.load = 'stackexchange'
-        params.save = 'stackexchange'
+        params.load = 'so'
+        params.save = 'so'
 
     else:#different dataset. Encode those details.
         pass
@@ -209,8 +210,8 @@ if __name__ == '__main__':
             file_name = file_name+item_[0]+ str(item_[1])
 
         #Data should reside in this path for all datasets. Ideally 5 cross fold validation.
-        train_data_path = params.data_dir + params.data_name + "_train.pkl"
-        valid_data_path = params.data_dir + params.data_name + "_valid.pkl"
+        train_data_path = params.data_dir + params.data_name +'_'+str(params.cv_idx)+ "_train.pkl"
+        valid_data_path = params.data_dir + params.data_name + '_'+str(params.cv_idx)+"_valid.pkl"
         #That pkl file should give two list of x and t. It should not be tensor.
         train_x_data, train_t_data = load_data(train_data_path)
         valid_x_data, valid_t_data = load_data(valid_data_path)
@@ -220,11 +221,11 @@ if __name__ == '__main__':
         print("\n")
         best_epoch = train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_data, valid_t_data)
         if params.train_test:
-            test_data_path = params.data_dir + "/" + params.data_name + "_test.pkl"
+            test_data_path = params.data_dir + "/" + params.data_name + '_'+str(params.cv_idx)+ "_test.pkl"
             test_x_data, test_t_data = load_data(test_data_path)
             test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch)
     else:
-        test_data_path = params.data_dir + "/" + params.data_name  +"_test.pkl"
+        test_data_path = params.data_dir + "/" + params.data_name  +'_'+str(params.cv_idx)+"_test.pkl"
         test_x_data, test_t_data = load_data(test_data_path)
         best_epoch = params.best_epoch
         file_name = ''

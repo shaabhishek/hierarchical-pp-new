@@ -60,15 +60,15 @@ def train(net, params, optimizer, x_data, t_data, label):
             input_x = np.zeros( (max_seq_len, len(seq_len)) )
         else:
             input_x = np.zeros( (max_seq_len, len(seq_len), unpad_input_x[0].shape[1]) )
-        # Shape = T_max_batch x BS x 3
-        input_t = np.zeros( (max_seq_len, len(seq_len), unpad_input_t[0].shape[1]) )
+        # Shape = T_max_batch x BS x 1
+        input_t = np.zeros( (max_seq_len, len(seq_len), 1) )
         input_mask = np.zeros( (max_seq_len, len(seq_len)) )
         for idx in range(len(seq_len)):
             if params.marker_type == 'categorical':
                 input_x[:seq_len[idx], idx ] = unpad_input_x[idx].reshape(-1)    
             else:
                 input_x[:seq_len[idx], idx, : ] = unpad_input_x[idx]
-            input_t[:seq_len[idx], idx, : ] = unpad_input_t[idx]
+            input_t[:seq_len[idx], idx, 0 ] = unpad_input_t[idx]
             input_mask[:seq_len[idx], idx ] = 1.
 
         # Convert numpy ndarrays to torch Tensors
@@ -152,14 +152,14 @@ def test(net, params,  optimizer,  x_data, t_data, label):
             input_x = np.zeros( (max_seq_len, len(seq_len)) )
         else:
             input_x = np.zeros( (max_seq_len, len(seq_len), unpad_input_x[0].shape[1]) )
-        input_t = np.zeros( (max_seq_len, len(seq_len), unpad_input_t[0].shape[1]) )
+        input_t = np.zeros( (max_seq_len, len(seq_len), 1) )
         input_mask = np.zeros( (max_seq_len, len(seq_len)) )
         for idx in range(len(seq_len)):
             if params.marker_type == 'categorical':
                 input_x[:seq_len[idx], idx ] = unpad_input_x[idx].reshape(-1)        
             else:
                 input_x[:seq_len[idx], idx, : ] = unpad_input_x[idx]
-            input_t[:seq_len[idx], idx,  : ] = unpad_input_t[idx]
+            input_t[:seq_len[idx], idx,  0 ] = unpad_input_t[idx]
             input_mask[:seq_len[idx], idx ] = 1.
 
 
