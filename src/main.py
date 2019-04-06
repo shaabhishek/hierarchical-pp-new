@@ -3,6 +3,7 @@ import os
 import argparse
 import numpy as np
 import torch
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 from run import train, test
@@ -154,7 +155,7 @@ if __name__ == '__main__':
     
 
     ###Helper Parameter###
-    parser.add_argument('--model', type=str, default='hrmtpp', help='model name')
+    parser.add_argument('--model', type=str, default='ACD', help='model name')
     parser.add_argument('--time_loss', type=str, default='normal', help='whether to use normal loss or intensity loss')
     parser.add_argument('--test', type=bool, default=False, help='enable testing')
     parser.add_argument('--train_test', type=bool, default=True, help='enable testing')
