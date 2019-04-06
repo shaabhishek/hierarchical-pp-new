@@ -19,7 +19,13 @@ def convert_dataset(data_name):
                 with open(time_data_path,'r') as f:
                     lines = f.readlines()
                     for line in lines:
-                        values = np.asarray([float(i) for i in line.strip().split(' ')])
+                        x = np.asarray([float(i) for i in line.strip().split(' ')])
+                        z = x[1:] - x[:-1]
+                        y = np.zeros(x.shape)
+                        y[1:] = z
+                        values = np.concatenate([y.reshape(-1,1),x.reshape(-1,1)], axis = 1)
+
+
                         times.append(values)
                 assert len(events)== len(times), "Len mismatch"
                 print(ls, idx, len(times))
@@ -55,7 +61,11 @@ def convert_dataset(data_name):
                 with open(time_data_path,'r') as f:
                     lines = f.readlines()
                     for line in lines:
-                        values = np.asarray([float(i) for i in line.strip().split(' ')])
+                        x = np.asarray([float(i) for i in line.strip().split(' ')])
+                        z = x[1:] - x[:-1]
+                        y = np.zeros(x.shape)
+                        y[1:] = z
+                        values = np.concatenate([y.reshape(-1,1),x.reshape(-1,1)], axis = 1)
                         times.append(values)
                 assert len(events)== len(times), "Len mismatch"
                 print(ls, len(times))

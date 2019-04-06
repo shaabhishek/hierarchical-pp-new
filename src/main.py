@@ -141,11 +141,11 @@ if __name__ == '__main__':
     ###Validation Parameter###
     parser.add_argument('--max_iter', type=int, default=500, help='number of iterations')
     parser.add_argument('--anneal_iter', type=int, default=100, help='number of iteration over which anneal goes to 1')
-    parser.add_argument('--hidden_dim', type=int, default=128, help='rnn hidden dim')
+    parser.add_argument('--hidden_dim', type=int, default=512, help='rnn hidden dim')
     parser.add_argument('--maxgradnorm', type=float, default=10.0, help='maximum gradient norm')
     parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
     parser.add_argument('--gamma', type=float, default=.1, help='tradeoff of time and marker in loss. marker loss + gamma * time loss')
-    parser.add_argument('--l2', type=float, default=1e-2, help='regularizer with weight decay parameter')
+    parser.add_argument('--l2', type=float, default=0., help='regularizer with weight decay parameter')
     parser.add_argument('--batch_size', type=int, default=32, help='the batch size')
     parser.add_argument('--latent_dim', type=int, default=20, help='latent dim')
     parser.add_argument('--x_given_t', type=bool, default=False, help='whether x given t')
@@ -154,8 +154,8 @@ if __name__ == '__main__':
     
 
     ###Helper Parameter###
-    parser.add_argument('--model', type=str, default='hrmtpp', help='model name')
-    parser.add_argument('--time_loss', type=str, default='intensity', help='whether to use normal loss or intensity loss')
+    parser.add_argument('--model', type=str, default='rmtpp', help='model name')
+    parser.add_argument('--time_loss', type=str, default='normal', help='whether to use normal loss or intensity loss')
     parser.add_argument('--test', type=bool, default=False, help='enable testing')
     parser.add_argument('--train_test', type=bool, default=True, help='enable testing')
     parser.add_argument('--show', type=bool, default=True, help='print progress')
@@ -174,13 +174,13 @@ if __name__ == '__main__':
         params.marker_dim = 75
         params.base_intensity = -0.
         params.time_influence = 1.
-        params.time_dim = 1
+        params.time_dim = 2
         params.marker_type = 'categorical'
         params.load = 'mimic2'
         params.save = 'mimic2'
     elif params.data_name == 'so':
         params.marker_dim = 22
-        params.time_dim = 1
+        params.time_dim = 2
         params.base_intensity = -5.
         params.time_influence = 0.01
         params.marker_type = 'categorical'
