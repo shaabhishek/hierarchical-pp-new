@@ -55,9 +55,9 @@ class hrmtpp(nn.Module):
         self.sigma_min = 1e-2
 
         # Set up layer dimensions. This is only hidden layers dimensions
-        self.x_embedding_layer = [64]
-        self.t_embedding_layer = [64]
-        self.shared_output_layers = [64]
+        self.x_embedding_layer = [256]
+        self.t_embedding_layer = [2]
+        self.shared_output_layers = [128]
         self.encoder_layers = [64, 64]
 
         self.hidden_embed_input_dim = self.hidden_dim + self.latent_dim

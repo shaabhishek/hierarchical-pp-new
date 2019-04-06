@@ -31,12 +31,15 @@ def assert_input(self):
             'real', 'categorical', 'binary'}, "Unknown Input type provided!"
 
 def create_input_embedding_layer(model):
-    x_module = nn.Sequential(
-        nn.Linear(model.marker_dim, model.x_embedding_layer[0])#, nn.ReLU(),
-        # Not sure whether to put Relu at the end of embedding layer
-        #nn.Linear(self.x_embedding_layer[0],
-        #          self.x_embedding_layer[1]), nn.ReLU()
-    )
+    if model.marker_type == 'categorical':
+        x_module = nn.Embedding(model.marker_dim, model.x_embedding_layer[0])
+    else:
+        x_module = nn.Sequential(
+            nn.Linear(model.marker_dim, model.x_embedding_layer[0])#, nn.ReLU(),
+            # Not sure whether to put Relu at the end of embedding layer
+            #nn.Linear(self.x_embedding_layer[0],
+            #          self.x_embedding_layer[1]), nn.ReLU()
+        )
 
     #t_module = nn.Linear(self.time_dim, self.t_embedding_layer[0])
     t_module = nn.Sequential(
@@ -170,11 +173,12 @@ def preprocess_input(model, x, t):
             phi_t : Tensor of shape TxBSx self.t_embedding_layer[-1]
             phi   : Tensor of shape TxBS x (self.x_embedding_layer[-1] + self.t_embedding_layer[-1])
     """
-    if model.marker_type == 'categorical':
-        # Shape TxBSxmarker_dim
-        x = one_hot_encoding(x[:, :], model.marker_dim).to(device)
+    # if model.marker_type == 'categorical':
+    #     # Shape TxBSxmarker_dim
+    #     x = one_hot_encoding(x[:, :], model.marker_dim).to(device)
     phi_x = model.embed_x(x)
-    phi_t = model.embed_time(t)
+    #phi_t = model.embed_time(t)
+    phi_t = t
     phi = torch.cat([phi_x, phi_t], -1)
     return phi_x, phi_t, phi
 
