@@ -24,9 +24,11 @@ def convert_dataset(data_name):
                         y = np.zeros(x.shape)
                         y[1:] = z
                         values = np.concatenate([y.reshape(-1,1),x.reshape(-1,1)], axis = 1)
+                        if data_name =='so':
+                           times.append(values/3600*24.)
+                        else:
+                           times.append(values)
 
-
-                        times.append(values)
                 assert len(events)== len(times), "Len mismatch"
                 print(ls, idx, len(times))
                 data_dict = {
