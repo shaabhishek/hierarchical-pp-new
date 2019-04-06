@@ -2,7 +2,7 @@ import numpy as np
 import pickle
 
 
-data_path = '../data/so_2_train.pkl'
+data_path = '../data/mimic2_2_train.pkl'
 
 with open(data_path, 'rb') as handle:
     data = pickle.load(handle)
@@ -10,7 +10,7 @@ with open(data_path, 'rb') as handle:
 times, x = data['t'], data['x']
 
 print("Time statistics, Number of users", len(times))
-d = np.concatenate([y[1:] for y in times], axis = None)
+d = np.concatenate([y[1:, 1] for y in times], axis = None)
 print("Interval stat: Min, Max, mu, std: ", d.min(), d.max(), d.mean(), d.std())
 
 print("x statistics")
