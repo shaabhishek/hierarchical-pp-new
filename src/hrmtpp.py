@@ -274,7 +274,7 @@ class hrmtpp(nn.Module):
                 expected_t = compute_time_expectation(self, hz_embedded, t, mask)
                 time_mse = torch.abs(expected_t- t[:,:,0])[1:, :] * mask[1:, :]
             else:
-                time_mse = torch.abs(mu_time[:,:,0]- t[:,:,1])[1:, :] * mask[1:, :]
+                time_mse = torch.abs(mu_time[:,:,0]- t[:,:,0])[1:, :] * mask[1:, :]
             metric_dict['time_mse'] = time_mse.sum().detach().cpu().numpy()
             metric_dict['time_mse_count'] = mask[1:,:].sum().detach().cpu().numpy()
 
