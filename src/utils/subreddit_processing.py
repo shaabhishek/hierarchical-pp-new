@@ -1,6 +1,7 @@
 import pandas
 import numpy as np
 from multiprocessing import Pool
+import pickle
 import os
 
 from helper import train_val_split
@@ -14,17 +15,19 @@ def map_column_to_ints(reddit_df, colname):
     assert(num_values == len(reddit_df[colname].unique()))
     return reddit_df
 
-def subreddit_data_to_df(data, time_threshold, colnames=None):
-    base_path = './../../data/dump/'
-    files = os.listdir(base_path)
-    file_list = [base_path+filename for filename in files if filename.startswith('x') and filename.split('.')[1]=='csv']
-    def read_csv(x):
-        df = pandas.read_csv(x, header=None)
-        df.columns = ['username', 'subreddit', 'utc']
-        df['utc'] = pandas.to_datetime(df['utc'], unit='s')
-        return df
+def read_csv(x):
+    df = pandas.read_csv(x, header=None)
+    df.columns = ['username', 'subreddit', 'utc']
+    df['utc'] = pandas.to_datetime(df['utc'], unit='s')
+    return df
 
-    with Pool(7) as pool:
+def subreddit_data_to_df(data, time_threshold, colnames=None):
+    base_path = './../data/dump/'
+    files = os.listdir(base_path)
+    file_list = [base_path+filename for filename in files if filename.startswith('partial_reddit_') and filename.split('.')[1]=='csv']
+    print(files)
+
+    with Pool(num_jobs) as pool:
         df_list = pool.map(read_csv, file_list)
 
     reddit_df = pandas.concat(df_list, ignore_index=True, sort=False)
@@ -41,8 +44,8 @@ def subreddit_data_to_df(data, time_threshold, colnames=None):
     # Limit the users to only the ones with a certain frequency of posting
     freq_users = reddit_df.username.value_counts()
     hifreq_users = freq_users[freq_users>time_threshold].index.values
-    print(freq_users.shape)
-    print(hifreq_users.shape)
+    print("Total users:",freq_users.shape)
+    print("Users left after frequency pruning", hifreq_users.shape)
     del freq_users
     reddit_df = reddit_df[reddit_df.username.isin(hifreq_users)]
 
@@ -50,22 +53,25 @@ def subreddit_data_to_df(data, time_threshold, colnames=None):
     return reddit_df
 
 
+def extract_marker_from_group(user_idx):
+    global group_users
+    return group_users.get_group(user_idx)['subreddit'].values
+
+def extract_time_from_group(user_idx):
+    global group_users
+    times = group_users.get_group(user_idx)['utc'].astype('int') / (10**9 * 3600 * 24)
+    intervals = times - times.shift(periods=1)
+    intervals.iloc[0] = 0
+    return np.stack([times.values, intervals.values]).astype(np.int32).T
+
 def get_markers_and_times(reddit_df):
-    def extract_marker_from_group(user_idx, user_df_rows):
-        return reddit_df.iloc[user_df_rows]['subreddit'].values
-
-    def extract_time_from_group(user_idx, user_df_rows):
-        times = reddit_df.iloc[user_df_rows]['utc'].astype('int') / (10**9 * 3600 * 24)
-        intervals = times - times.shift(periods=1)
-        intervals.iloc[0] = 0
-        return np.stack([times.values, intervals.values]).astype(np.int32).T
-    
+    global group_users
     group_users = reddit_df.groupby('username')
-    args = list(group_users.groups.items())
+    args = list(group_users.groups.keys())
 
-    with Pool(7) as pool:
-        x_data = pool.starmap(extract_marker_from_group, args)
-        t_data = pool.starmap(extract_time_from_group, args)
+    with Pool(num_jobs) as pool:
+        x_data = pool.map(extract_marker_from_group, args)
+        t_data = pool.map(extract_time_from_group, args)
 
     assert(np.all([t_data[idx].shape[1] == 2 for idx in range(100)]))
     assert(np.all([x_data[idx].shape[0] == t_data[idx].shape[0] for idx in range(100)]))
@@ -79,18 +85,8 @@ def save_subreddit_data(time_threshold, data=None):
     Saves the data as a dict with keys 'x' and 't' into a file with path='path_data'
     The values of the keys are x_data and t_data:
     x_data: list of length num_data_train, each element is numpy array of shape T_i x marker_dim
-    t_data: list of length num_data_train, each element is numpy array of shape T_i x 3
+    t_data: list of length num_data_train, each element is numpy array of shape T_i x 2
     """
-    if data==None:
-        filename = './../data/dump/stack_processed.pickle'
-        try: 
-            # if os.path.isfile(filename):
-            with open(filename, 'rb') as handle:
-                print("Processed Dictionary Exists!")
-                data = pickle.load(handle)
-                print('Data length: ', len(data))
-        except:
-            print('Data didnt load')
 
     reddit_df = subreddit_data_to_df(data, time_threshold)
     
@@ -128,5 +124,7 @@ def save_subreddit_data(time_threshold, data=None):
 
 if __name__ == "__main__":
     # only users with a series length less than time_threshold are chosen
+    global num_jobs
+    num_jobs = 4
     time_threshold = 100
     print(save_subreddit_data(time_threshold))
