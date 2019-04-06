@@ -125,6 +125,6 @@ def save_subreddit_data(time_threshold, data=None):
 if __name__ == "__main__":
     # only users with a series length less than time_threshold are chosen
     global num_jobs
-    num_jobs = 4
+    num_jobs = 8
     time_threshold = 100
     print(save_subreddit_data(time_threshold))
