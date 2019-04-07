@@ -83,7 +83,7 @@ def train(net, params, optimizer, x_data, t_data, label):
         loss, meta_info = net(input_x, input_t, mask=input_mask)
         loss.backward()
 
-        total_loss += meta_info['true_ll'].numpy()
+        total_loss += meta_info['true_ll'].cpu().numpy()
         
         time_mse += meta_info["time_mse"]
         time_mse_count += meta_info["time_mse_count"]
@@ -173,7 +173,7 @@ def test(net, params,  optimizer,  x_data, t_data, label):
         with torch.no_grad():
             loss, meta_info = net(input_x, input_t, mask= input_mask)
 
-        total_loss += meta_info['true_ll'].numpy()
+        total_loss += meta_info['true_ll'].cpu().numpy()
         time_mse+= meta_info["time_mse"]
         time_mse_count += meta_info["time_mse_count"]
         if params.marker_type == 'real':
