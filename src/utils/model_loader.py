@@ -1,7 +1,7 @@
 import torch
 import sys
 sys.path.insert(0, './../')
-from rmtpp import rmtpp
+from rmtpp_rep import rmtpp
 from hrmtpp import hrmtpp
 from autoregressive import ACD
 from hrmtpp_exact import hrmtpp_exact
