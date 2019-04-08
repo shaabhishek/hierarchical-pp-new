@@ -25,7 +25,7 @@ def convert_dataset(data_name):
                         y[1:] = z
                         values = np.concatenate([y.reshape(-1,1),x.reshape(-1,1)], axis = 1)
                         if data_name =='so':
-                           times.append(values/(3600*24.))
+                           times.append(values*0.00001)
                         else:
                            times.append(values)
 
