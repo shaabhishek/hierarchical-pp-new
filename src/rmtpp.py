@@ -97,8 +97,8 @@ class rmtpp(nn.Module):
         time_log_likelihood, marker_log_likelihood, metric_dict = self._forward(
             x, t, mask)
         
-        marker_loss = (-1.* marker_log_likelihood *mask).sum()
-        time_loss = (-1. *time_log_likelihood *mask).sum()
+        marker_loss = (-1.* marker_log_likelihood *mask)[1:,:].sum()
+        time_loss = (-1. *time_log_likelihood *mask)[1:,:].sum()
 
 
         loss = self.gamma*time_loss + marker_loss
