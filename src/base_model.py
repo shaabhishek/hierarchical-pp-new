@@ -116,7 +116,7 @@ def compute_marker_log_likelihood(model, x, mu, logvar):
                 seq_lengths, batch_size)
         else:#binary
             loss = F.binary_cross_entropy(mu, x, reduction= 'none').sum(dim =-1)#TxBS
-        return -loss    
+        return loss    
 
 
 def compute_point_log_likelihood(model, h, t):
