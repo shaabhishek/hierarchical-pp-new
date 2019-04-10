@@ -54,7 +54,7 @@ def create_input_embedding_layer(model):
 def create_output_marker_layer(model):
     embed_module = nn.Sequential(
         nn.Linear(model.hidden_embed_input_dim,
-                    model.shared_output_layers[0]), nn.ReLU(),
+                    model.shared_output_layers[0]), nn.ReLU(),nn.Dropout(model.dropout)
         #nn.Linear(
         #    self.shared_output_layers[0], self.shared_output_layers[1]), nn.ReLU()
     )

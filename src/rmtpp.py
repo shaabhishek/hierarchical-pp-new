@@ -36,7 +36,7 @@ class rmtpp(nn.Module):
 
     """
 
-    def __init__(self, marker_type='real', marker_dim=31, time_dim=2, hidden_dim=128, x_given_t=False,base_intensity = 0.,time_influence = 1., gamma = 1., time_loss = 'intensity' ):
+    def __init__(self, marker_type='real', marker_dim=31, time_dim=2, dropout = 0., hidden_dim=128, x_given_t=False,base_intensity = 0.,time_influence = 1., gamma = 1., time_loss = 'intensity' ):
         super().__init__()
         """
             Input:

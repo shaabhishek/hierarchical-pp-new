@@ -156,6 +156,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
     parser.add_argument('--gamma', type=float, default=.0, help='tradeoff of time and marker in loss. marker loss + gamma * time loss')
     parser.add_argument('--l2', type=float, default=0., help='regularizer with weight decay parameter')
+    parser.add_argument('--dropout', type=float, default=0.2, help='dropout rate')
     parser.add_argument('--batch_size', type=int, default=32, help='the batch size')
     parser.add_argument('--latent_dim', type=int, default=20, help='latent dim')
     parser.add_argument('--x_given_t', type=bool, default=False, help='whether x given t')
