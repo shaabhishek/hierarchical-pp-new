@@ -52,6 +52,7 @@ class rmtpp(nn.Module):
         self.time_dim = time_dim
         self.hidden_dim = hidden_dim
         self.x_given_t = x_given_t
+        self.dropout = dropout
         self.gamma = gamma
         self.time_loss = time_loss
         self.use_rnn_cell = False
