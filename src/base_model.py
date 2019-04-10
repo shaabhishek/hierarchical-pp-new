@@ -79,14 +79,15 @@ def create_output_marker_layer(model):
     return embed_module, x_module_mu, x_module_logvar    
 
 def create_output_time_layer(model, b, ti):
+    l = model.hidden_embed_input_dim#model.shared_output_layers[-1]
     if model.time_loss == 'intensity':
-        h_influence =  nn.Linear(model.shared_output_layers[-1], 1, bias=False)
+        h_influence =  nn.Linear(l, 1, bias=False)
         time_influence = nn.Parameter(ti*torch.ones(1, 1, 1))#0.005*
         base_intensity =  nn.Parameter(torch.zeros(1, 1, 1)-b)#-8
         model.h_influence, model.time_influence, model.base_intensity =  h_influence, time_influence, base_intensity
     else:
-        model.time_mu =   nn.Linear(model.shared_output_layers[-1], 1)
-        model.time_logvar =   nn.Linear(model.shared_output_layers[-1], 1)
+        model.time_mu =   nn.Linear(l, 1)
+        model.time_logvar =   nn.Linear(l, 1)
     return
 
 
