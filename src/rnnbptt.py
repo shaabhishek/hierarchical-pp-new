@@ -29,7 +29,7 @@ class rnnbptt(nn.Module):
 
     """
 
-    def __init__(self, marker_type='real', marker_dim=31, time_dim=2, hidden_dim=128, x_given_t=False,base_intensity = 0.,time_influence = 1., gamma = 1., time_loss = 'intensity' ):
+    def __init__(self, marker_type='real', marker_dim=31, time_dim=2, hidden_dim=128, x_given_t=False,base_intensity = 0.,time_influence = 1., gamma = 1., time_loss = 'intensity', dropout=0.):
         super().__init__()
         """
             Input:
@@ -47,6 +47,7 @@ class rnnbptt(nn.Module):
         self.x_given_t = x_given_t
         self.gamma = gamma
         self.time_loss = time_loss
+        self.dropout = dropout
         self.use_rnn_cell = True
         self.bptt = 6
         assert_input(self)
