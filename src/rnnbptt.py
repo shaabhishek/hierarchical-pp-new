@@ -29,8 +29,9 @@ class rnnbptt(nn.Module):
 
     """
 
-    def __init__(self, marker_type='real', marker_dim=31, time_dim=2, hidden_dim=128, x_given_t=False,base_intensity = 0.,time_influence = 1., gamma = 1., time_loss = 'intensity', dropout=0.):
+    def __init__(self, marker_type='real', marker_dim=31, time_dim=2, hidden_dim=128,bptt = 6, x_given_t=False,base_intensity = 0.,time_influence = 1., gamma = 1., time_loss = 'intensity', dropout=0.):
         super().__init__()
+
         """
             Input:
                 marker_type : 'real' or 'binary', 'categorical'
@@ -49,7 +50,7 @@ class rnnbptt(nn.Module):
         self.time_loss = time_loss
         self.dropout = dropout
         self.use_rnn_cell = True
-        self.bptt = 6
+        self.bptt = bptt
         assert_input(self)
 
         self.sigma_min = 1e-2

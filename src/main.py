@@ -162,10 +162,11 @@ if __name__ == '__main__':
     parser.add_argument('--x_given_t', type=bool, default=False, help='whether x given t')
     #parser.add_argument('--reg', type=str, default='l2', help='regularization')
     parser.add_argument('--n_cluster', type=int, default=10, help='number of cluster')
+    parser.add_argument('--bptt', type=int, default=6, help='bptt steps')
     
 
     ###Helper Parameter###
-    parser.add_argument('--model', type=str, default='rmtpp', help='model name')
+    parser.add_argument('--model', type=str, default='rnnbptt', help='model name')
     parser.add_argument('--time_loss', type=str, default='normal', help='whether to use normal loss or intensity loss')
     parser.add_argument('--test', type=bool, default=False, help='enable testing')
     parser.add_argument('--train_test', type=bool, default=True, help='enable testing')
