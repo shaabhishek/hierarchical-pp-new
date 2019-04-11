@@ -154,8 +154,9 @@ if __name__ == '__main__':
     parser.add_argument('--hidden_dim', type=int, default=512, help='rnn hidden dim')
     parser.add_argument('--maxgradnorm', type=float, default=10.0, help='maximum gradient norm')
     parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
-    parser.add_argument('--gamma', type=float, default=.1, help='tradeoff of time and marker in loss. marker loss + gamma * time loss')
+    parser.add_argument('--gamma', type=float, default=.0, help='tradeoff of time and marker in loss. marker loss + gamma * time loss')
     parser.add_argument('--l2', type=float, default=0., help='regularizer with weight decay parameter')
+    parser.add_argument('--dropout', type=float, default=0.2, help='dropout rate')
     parser.add_argument('--batch_size', type=int, default=32, help='the batch size')
     parser.add_argument('--latent_dim', type=int, default=20, help='latent dim')
     parser.add_argument('--x_given_t', type=bool, default=False, help='whether x given t')
@@ -176,7 +177,7 @@ if __name__ == '__main__':
 
 
 
-    parser.add_argument('--data_name', type=str, default='mimic2', help='data set name')
+    parser.add_argument('--data_name', type=str, default='so', help='data set name')
     params = parser.parse_args()
     params.cv_idx = 1
     ###Fixed parameter###
