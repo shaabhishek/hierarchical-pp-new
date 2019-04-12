@@ -178,7 +178,7 @@ if __name__ == '__main__':
 
 
 
-    parser.add_argument('--data_name', type=str, default='so', help='data set name')
+    parser.add_argument('--data_name', type=str, default='book_order', help='data set name')
     params = parser.parse_args()
     params.cv_idx = 1
     ###Fixed parameter###
@@ -206,6 +206,15 @@ if __name__ == '__main__':
         params.marker_type = 'categorical'
         params.load = 'meme'
         params.save = 'meme'
+    
+    elif params.data_name == 'book_order':
+        params.marker_dim = 2
+        params.time_dim = 2
+        params.base_intensity = 0.
+        params.time_influence = 0.01
+        params.marker_type = 'categorical'
+        params.load = 'book_order'
+        params.save = 'book_order'
 
     else:#different dataset. Encode those details.
         pass
