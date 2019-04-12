@@ -198,6 +198,14 @@ if __name__ == '__main__':
         params.marker_type = 'categorical'
         params.load = 'so'
         params.save = 'so'
+    elif params.data_name == 'meme':
+        params.marker_dim = 5000
+        params.time_dim = 2
+        params.base_intensity = 0.
+        params.time_influence = 0.01
+        params.marker_type = 'categorical'
+        params.load = 'meme'
+        params.save = 'meme'
 
     else:#different dataset. Encode those details.
         pass
