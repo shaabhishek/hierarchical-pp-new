@@ -2,6 +2,22 @@ import numpy as np
 import pickle
 from helper import train_val_split
 
+def seq_to_marker(seq):
+    """
+        Input: dict with keys: 'time_since_start', 'time_since_last_event'
+    """
+    seq = sorted(seq, key=lambda x: x['time_since_start'])
+    markers = np.array([datum['type_event'] for datum in seq])
+    return markers
+
+def seq_to_times(seq):
+    """
+        Input: dict with keys: 'time_since_start', 'time_since_last_event'
+    """
+    seq = sorted(seq, key=lambda x: x['time_since_start'])
+    times = np.array([(datum['time_since_last_event'], datum['time_since_start']) for datum in seq])
+    return times
+
 def getdata_NHP(filepath):
     t_data, x_data = [],[]
     with open(filepath,'rb') as f:
@@ -104,8 +120,9 @@ def convert_dataset(data_name):
                     test_file = '../data/'+data_name+'_'+str(1)+'_test.pkl'
                     with open(test_file, 'wb') as handle:
                         pickle.dump(data_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        if data_name == 'meme':
+    if data_name == 'meme':
             train_dict = getdata_NHP('./../data/dump/data_meme/train.pkl')
+            import pdb; pdb.set_trace()
             valid_dict = getdata_NHP('./../data/dump/data_meme/dev.pkl')
             test_dict = getdata_NHP('./../data/dump/data_meme/test.pkl')
 
