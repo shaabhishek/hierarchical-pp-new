@@ -1,5 +1,6 @@
 import numpy as np
 import pickle
+import random
 from helper import train_val_split
 
 def seq_to_marker(seq):
@@ -18,7 +19,7 @@ def seq_to_times(seq):
     times = np.array([(datum['time_since_last_event'], datum['time_since_start']) for datum in seq])
     return times
 
-def getdata_NHP(filepath):
+def getdata_NHP(filepath, max_size=None):
     t_data, x_data = [],[]
     with open(filepath,'rb') as f:
         data = pickle.load(f, encoding='latin1')
@@ -26,11 +27,15 @@ def getdata_NHP(filepath):
             if (type(_data)==list) and len(_data)>0:
                 x_data.extend(list(map(seq_to_marker, _data)))
                 t_data.extend(list(map(seq_to_times, _data)))
-            
+    if max_size is not None:
+        idxs = random.sample(range(len(x_data)), max_size)
+        t_data = [t_data[idx] for idx in idxs]
+        x_data = [x_data[idx] for idx in idxs]
+
     data_dict = {
-            't': t_data,
-            'x': x_data
-        }
+        't': t_data,
+        'x': x_data
+    }
     return data_dict
 
 def convert_dataset(data_name):
@@ -121,9 +126,8 @@ def convert_dataset(data_name):
                     with open(test_file, 'wb') as handle:
                         pickle.dump(data_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
     if data_name == 'meme':
-            train_dict = getdata_NHP('./../data/dump/data_meme/train.pkl')
-            import pdb; pdb.set_trace()
             valid_dict = getdata_NHP('./../data/dump/data_meme/dev.pkl')
+            train_dict = getdata_NHP('./../data/dump/data_meme/train.pkl', 32000)
             test_dict = getdata_NHP('./../data/dump/data_meme/test.pkl')
 
             train_file = '../data/'+data_name+'_'+str(1)+'_train.pkl'
@@ -142,7 +146,7 @@ def convert_dataset(data_name):
 
 if __name__ == "__main__":
     #convert_dataset('mimic2')
-    convert_dataset('so')
-    #convert_dataset('meme')
+    # convert_dataset('so')
+    convert_dataset('meme')
     #convert_dataset('lastfm')
     #convert_dataset('book_order')
