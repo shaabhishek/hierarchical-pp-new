@@ -61,6 +61,8 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
             print("valid_marker_rmse\t", valid_info['marker_rmse'], "\ttrain_marker_rmse\t", train_info['marker_rmse'])
         print("valid_time_mse\t", valid_info['time_rmse'], "\ttrain_time_msee\t", train_info['time_rmse'])
         print("valid_loss\t", valid_info['loss'], "\ttrain_loss\t", train_info['loss'])
+        print("valid marker likelihood\t", valid_info['marker_ll'], "\t train marker likelihood\t", train_info['marker_ll'])
+        print("valid time likelihood\t", valid_info['time_ll'], "\t train time likelihood\t", train_info['time_ll'])
 
         if not os.path.isdir('model'):
             os.makedirs('model')
