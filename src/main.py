@@ -45,8 +45,11 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
         for fs in fields:
             all_data[ds][fs] = {}
             
-    best_valid_loss = None
-    best_epoch = 1
+    best_valid_loss = {}
+    best_epoch = {}
+    for fs in fields:
+        best_epoch[fs] =  1
+        best_valid_loss[fs] = None
 
     for idx in range(params.max_iter):
         params.iter = idx +1
@@ -87,9 +90,10 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
         
 
         # output the epoch with the best validation auc
-        if (best_valid_loss is None) or (valid_info['loss'] < best_valid_loss) :
-            best_valid_loss = valid_info['loss']
-            best_epoch = idx+1
+        for fs in fields:
+            if (best_valid_loss[fs] is None) or (valid_info[fs] < best_valid_loss[fs]) :
+                best_valid_loss[fs] = valid_info[fs]
+                best_epoch[fs] = idx+1
 
     if not os.path.isdir('result'):
         os.makedirs('result')
@@ -107,27 +111,32 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
 
 def test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch):
     print("\n\nStart testing ......................\n Best epoch:", best_epoch)
-    model = load_model(params).to(device)
-
-
-    checkpoint = torch.load(os.path.join('model', params.save, params.model, file_name)+ '_'+str(best_epoch))
-    model.load_state_dict(checkpoint['model_state_dict'])
+    fields = ['loss', 'marker_ll', 'time_ll', 'auc','accuracy', 'marker_rmse', 'time_rmse']
+    for fs in fields:
+        model = load_model(params).to(device)
+        checkpoint = torch.load(os.path.join('model', params.save, params.model, file_name)+ '_'+str(best_epoch[fs]))
+        model.load_state_dict(checkpoint['model_state_dict'])
     
-    test_info = test(model, params, None, test_x_data, test_t_data, label='Test')
-    if params.marker_type != 'real':
-        print("\ntest_auc\t", test_info['auc'])
-        print("test_accuracy\t", test_info['accuracy'])
-    else:
-        print("test_marker_rmse\t" , test_info['marker_rmse'])
-    print("test_loss\t", test_info['loss'])
-    print("test_time_rmse\t" , test_info['time_rmse'])
+        test_info = test(model, params, None, test_x_data, test_t_data, label='Test')
+        print("test\t ", fs, ': ', test_info[fs])
+        # if params.marker_type != 'real':
+        #     print("\ntest_auc\t", test_info['auc'])
+        #     print("test_accuracy\t", test_info['accuracy'])
+        # else:
+        #     print("test_marker_rmse\t" , test_info['marker_rmse'])
+        # print("test_loss\t", test_info['loss'])
+        # print("test_time_rmse\t" , test_info['time_rmse'])
+        # print("test time likelihood\t", test_info['time_ll'], "\t test marker likelihood\t", test_info['marker_ll'])
+
 
     path = os.path.join('model', params.save, params.model, file_name)+ '*'
     for i in glob.glob(path):
         os.remove(i)
-    ##Now Delete all the models
-    #subprocess.run(["rm" + 'model/'+params.save+'/'+params.model+'/'+file_name+'_*'])
-    #subprocess.call("rm" + 'model/'+params.save+'/'+params.model+'/'+file_name+'_*', shell=True)
+    
+    f_save_log = open(os.path.join('result', params.save,params.model,  file_name), 'a')
+    for fs in fields:
+        f_save_log.write('Test results\t :'+ fs  +':\t'+ str(test_info[fs]) + "\n")
+    f_save_log.close()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Script to test Marked Point Process.')
