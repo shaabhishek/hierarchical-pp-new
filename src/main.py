@@ -120,7 +120,9 @@ def test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch):
     
         test_info = test(model, params, None, test_x_data, test_t_data, label='Test')
         print("test\t ", fs, ': ', test_info[fs])
+        print("best epoch of metric: ",fs ,"\t", best_epoch[fs], "All Metrics for that epoch", test_info)
         f_save_log.write('Test results\t :'+ fs  +':\t'+ str(test_info[fs]) + "\n")
+        f_save_log.write('Other results for taking best\t :'+ fs  +':\t'+ str(test_info) + "\n")
         # if params.marker_type != 'real':
         #     print("\ntest_auc\t", test_info['auc'])
         #     print("test_accuracy\t", test_info['accuracy'])
