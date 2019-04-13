@@ -37,33 +37,30 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
     print("\n")
 
     ### ================================== start training ==================================
-    all_train_loss = {}
-    all_train_accuracy = {}
-    all_train_auc = {}
-    all_valid_loss = {}
-    all_valid_accuracy = {}
-    all_valid_auc = {}
-    all_valid_marker_rmse = {}
-    all_train_marker_rmse = {}
-    all_valid_time_rmse = {}
-    all_train_time_rmse = {}
+    fields = ['loss', 'marker_ll', 'time_ll', 'auc','accuracy', 'marker_rmse', 'time_rmse']
+    datas = ['train', 'valid']
+    all_data = {}
+    for ds in datas:
+        all_data[ds] = {}
+        for fs in fields:
+            all_data[ds][fs] = {}
+            
     best_valid_loss = None
     best_epoch = 1
 
     for idx in range(params.max_iter):
         params.iter = idx +1
         #### Loss is the ELBO, accuracy is for categorical/binary marker, AUC is for binary/categorical marker.  Time RMSE is w.r.t expectation. marker rmse for real marker####
-        train_loss, train_time_rmse, train_accuracy, train_auc, train_marker_rmse = train(model, params, optimizer, train_x_data, train_t_data,  label='Train')
-        valid_loss, valid_time_rmse, valid_accuracy, valid_auc, valid_marker_rmse = test(model,  params, optimizer, valid_x_data, valid_t_data, label='Valid')
-
+        train_info = train(model, params, optimizer, train_x_data, train_t_data,  label='Train')
+        valid_info = test(model,  params, optimizer, valid_x_data, valid_t_data, label='Valid')
         print('epoch', idx + 1)
         if params.marker_type != 'real':
-            print("valid_auc\t", valid_auc, "\ttrain_auc\t", train_auc)
-            print("valid_accuracy\t", valid_accuracy, "\ttrain_accuracy\t", train_accuracy)
+            print("valid_auc\t", valid_info['auc'], "\ttrain_auc\t", train_info['auc'])
+            print("valid_accuracy\t", valid_info['accuracy'], "\ttrain_accuracy\t", train_info['accuracy'])
         else:
-            print("valid_marker_rmse\t", valid_marker_rmse, "\ttrain_marker_rmse\t", train_marker_rmse)
-        print("valid_time_mse\t", valid_time_rmse, "\ttrain_time_msee\t", train_time_rmse)
-        print("valid_loss\t", valid_loss, "\ttrain_loss\t", train_loss)
+            print("valid_marker_rmse\t", valid_info['marker_rmse'], "\ttrain_marker_rmse\t", train_info['marker_rmse'])
+        print("valid_time_mse\t", valid_info['time_rmse'], "\ttrain_time_msee\t", train_info['time_rmse'])
+        print("valid_loss\t", valid_info['loss'], "\ttrain_loss\t", train_info['loss'])
 
         if not os.path.isdir('model'):
             os.makedirs('model')
@@ -75,29 +72,21 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
         torch.save({'epoch':idx,
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
-                    'loss': train_loss,
+                    'loss': train_info['loss'],
                     },
                      os.path.join('model', params.save, params.model, file_name)+'_'+ str(idx+1)
                     )
+        
+        for fs in fields:
+            all_data['train'][fs][idx+1] =  train_info.get(fs, 0.)
+            all_data['valid'][fs][idx+1] =  valid_info.get(fs, 0.)
 
-        if params.marker_type != 'real':
-            all_valid_auc[idx + 1] = valid_auc
-            all_train_auc[idx + 1] = train_auc
-            all_valid_accuracy[idx + 1] = valid_accuracy
-            all_train_accuracy[idx + 1] = train_accuracy
-        else:
-            all_valid_marker_rmse[idx + 1] = valid_marker_rmse
-            all_train_marker_rmse[idx + 1] = train_marker_rmse
-        all_valid_time_rmse[idx + 1] = valid_time_rmse
-        all_train_time_rmse[idx + 1] = train_time_rmse
-        all_valid_loss[idx + 1] = valid_loss
-        all_train_loss[idx + 1] = train_loss
         
         
 
         # output the epoch with the best validation auc
-        if (best_valid_loss is None) or (valid_loss < best_valid_loss) :
-            best_valid_loss = valid_loss
+        if (best_valid_loss is None) or (valid_info['loss'] < best_valid_loss) :
+            best_valid_loss = valid_info['loss']
             best_epoch = idx+1
 
     if not os.path.isdir('result'):
@@ -108,16 +97,9 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
             os.makedirs(os.path.join('result', params.save, params.model))
 
     f_save_log = open(os.path.join('result', params.save,params.model,  file_name), 'w')
-    f_save_log.write("valid_auc:\n" + str(all_valid_auc) + "\n\n")
-    f_save_log.write("train_auc:\n" + str(all_train_auc) + "\n\n")
-    f_save_log.write("valid_loss:\n" + str(all_valid_loss) + "\n\n")
-    f_save_log.write("train_loss:\n" + str(all_train_loss) + "\n\n")
-    f_save_log.write("valid_accuracy:\n" + str(all_valid_accuracy) + "\n\n")
-    f_save_log.write("train_accuracy:\n" + str(all_train_accuracy) + "\n\n")
-    f_save_log.write("valid_marker_rmse:\n" + str(all_valid_marker_rmse) + "\n\n")
-    f_save_log.write("train_marker_rmse:\n" + str(all_train_marker_rmse) + "\n\n")
-    f_save_log.write("valid_time_rmse:\n" + str(all_valid_time_rmse) + "\n\n")
-    f_save_log.write("train_time_rmse:\n" + str(all_train_time_rmse) + "\n\n")
+    for fs in fields:
+        for ds in datas:
+            f_save_log.write(ds + '_'+ fs +":\n" + str(all_data[ds][fs]) + "\n\n")
     f_save_log.close()
     return best_epoch
 
@@ -129,14 +111,14 @@ def test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch):
     checkpoint = torch.load(os.path.join('model', params.save, params.model, file_name)+ '_'+str(best_epoch))
     model.load_state_dict(checkpoint['model_state_dict'])
     
-    test_loss, test_time_rmse, test_accuracy, test_auc, test_marker_rmse = test(model, params, None, test_x_data, test_t_data, label='Test')
+    test_info = test(model, params, None, test_x_data, test_t_data, label='Test')
     if params.marker_type != 'real':
-        print("\ntest_auc\t", test_auc)
-        print("test_accuracy\t", test_accuracy)
+        print("\ntest_auc\t", test_info['auc'])
+        print("test_accuracy\t", test_info['accuracy'])
     else:
-        print("test_marker_rmse\t" , test_marker_rmse)
-    print("test_loss\t", test_loss)
-    print("test_time_rmse\t" , test_time_rmse)
+        print("test_marker_rmse\t" , test_info['marker_rmse'])
+    print("test_loss\t", test_info['loss'])
+    print("test_time_rmse\t" , test_info['time_rmse'])
 
     path = os.path.join('model', params.save, params.model, file_name)+ '*'
     for i in glob.glob(path):
@@ -149,7 +131,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Script to test Marked Point Process.')
 
     ###Validation Parameter###
-    parser.add_argument('--max_iter', type=int, default=20, help='number of iterations')
+    parser.add_argument('--max_iter', type=int, default=3, help='number of iterations')
     parser.add_argument('--anneal_iter', type=int, default=100, help='number of iteration over which anneal goes to 1')
     parser.add_argument('--hidden_dim', type=int, default=256, help='rnn hidden dim')
     parser.add_argument('--maxgradnorm', type=float, default=10.0, help='maximum gradient norm')
@@ -160,7 +142,6 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=32, help='the batch size')
     parser.add_argument('--latent_dim', type=int, default=20, help='latent dim')
     parser.add_argument('--x_given_t', type=bool, default=False, help='whether x given t')
-    #parser.add_argument('--reg', type=str, default='l2', help='regularization')
     parser.add_argument('--n_cluster', type=int, default=10, help='number of cluster')
     parser.add_argument('--bptt', type=int, default=6, help='bptt steps')
     
@@ -178,7 +159,7 @@ if __name__ == '__main__':
 
 
 
-    parser.add_argument('--data_name', type=str, default='so', help='data set name')
+    parser.add_argument('--data_name', type=str, default='mimic2', help='data set name')
     params = parser.parse_args()
     params.cv_idx = 1
     ###Fixed parameter###
@@ -232,7 +213,7 @@ if __name__ == '__main__':
     torch.backends.cudnn.benchmark = False
     torch.manual_seed(seedNum)
     np.random.seed(seedNum)
-    file_name_identifier = [['_b', params.batch_size],['_h',params.hidden_dim ] , ['_l2', params.l2], ['_l', params.latent_dim], ['_gn', params.maxgradnorm], ['_lr', params.lr], ['_c',params.n_cluster],['_xt', params.x_given_t], ['_s',params.seed   ]  ]
+    file_name_identifier = [['_g', params.gamma], ['_do', params.dropout],['_b', params.batch_size],['_h',params.hidden_dim ] , ['_l2', params.l2], ['_l', params.latent_dim], ['_gn', params.maxgradnorm], ['_lr', params.lr], ['_c',params.n_cluster], ['_s',params.seed   ]  ]
 
     if not params.test:
         d = vars(params)

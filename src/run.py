@@ -36,7 +36,7 @@ def train(net, params, optimizer, x_data, t_data, label):
     time_mse, time_mse_count = 0., 0.
     marker_mse, marker_mse_count = 0., 0.
     marker_acc, marker_acc_count = 0., 0.
-    total_loss = 0.
+    total_loss, marker_ll, time_ll = 0., 0, 0.
     total_sequence = 0.
 
     if params.show:
@@ -51,7 +51,7 @@ def train(net, params, optimizer, x_data, t_data, label):
         unpad_input_t = t_data[b_idx*batch_size:(b_idx+1)*batch_size]
 
         seq_len = [len(lst) for lst in unpad_input_x]
-        total_sequence += sum(seq_len)
+        total_sequence += (sum(seq_len) - len(seq_len))
         max_seq_len = max(seq_len)
         # Shape = T_max_batch x BS x marker_dim
 
@@ -83,7 +83,9 @@ def train(net, params, optimizer, x_data, t_data, label):
         loss, meta_info = net(input_x, input_t, mask=input_mask)
         loss.backward()
 
-        total_loss += meta_info['true_ll'].cpu().numpy()
+        total_loss += meta_info['true_ll'].numpy()
+        marker_ll -= meta_info['marker_ll'].numpy()
+        time_ll -= meta_info['time_ll'].numpy()
         
         time_mse += meta_info["time_mse"]
         time_mse_count += meta_info["time_mse_count"]
@@ -105,6 +107,9 @@ def train(net, params, optimizer, x_data, t_data, label):
 
     time_rmse = (time_mse/time_mse_count)** 0.5
     total_loss /= total_sequence
+    marker_ll /= total_sequence
+    time_ll /= total_sequence
+    
     if params.marker_type == 'real':
         marker_rmse = (marker_mse/marker_mse_count)** 0.5
         accuracy = None
@@ -113,8 +118,11 @@ def train(net, params, optimizer, x_data, t_data, label):
         accuracy = marker_acc/marker_acc_count
         auc = None
         marker_rmse = None
+    
+    info = {'loss': total_loss, 'time_rmse':time_rmse, 'accuracy': accuracy, 'auc':auc,\
+        'marker_rmse': marker_rmse, 'marker_ll':marker_ll, 'time_ll': time_ll}
 
-    return total_loss, time_rmse, accuracy, auc, marker_rmse
+    return info
 
 
 def test(net, params,  optimizer,  x_data, t_data, label):
@@ -130,7 +138,7 @@ def test(net, params,  optimizer,  x_data, t_data, label):
     time_mse, time_mse_count = 0., 0.
     marker_mse, marker_mse_count = 0., 0.
     marker_acc, marker_acc_count = 0., 0.
-    total_loss = 0.
+    total_loss, marker_ll, time_ll = 0., 0, 0.
     total_sequence =0
 
     if params.show:
@@ -145,7 +153,7 @@ def test(net, params,  optimizer,  x_data, t_data, label):
         unpad_input_t = t_data[b_idx*batch_size:(b_idx+1)*batch_size]
 
         seq_len = [len(lst) for lst in unpad_input_x]
-        total_sequence += sum(seq_len)
+        total_sequence += (sum(seq_len)- len(seq_len))
         max_seq_len = max(seq_len)
 
         if params.marker_type == 'categorical':
@@ -173,7 +181,10 @@ def test(net, params,  optimizer,  x_data, t_data, label):
         with torch.no_grad():
             loss, meta_info = net(input_x, input_t, mask= input_mask)
 
-        total_loss += meta_info['true_ll'].cpu().numpy()
+        total_loss += meta_info['true_ll'].numpy()
+        marker_ll -= meta_info['marker_ll'].numpy()
+        time_ll -= meta_info['time_ll'].numpy()
+
         time_mse+= meta_info["time_mse"]
         time_mse_count += meta_info["time_mse_count"]
         if params.marker_type == 'real':
@@ -196,4 +207,9 @@ def test(net, params,  optimizer,  x_data, t_data, label):
         auc = None
         marker_rmse = None
     total_loss /= total_sequence
-    return total_loss, time_rmse, accuracy, auc, marker_rmse
+    marker_ll /= total_sequence
+    time_ll /= total_sequence
+    info = {'loss': total_loss, 'time_rmse':time_rmse, 'accuracy': accuracy, 'auc':auc,\
+        'marker_rmse': marker_rmse, 'marker_ll':marker_ll, 'time_ll': time_ll}
+
+    return info
