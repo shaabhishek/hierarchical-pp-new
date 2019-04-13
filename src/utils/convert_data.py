@@ -57,7 +57,7 @@ def convert_dataset(data_name):
                         values = np.concatenate([y.reshape(-1,1),x.reshape(-1,1)], axis = 1)
                         if data_name =='so':
                             values[:,1 ] = values[:,1]-1325385742.
-                            times.append(values*0.00001)
+                            times.append(values/(24.*3600))#0.00001)
                         else:
                            times.append(values)
 
@@ -142,7 +142,7 @@ def convert_dataset(data_name):
 
 if __name__ == "__main__":
     #convert_dataset('mimic2')
-    # convert_dataset('so')
-    convert_dataset('meme')
+    convert_dataset('so')
+    #convert_dataset('meme')
     #convert_dataset('lastfm')
     #convert_dataset('book_order')

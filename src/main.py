@@ -244,7 +244,7 @@ if __name__ == '__main__':
 
         #Data should reside in this path for all datasets. Ideally 5 cross fold validation.
         train_data_path = params.data_dir + params.data_name +'_'+str(params.cv_idx)+ "_train.pkl"
-        valid_data_path = params.data_dir + params.data_name + '_'+str(params.cv_idx)+"_valid.pkl"
+        valid_data_path = params.data_dir + params.data_name + '_'+str(params.cv_idx)+"_test.pkl"
         #That pkl file should give two list of x and t. It should not be tensor.
         train_x_data, train_t_data = load_data(train_data_path)
         valid_x_data, valid_t_data = load_data(valid_data_path)

@@ -2,7 +2,7 @@ import numpy as np
 import pickle
 
 
-data_path = '../data/mimic2_1_train.pkl'
+data_path = '../data/book_order_1_train.pkl'
 
 with open(data_path, 'rb') as handle:
     data = pickle.load(handle)
