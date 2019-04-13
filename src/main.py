@@ -112,6 +112,7 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
 def test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch):
     print("\n\nStart testing ......................\n Best epoch:", best_epoch)
     fields = ['loss', 'marker_ll', 'time_ll', 'auc','accuracy', 'marker_rmse', 'time_rmse']
+    f_save_log = open(os.path.join('result', params.save,params.model,  file_name), 'a')
     for fs in fields:
         model = load_model(params).to(device)
         checkpoint = torch.load(os.path.join('model', params.save, params.model, file_name)+ '_'+str(best_epoch[fs]))
@@ -119,6 +120,7 @@ def test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch):
     
         test_info = test(model, params, None, test_x_data, test_t_data, label='Test')
         print("test\t ", fs, ': ', test_info[fs])
+        f_save_log.write('Test results\t :'+ fs  +':\t'+ str(test_info[fs]) + "\n")
         # if params.marker_type != 'real':
         #     print("\ntest_auc\t", test_info['auc'])
         #     print("test_accuracy\t", test_info['accuracy'])
@@ -128,21 +130,17 @@ def test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch):
         # print("test_time_rmse\t" , test_info['time_rmse'])
         # print("test time likelihood\t", test_info['time_ll'], "\t test marker likelihood\t", test_info['marker_ll'])
 
-
+    f_save_log.close()
     path = os.path.join('model', params.save, params.model, file_name)+ '*'
     for i in glob.glob(path):
         os.remove(i)
     
-    f_save_log = open(os.path.join('result', params.save,params.model,  file_name), 'a')
-    for fs in fields:
-        f_save_log.write('Test results\t :'+ fs  +':\t'+ str(test_info[fs]) + "\n")
-    f_save_log.close()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Script to test Marked Point Process.')
 
     ###Validation Parameter###
-    parser.add_argument('--max_iter', type=int, default=3, help='number of iterations')
+    parser.add_argument('--max_iter', type=int, default=10, help='number of iterations')
     parser.add_argument('--anneal_iter', type=int, default=100, help='number of iteration over which anneal goes to 1')
     parser.add_argument('--hidden_dim', type=int, default=256, help='rnn hidden dim')
     parser.add_argument('--maxgradnorm', type=float, default=10.0, help='maximum gradient norm')
