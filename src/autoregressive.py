@@ -5,7 +5,7 @@ from  torch.distributions.exponential import Exponential
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class ACD(nn.Module):
-    def __init__(self,m =2 ):
+    def __init__(self,m =4 ):
         super().__init__()
         self.gamma =  nn.Parameter(torch.zeros(1))
         self.m = m
@@ -28,7 +28,7 @@ class ACD(nn.Module):
         
         metric_dict = {'true_ll': -ll_loss.detach(), "marker_acc":0., "marker_acc_count":1.}
         with torch.no_grad():
-            time_mse = torch.abs(d_j[1:,:]- 1./total_influence[1:,:]) * mask[1:, :]
+            time_mse = ((d_j[1:,:]- 1./total_influence[1:,:]) * mask[1:, :]) **2.
             metric_dict['time_mse'] = time_mse.sum().detach().cpu().numpy()
             metric_dict['time_mse_count'] = mask[1:,:].sum().detach().cpu().numpy()
         return -ll_loss, metric_dict            

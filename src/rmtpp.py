@@ -16,7 +16,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 DEBUG = False
 
 #Move it to utils
-from utils.metric import get_marker_metric, compute_time_expectation
+from utils.metric import get_marker_metric, compute_time_expectation, get_time_metric
 
 
 
@@ -62,8 +62,8 @@ class rmtpp(nn.Module):
 
         # Set up layer dimensions
         self.x_embedding_layer = [256]
-        self.t_embedding_layer = [self.time_dim]
-        self.shared_output_layers = [128]
+        self.t_embedding_layer = [8]
+        self.shared_output_layers = [256]
         self.hidden_embed_input_dim = self.hidden_dim 
 
         # setup layers
@@ -117,8 +117,9 @@ class rmtpp(nn.Module):
                 t   : Tensor of shape TxBSxtime_dim [i,:,0] represents actual time at timestep i ,\
                     [i,:,1] represents time gap d_i = t_i- t_{i-1}
             Output:
-                h : Tensor of shape (T+1)xBSxhidden_dim
-                embed_h : Tensor of shape (T+1)xBSxself.shared_output_layers[-1]
+                Output hiddent states to be used for prediction. Thus including h_0
+                h : Tensor of shape (T)xBSxhidden_dim
+                embed_h : Tensor of shape (T)xBSxself.shared_output_layers[-1]
         """
         batch_size, seq_length = x.size(1), x.size(0)
         # phi Tensor shape TxBS x (self.x_embedding_layer[-1] + self.t_embedding_layer[-1])
@@ -184,19 +185,16 @@ class rmtpp(nn.Module):
         time_log_likelihood, mu_time = compute_point_log_likelihood(self,
             hidden_states, t)
         with torch.no_grad():
-            get_marker_metric(self.marker_type, marker_out_mu, x, mask, metric_dict)
             if self.time_loss == 'intensity':
-                expected_t = compute_time_expectation(self, hidden_states, t, mask)
-                time_mse = torch.abs(expected_t- t[:,:,0])[1:, :] * mask[1:, :]
-            else:
-                time_mse = torch.abs(mu_time[:,:,0]- t[:,:,0])[1:, :] * mask[1:, :]
-            metric_dict['time_mse'] = time_mse.sum().detach().cpu().numpy()
-            metric_dict['time_mse_count'] = mask[1:,:].sum().detach().cpu().numpy()
+                mu_time = compute_time_expectation(self, hidden_states, t, mask)[:,:, None]
+            get_marker_metric(self.marker_type, marker_out_mu, x, mask, metric_dict)
+            get_time_metric(mu_time,  t, mask, metric_dict)
+            
 
         
         #Pad initial Time point with 0
-        zero_pad = torch.zeros(1, bs).to(device)
-        time_log_likelihood = torch.cat([zero_pad, time_log_likelihood[1:,:]], dim =0)
+        #zero_pad = torch.zeros(1, bs).to(device)
+        #time_log_likelihood = torch.cat([zero_pad, time_log_likelihood[1:,:]], dim =0)
         marker_log_likelihood = compute_marker_log_likelihood(self, 
             x, marker_out_mu, marker_out_logvar)
 

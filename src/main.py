@@ -62,7 +62,7 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
             print("valid_accuracy\t", valid_accuracy, "\ttrain_accuracy\t", train_accuracy)
         else:
             print("valid_marker_rmse\t", valid_marker_rmse, "\ttrain_marker_rmse\t", train_marker_rmse)
-        print("valid_time_mae\t", valid_time_rmse, "\ttrain_time_mae\t", train_time_rmse)
+        print("valid_time_mse\t", valid_time_rmse, "\ttrain_time_msee\t", train_time_rmse)
         print("valid_loss\t", valid_loss, "\ttrain_loss\t", train_loss)
 
         if not os.path.isdir('model'):
@@ -149,14 +149,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Script to test Marked Point Process.')
 
     ###Validation Parameter###
-    parser.add_argument('--max_iter', type=int, default=5, help='number of iterations')
+    parser.add_argument('--max_iter', type=int, default=20, help='number of iterations')
     parser.add_argument('--anneal_iter', type=int, default=100, help='number of iteration over which anneal goes to 1')
-    parser.add_argument('--hidden_dim', type=int, default=512, help='rnn hidden dim')
+    parser.add_argument('--hidden_dim', type=int, default=256, help='rnn hidden dim')
     parser.add_argument('--maxgradnorm', type=float, default=10.0, help='maximum gradient norm')
     parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
-    parser.add_argument('--gamma', type=float, default=.0, help='tradeoff of time and marker in loss. marker loss + gamma * time loss')
+    parser.add_argument('--gamma', type=float, default=1, help='tradeoff of time and marker in loss. marker loss + gamma * time loss')
     parser.add_argument('--l2', type=float, default=0., help='regularizer with weight decay parameter')
-    parser.add_argument('--dropout', type=float, default=0.2, help='dropout rate')
+    parser.add_argument('--dropout', type=float, default=0.5, help='dropout rate')
     parser.add_argument('--batch_size', type=int, default=32, help='the batch size')
     parser.add_argument('--latent_dim', type=int, default=20, help='latent dim')
     parser.add_argument('--x_given_t', type=bool, default=False, help='whether x given t')
@@ -166,7 +166,7 @@ if __name__ == '__main__':
     
 
     ###Helper Parameter###
-    parser.add_argument('--model', type=str, default='rnnbptt', help='model name')
+    parser.add_argument('--model', type=str, default='rmtpp', help='model name')
     parser.add_argument('--time_loss', type=str, default='normal', help='whether to use normal loss or intensity loss')
     parser.add_argument('--test', type=bool, default=False, help='enable testing')
     parser.add_argument('--train_test', type=bool, default=True, help='enable testing')
@@ -178,7 +178,7 @@ if __name__ == '__main__':
 
 
 
-    parser.add_argument('--data_name', type=str, default='book_order', help='data set name')
+    parser.add_argument('--data_name', type=str, default='so', help='data set name')
     params = parser.parse_args()
     params.cv_idx = 1
     ###Fixed parameter###
@@ -188,24 +188,20 @@ if __name__ == '__main__':
         params.time_influence = 1.
         params.time_dim = 2
         params.marker_type = 'categorical'
-        params.load = 'mimic2'
-        params.save = 'mimic2'
     elif params.data_name == 'so':
         params.marker_dim = 22
         params.time_dim = 2
         params.base_intensity = -5.
         params.time_influence = 0.01
         params.marker_type = 'categorical'
-        params.load = 'so'
-        params.save = 'so'
+
     elif params.data_name == 'meme':
         params.marker_dim = 5000
         params.time_dim = 2
         params.base_intensity = 0.
         params.time_influence = 0.01
         params.marker_type = 'categorical'
-        params.load = 'meme'
-        params.save = 'meme'
+
     
     elif params.data_name == 'book_order':
         params.marker_dim = 2
@@ -213,13 +209,21 @@ if __name__ == '__main__':
         params.base_intensity = 0.
         params.time_influence = 0.01
         params.marker_type = 'categorical'
-        params.load = 'book_order'
-        params.save = 'book_order'
+    
+    elif params.data_name == 'lastfm':
+        params.marker_dim = 3149
+        params.time_dim = 2
+        params.base_intensity = 0.
+        params.time_influence = 0.01
+        params.marker_type = 'categorical'
+
 
     else:#different dataset. Encode those details.
         pass
 
-    
+
+    params.load = params.data_name
+    params.save = params.data_name    
     # Read data
     
     #Set Seed for reproducibility

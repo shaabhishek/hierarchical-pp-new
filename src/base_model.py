@@ -53,14 +53,15 @@ def create_input_embedding_layer(model):
 
 def create_output_marker_layer(model):
     embed_module = nn.Sequential(
-        #nn.Linear(model.hidden_embed_input_dim,model.shared_output_layers[0]),
+        nn.ReLU(),nn.Dropout(model.dropout),
+        nn.Linear(model.hidden_embed_input_dim,model.shared_output_layers[0]),
         nn.ReLU(),nn.Dropout(model.dropout)
         #nn.Linear(
         #    self.shared_output_layers[0], self.shared_output_layers[1]), nn.ReLU()
     )
 
     x_module_logvar = None
-    l = model.hidden_embed_input_dim#model.shared_output_layers[-1]
+    l = model.shared_output_layers[-1]
     if model.x_given_t:
         l += 1
     if model.marker_type == 'real':
@@ -79,7 +80,7 @@ def create_output_marker_layer(model):
     return embed_module, x_module_mu, x_module_logvar    
 
 def create_output_time_layer(model, b, ti):
-    l = model.hidden_embed_input_dim#model.shared_output_layers[-1]
+    l =model.shared_output_layers[-1]
     if model.time_loss == 'intensity':
         h_influence =  nn.Linear(l, 1, bias=False)
         time_influence = nn.Parameter(ti*torch.ones(1, 1, 1))#0.005*
@@ -123,7 +124,7 @@ def compute_marker_log_likelihood(model, x, mu, logvar):
 def compute_point_log_likelihood(model, h, t):
     """
         Input:
-            h : Tensor of shape (T+1)xBSxself.shared_output_layers[-1]
+            h : Tensor of shape (T)xBSxself.shared_output_layers[-1]
             t : Tensor of shape TxBSxtime_dim [i,:,0] represents actual time at timestep i ,\
                 [i,:,1] represents time gap d_i = t_i- t_{i-1}
         Output:
@@ -178,8 +179,8 @@ def preprocess_input(model, x, t):
     #     # Shape TxBSxmarker_dim
     #     x = one_hot_encoding(x[:, :], model.marker_dim).to(device)
     phi_x = model.embed_x(x)
-    #phi_t = model.embed_time(t)
-    phi_t = t
+    phi_t = model.embed_time(t)
+    #phi_t = t
     phi = torch.cat([phi_x, phi_t], -1)
     return phi_x, phi_t, phi
 

@@ -2,6 +2,12 @@ import torch
 import numpy as np
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+def get_time_metric(mu_time,  t, mask, metric_dict):
+    time_mse = ((mu_time[:,:,0]- t[:,:,0])[1:, :] * mask[1:, :]) **2.
+    metric_dict['time_mse'] = time_mse.sum().detach().cpu().numpy()
+    metric_dict['time_mse_count'] = mask[1:,:].sum().detach().cpu().numpy()
+    
+
 def get_marker_metric(marker_type, marker_out_mu, x, mask, metric_dict):
     #mask TxBS
     if marker_type == 'real':
