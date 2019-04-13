@@ -193,6 +193,13 @@ if __name__ == '__main__':
         params.base_intensity = 0.
         params.time_influence = 0.01
         params.marker_type = 'categorical'
+    
+    elif params.data_name == 'retweet':
+        params.marker_dim = 3
+        params.time_dim = 2
+        params.base_intensity = 0.
+        params.time_influence = 0.01
+        params.marker_type = 'categorical'
 
     
     elif params.data_name == 'book_order':
