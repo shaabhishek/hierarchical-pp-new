@@ -38,6 +38,9 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
 
     ### ================================== start training ==================================
     fields = ['loss', 'marker_ll', 'time_ll', 'auc','accuracy', 'marker_rmse', 'time_rmse']
+    fs_map = {'loss':'small', 'marker_ll':'large', 'time_ll':'large', 'auc':'large','accuracy':'large', 'marker_rmse':'small', 'time_rmse':'small'}
+
+
     datas = ['train', 'valid']
     all_data = {}
     for ds in datas:
@@ -91,7 +94,8 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
 
         # output the epoch with the best validation auc
         for fs in fields:
-            if (best_valid_loss[fs] is None) or (valid_info[fs] < best_valid_loss[fs]) :
+            if (best_valid_loss[fs] is None) or (fs_map[fs] == 'small' and valid_info[fs] < best_valid_loss[fs]) or \
+                (fs_map[fs] == 'large' and valid_info[fs] > best_valid_loss[fs]):
                 best_valid_loss[fs] = valid_info[fs]
                 best_epoch[fs] = idx+1
 
@@ -142,7 +146,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Script to test Marked Point Process.')
 
     ###Validation Parameter###
-    parser.add_argument('--max_iter', type=int, default=10, help='number of iterations')
+    parser.add_argument('--max_iter', type=int, default=5, help='number of iterations')
     parser.add_argument('--anneal_iter', type=int, default=100, help='number of iteration over which anneal goes to 1')
     parser.add_argument('--hidden_dim', type=int, default=256, help='rnn hidden dim')
     parser.add_argument('--maxgradnorm', type=float, default=10.0, help='maximum gradient norm')
