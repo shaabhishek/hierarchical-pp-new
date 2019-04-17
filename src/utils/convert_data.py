@@ -165,13 +165,6 @@ def convert_dataset(data_name):
 if __name__ == "__main__":
     #convert_dataset('mimic2')
     # convert_dataset('so')
-<<<<<<< HEAD
     #convert_dataset('meme')
     convert_dataset('lastfm')
     convert_dataset('book_order')
-=======
-    # convert_dataset('meme')
-    convert_dataset('retweet')
-    #convert_dataset('lastfm')
-    #convert_dataset('book_order')
->>>>>>> 9db17b3d3384a355191a3cc8bd708550ad4ec3bf
