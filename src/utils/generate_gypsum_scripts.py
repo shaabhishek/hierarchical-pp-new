@@ -13,12 +13,12 @@ def main(data_name=None):
     lr = 1e-3
     time_loss = "intensity"
     if data_name is None:
-        data_names = ["retweet"]
+        data_names = ["retweet", "meme", "mimic2"]
     else:
         data_names = [data_name]
     filenames = []
-    i = 0
     for data_name in data_names:
+        i = 0
         for hiddenlayer in hiddenlayers:
             for batch_size in batch_sizes:
                 i += 1
@@ -42,6 +42,6 @@ def main(data_name=None):
 
 if __name__ == "__main__":
     # Step 1: Generate the files
-    main('mimic2')
+    main()
     # Step 2: Run scheduler as
     # Run the `./scheduler_hpp.sh meme2`
