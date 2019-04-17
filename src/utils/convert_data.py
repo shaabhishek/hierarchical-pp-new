@@ -63,6 +63,9 @@ def convert_dataset(data_name):
                         if data_name =='so':
                             values[:,1 ] = values[:,1]-1325385742.
                             times.append(values/(24.*3600))#0.00001)
+                        if data_name == 'book_order':
+                            values[:,0 ] = values[:,0]*100.
+                            times.append(values*1)
                         else:
                            times.append(values)
 
@@ -88,7 +91,7 @@ def convert_dataset(data_name):
     if data_name =='lastfm':
         for ls in ['train', 'test']:
                 event_data_path = './../data/real/'+data_name+'/'+ 'event_split_1000'+'-'+ls+'.txt'#event_split_1000-test.txt
-                time_data_path = './../data/real/'+data_name+'/'+ 'event_split_1000'+'-'+ls+'.txt'
+                time_data_path = './../data/real/'+data_name+'/'+ 'time_split_1000'+'-'+ls+'.txt'
                 events = []
                 times = []
                 with open(event_data_path,'r') as f:
@@ -147,6 +150,6 @@ def convert_dataset(data_name):
 if __name__ == "__main__":
     #convert_dataset('mimic2')
     # convert_dataset('so')
-    convert_dataset('meme')
-    #convert_dataset('lastfm')
-    #convert_dataset('book_order')
+    #convert_dataset('meme')
+    convert_dataset('lastfm')
+    convert_dataset('book_order')
