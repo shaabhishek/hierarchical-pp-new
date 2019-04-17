@@ -39,7 +39,7 @@ def getdata_NHP(filepath, max_size=None):
     return data_dict
 
 def convert_dataset(data_name):
-    if data_name not in {'lastfm', 'meme'}:
+    if data_name not in {'lastfm', 'meme', 'retweet'}:
         for idx in range(1,6):
             for ls in ['train', 'test']:
                 event_data_path = './../data/real/'+data_name+'/'+ 'event-'+str(idx)+'-'+ls+'.txt'
@@ -143,6 +143,21 @@ def convert_dataset(data_name):
                 pickle.dump(valid_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
             with open(test_file, 'wb') as handle:
                 pickle.dump(test_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    if data_name == 'retweet':
+            valid_dict = getdata_NHP('./../data/dump/data_retweet/dev.pkl')
+            train_dict = getdata_NHP('./../data/dump/data_retweet/train.pkl')
+            test_dict = getdata_NHP('./../data/dump/data_retweet/test.pkl')
+
+            train_file = '../data/'+data_name+'_'+str(1)+'_train.pkl'
+            valid_file = '../data/'+data_name+'_'+str(1)+'_valid.pkl'
+            test_file = '../data/'+data_name+'_'+str(1)+'_test.pkl'
+            
+            with open(train_file, 'wb') as handle:
+                pickle.dump(train_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            with open(valid_file, 'wb') as handle:
+                pickle.dump(valid_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            with open(test_file, 'wb') as handle:
+                pickle.dump(test_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 
@@ -150,6 +165,13 @@ def convert_dataset(data_name):
 if __name__ == "__main__":
     #convert_dataset('mimic2')
     # convert_dataset('so')
+<<<<<<< HEAD
     #convert_dataset('meme')
     convert_dataset('lastfm')
     convert_dataset('book_order')
+=======
+    # convert_dataset('meme')
+    convert_dataset('retweet')
+    #convert_dataset('lastfm')
+    #convert_dataset('book_order')
+>>>>>>> 9db17b3d3384a355191a3cc8bd708550ad4ec3bf
