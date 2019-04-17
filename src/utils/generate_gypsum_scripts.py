@@ -11,6 +11,7 @@ def main(data_name=None):
     hiddenlayers = 2**np.arange(6,11)
     batch_sizes = [32,64,128]
     lr = 1e-3
+    time_loss = "intensity"
     if data_name is None:
         data_names = ["retweet"]
     else:
@@ -22,7 +23,7 @@ def main(data_name=None):
             for batch_size in batch_sizes:
                 i += 1
                 print("{}\t{}\t{}".format(lr, batch_size, hiddenlayer))
-                sbatch_command = "python3 main.py --max_iter=100 --model=rmtpp --data_name={} --gamma=1. --l2=1e-3 --lr={} --batch_size={} --hidden_dim={}".format(data_name, lr, batch_size, hiddenlayer)
+                sbatch_command = "python3 main.py --max_iter=100 --model=rmtpp --data_name={} --gamma=1. --l2=1e-3 --lr={} --batch_size={} --hidden_dim={} --time_loss={}".format(data_name, lr, batch_size, hiddenlayer, time_loss)
                 filename = "./sbatch_hpp_{}_{}.sh".format(data_name, i)
                 filenames.append(filename)
                 print(filename)
