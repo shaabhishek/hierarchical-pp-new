@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 # import pdb; pdb.set_trace()
 from base_model import *
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-from utils.metric import get_marker_metric, compute_time_expectation
+from utils.metric import get_marker_metric, compute_time_expectation, get_time_metric
 DEBUG = False
 
 
@@ -28,7 +28,9 @@ class hrmtpp(nn.Module):
 
     """
 
-    def __init__(self, latent_dim = 20, marker_type='real', marker_dim=31, time_dim=2, hidden_dim=128, x_given_t=False,base_intensity = 0.,time_influence = 1., gamma = 1., time_loss = 'intensity'):
+    def __init__(self, latent_dim = 20, marker_type='real', marker_dim=31, dropout = 0,  time_dim=2,\
+         hidden_dim=128, x_given_t=False,base_intensity = 0.,time_influence = 1., gamma = 1.,\
+              time_loss = 'intensity'):
         super().__init__()
         """
             Input:
@@ -39,13 +41,14 @@ class hrmtpp(nn.Module):
                 latent_dim : sub-population vector
                 x_given_t : whether to condition marker given time gap. For RMTPP set it false.
         """
-
+        self.model_name = 'hrmtpp'
         self.marker_type = marker_type
         self.marker_dim = marker_dim
         self.hidden_dim = hidden_dim
         self.latent_dim = latent_dim
         self.time_dim = time_dim
         self.x_given_t = x_given_t
+        self.dropout = dropout
         self.use_rnn_cell = False
         self.time_loss = time_loss
         self.gamma = gamma
@@ -56,8 +59,8 @@ class hrmtpp(nn.Module):
 
         # Set up layer dimensions. This is only hidden layers dimensions
         self.x_embedding_layer = [256]
-        self.t_embedding_layer = [2]
-        self.shared_output_layers = [128]
+        self.t_embedding_layer = [8]
+        self.shared_output_layers = [256]
         self.encoder_layers = [64, 64]
 
         self.hidden_embed_input_dim = self.hidden_dim + self.latent_dim
@@ -111,8 +114,8 @@ class hrmtpp(nn.Module):
         #TxBS and TxBS
         time_log_likelihood, marker_log_likelihood, kl_loss, metric_dict = self._forward(x, t, mask)
 
-        marker_loss = (-1.* marker_log_likelihood *mask).sum()
-        time_loss = (-1. *time_log_likelihood *mask).sum()
+        marker_loss = (-1.* marker_log_likelihood *mask)[1:,:].sum()
+        time_loss = (-1. *time_log_likelihood *mask)[1:,:].sum()
         kl_loss = kl_loss.sum()
 
         loss = self.gamma*time_loss + marker_loss + anneal* kl_loss
@@ -269,14 +272,10 @@ class hrmtpp(nn.Module):
         time_log_likelihood, mu_time = compute_point_log_likelihood(self, hz_embedded,  t)
         metric_dict = {}
         with torch.no_grad():
-            get_marker_metric(self.marker_type, marker_out_mu, x, mask, metric_dict)
             if self.time_loss == 'intensity':
-                expected_t = compute_time_expectation(self, hz_embedded, t, mask)
-                time_mse = torch.abs(expected_t- t[:,:,0])[1:, :] * mask[1:, :]
-            else:
-                time_mse = torch.abs(mu_time[:,:,0]- t[:,:,0])[1:, :] * mask[1:, :]
-            metric_dict['time_mse'] = time_mse.sum().detach().cpu().numpy()
-            metric_dict['time_mse_count'] = mask[1:,:].sum().detach().cpu().numpy()
+                mu_time = compute_time_expectation(self, hz_embedded, t, mask)[:,:, None]
+            get_marker_metric(self.marker_type, marker_out_mu, x, mask, metric_dict)
+            get_time_metric(mu_time,  t, mask, metric_dict)
 
         posterior_dist = Normal(mu[0,:,:], logvar[0,:,:].exp().sqrt())
         prior_dist = Normal(0, 1)

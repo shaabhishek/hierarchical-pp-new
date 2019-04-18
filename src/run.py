@@ -4,6 +4,8 @@ import math
 from sklearn import metrics
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+anneal_model = {'hrmtpp'}
+
 def compute_auc(all_target, all_pred):
     return metrics.roc_auc_score(all_target, all_pred)
 
@@ -80,7 +82,11 @@ def train(net, params, optimizer, x_data, t_data, label):
         input_mask = torch.from_numpy(input_mask).float().to(device)
 
         #If annealing, pass it here using params.iter
-        loss, meta_info = net(input_x, input_t, mask=input_mask)
+        if params.model in anneal_model:
+            anneal = min(1., params.iter/(params.anneal_iter))
+            loss, meta_info = net(input_x, input_t, mask=input_mask, anneal = anneal)
+        else:
+            loss, meta_info = net(input_x, input_t, mask=input_mask)
         loss.backward()
 
         total_loss += meta_info['true_ll'].numpy()
