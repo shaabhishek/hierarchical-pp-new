@@ -83,7 +83,7 @@ def train(net, params, optimizer, x_data, t_data, label):
 
         #If annealing, pass it here using params.iter
         if params.model in anneal_model:
-            anneal = min(1., params.iter/(params.anneal_iter))
+            anneal = min(1., params.iter/(params.anneal_iter+0.))
             loss, meta_info = net(input_x, input_t, mask=input_mask, anneal = anneal)
         else:
             loss, meta_info = net(input_x, input_t, mask=input_mask)
