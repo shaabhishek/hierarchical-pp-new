@@ -223,7 +223,9 @@ class Model11(nn.Module):
         posterior_dist_y = Categorical(logits=posterior_logits_y)
         
         # Prior is just a Normal(0,1) dist for z and Uniform Categorical for y
-        prior_dist_z = Normal(0.*posterior_mu_z, 1. + 0.*posterior_mu_z)
+        #Why so complicated
+        prior_dist_z = Normal(0, 1)
+        
         prior_dist_y = Categorical(probs=1/self.cluster_dim + 0.*posterior_logits_y)
 
         ## Generative Part
