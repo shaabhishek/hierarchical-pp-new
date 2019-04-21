@@ -64,7 +64,7 @@ class Model1(nn.Module):
         
         # Inference network
         self.encoder_layers = [64, 64]
-        self.y_encoder, self.encoder_rnn, self.z_intmd_module, self.z_mu_module, self.z_logvar_module = self.create_inference_nets()
+        self.y_encoder, self.encoder_rnn, self.z_intmd_module, self.z_mu_module, self.z_var_module = self.create_inference_nets()
         
         # Generative network
         self.time_mu, self.time_logvar, self.output_x_mu, self.output_x_logvar = self.create_output_nets()
@@ -128,8 +128,11 @@ class Model1(nn.Module):
             nn.ReLU(),
         )
         z_mu_module = nn.Linear(self.encoder_layers[1], self.latent_dim)
-        z_logvar_module = nn.Linear(self.encoder_layers[1], self.latent_dim)
-        return y_module, encoder_rnn, z_intmd_module, z_mu_module, z_logvar_module
+        z_var_module = nn.Sequential(
+            nn.Linear(self.encoder_layers[1], self.latent_dim),
+            nn.Softplus(),
+        )
+        return y_module, encoder_rnn, z_intmd_module, z_mu_module, z_var_module
 
     def create_output_nets(self):
         l = self.shared_output_layers[-1]
@@ -185,7 +188,8 @@ class Model1(nn.Module):
         phi_hxty = self.inf_pre_module(concat_hxty)
         z_intmd = self.z_intmd_module(phi_hxty)
         mu_z = self.z_mu_module(z_intmd)
-        logvar_z = self.z_logvar_module(z_intmd)
+        var_z = self.z_var_module(z_intmd)
+        logvar_z = torch.log(var_z + self.sigma_min)
         sample_z = reparameterize(mu_z, logvar_z)
         return sample_y, sample_z, logits_y, (mu_z, logvar_z)
     
