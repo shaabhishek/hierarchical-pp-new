@@ -277,7 +277,8 @@ class Model2(nn.Module):
         
         # Prior is just a Normal(0,1) dist for z and Uniform Categorical for y
         #prior dist z is TxBSx latent_dim. T=0=> Normal(0,1)
-        prior_dist_z = Normal(0, 1)
+        prior_mu, prior_logvar = self.prior(posterior_sample_z)##Normal(0, 1)
+        prior_dist_z  = Normal(prior_mu, (prior_logvar*0.5).exp())
 
 
         
