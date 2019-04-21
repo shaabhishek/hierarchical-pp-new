@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.optim import Adam
 import torch.nn.functional as F
 from torch.distributions import kl_divergence, Normal, Categorical
+import math
 
 from base_model import compute_marker_log_likelihood, compute_point_log_likelihood, generate_marker
 from utils.metric import get_marker_metric, compute_time_expectation, get_time_metric
@@ -47,6 +48,7 @@ class Model2(nn.Module):
         self.cluster_dim = n_cluster
         self.x_given_t = x_given_t
         self.time_loss = time_loss
+        self.logvar_min = math.log(1e-6)
         self.sigma_min = 1e-2
         self.gamma = gamma
         self.dropout = dropout
@@ -71,6 +73,14 @@ class Model2(nn.Module):
         
         # Generative network
         self.time_mu, self.time_logvar, self.output_x_mu, self.output_x_logvar = self.create_output_nets()
+
+        #Prior on z
+        self.prior_net = nn.Sequential(
+            nn.Linear(self.latent_dim, self.hidden_dim),
+            nn.ReLU()
+        )
+        self.prior_mu = nn.Linear(self.hidden_dim, self.latent_dim)
+        self.prior_logvar = nn.Linear(self.hidden_dim, self.latent_dim)
     
     def create_embedding_nets(self):
         # marker_dim is passed. timeseries_dim is 2
@@ -227,6 +237,18 @@ class Model2(nn.Module):
         true_loss = time_loss + marker_loss
         meta_info = {"marker_ll":marker_loss.detach().cpu(), "time_ll":time_loss.detach().cpu(), "true_ll": true_loss.detach().cpu(), "kl": KL.detach().cpu()}
         return loss, {**meta_info, **metric_dict}
+
+    def prior(self, sample_z):
+        #Sample_z is shape T, BS, latent_dim
+        T,BS, l_dim = sample_z.shape
+        hiddenlayer = self.prior_net(sample_z)
+        mu = self.prior_mu(hiddenlayer)
+        logvar = torch.clamp(self.prior_logvar(hiddenlayer), min = self.logvar_min)#T,BS, dim
+        base_mu = torch.zeros(1,BS, l_dim).to(device)
+        base_logvar = torch.zeros(1,BS, l_dim).to(device)
+        mu = torch.cat([base_mu, mu[:-1,:,:]], dim =0)
+        logvar = torch.cat([base_logvar, logvar[:-1,:,:]], dim =0)
+        return mu, logvar
     
     def _forward(self, x, t, temp, mask):
         # Transform markers and timesteps into the embedding spaces
@@ -254,8 +276,10 @@ class Model2(nn.Module):
         posterior_dist_y = Categorical(logits=posterior_logits_y)
         
         # Prior is just a Normal(0,1) dist for z and Uniform Categorical for y
-        #Why so complicated
+        #prior dist z is TxBSx latent_dim. T=0=> Normal(0,1)
         prior_dist_z = Normal(0, 1)
+
+
         
         prior_dist_y = Categorical(probs=1/self.cluster_dim + 0.*posterior_logits_y)
 
