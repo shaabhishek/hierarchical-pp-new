@@ -216,8 +216,6 @@ class Model11(nn.Module):
         # using the hidden state sequence
         posterior_sample_y, posterior_sample_z, posterior_logits_y, (posterior_mu_z, posterior_logvar_z) = self.encoder(phi_xt, temp, mask)
 
-        repeat_vals = (T, -1,-1)
-        posterior_logits_y = posterior_logits_y.expand(*repeat_vals)
         # Create distributions for Posterior random vars
         posterior_dist_z = Normal(posterior_mu_z, torch.exp(posterior_logvar_z*0.5))
         posterior_dist_y = Categorical(logits=posterior_logits_y)
@@ -226,7 +224,7 @@ class Model11(nn.Module):
         #Why so complicated
         prior_dist_z = Normal(0, 1)
         
-        prior_dist_y = Categorical(probs=1/self.cluster_dim + 0.*posterior_logits_y)
+        prior_dist_y = Categorical(probs=1./self.cluster_dim* torch.ones(1,BS, self.cluster_dim))
 
         ## Generative Part
         
@@ -247,7 +245,7 @@ class Model11(nn.Module):
         time_log_likelihood, mu_time = compute_point_log_likelihood(self, phi_hzy, t)
         marker_log_likelihood = compute_marker_log_likelihood(self, x, mu_marker, logvar_marker)
         
-        KL_cluster = kl_divergence(posterior_dist_y, prior_dist_y)*mask
+        KL_cluster = kl_divergence(posterior_dist_y, prior_dist_y)
         KL_z = kl_divergence(posterior_dist_z, prior_dist_z).sum(-1)*mask
         KL = KL_cluster.sum() + KL_z.sum()
         try:
