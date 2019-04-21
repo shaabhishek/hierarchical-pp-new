@@ -224,7 +224,7 @@ class Model11(nn.Module):
         #Why so complicated
         prior_dist_z = Normal(0, 1)
         
-        prior_dist_y = Categorical(probs=1./self.cluster_dim* torch.ones(1,BS, self.cluster_dim))
+        prior_dist_y = Categorical(probs=1./self.cluster_dim* torch.ones(1,BS, self.cluster_dim).to(device))
 
         ## Generative Part
         
