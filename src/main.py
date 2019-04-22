@@ -185,12 +185,15 @@ if __name__ == '__main__':
         params.time_influence = 1.
         params.time_dim = 2
         params.marker_type = 'categorical'
+        params.batch_size = 128
+
     elif params.data_name == 'so':
         params.marker_dim = 22
         params.time_dim = 2
         params.base_intensity = -5.
         params.time_influence = 0.01
         params.marker_type = 'categorical'
+        params.batch_size = 32
 
     elif params.data_name == 'meme':
         params.marker_dim = 5000
@@ -198,6 +201,8 @@ if __name__ == '__main__':
         params.base_intensity = 0.
         params.time_influence = 0.01
         params.marker_type = 'categorical'
+        params.batch_size = 128
+        params.time_scale = 1e-3
     
     elif params.data_name == 'retweet':
         params.marker_dim = 3
@@ -205,6 +210,7 @@ if __name__ == '__main__':
         params.base_intensity = 0.
         params.time_influence = 0.01
         params.marker_type = 'categorical'
+        params.batch_size = 128
 
     
     elif params.data_name == 'book_order':
@@ -213,6 +219,7 @@ if __name__ == '__main__':
         params.base_intensity = 0.
         params.time_influence = 0.01
         params.marker_type = 'categorical'
+        params.batch_size = 128
     
     elif params.data_name == 'lastfm':
         params.marker_dim = 3149
@@ -220,6 +227,7 @@ if __name__ == '__main__':
         params.base_intensity = 0.
         params.time_influence = 0.01
         params.marker_type = 'categorical'
+        params.batch_size = 128
 
 
     else:#different dataset. Encode those details.
