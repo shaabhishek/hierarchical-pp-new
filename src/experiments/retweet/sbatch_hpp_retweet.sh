@@ -1,0 +1,89 @@
+#!/bin/bash
+#SBATCH --job-name=hpp_retweet
+#SBATCH --partition m40-long
+#SBATCH --gres gpu:1
+#SBATCH --output=log_retweet.log
+. /home/abhishekshar/anaconda3/etc/profile.d/conda.sh
+conda activate hpp
+cd /home/abhishekshar/hierarchichal_point_process/src
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=128 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=256 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=0.001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=0.0001 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=1e-05 --time_loss=normal --gamma=1.
+python3 main.py --max_iter=100 --model=model11 --data_name=retweet --hidden_dim=512 --lr=1e-05 --time_loss=normal --gamma=1.

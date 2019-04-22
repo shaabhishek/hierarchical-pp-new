@@ -2,14 +2,6 @@ import numpy as np
 import os
 
 def main(data_name=None):
-    # Fill it with sbatch boilerplate code except the final python command
-    # Load environments if you need to
-
-    with open("utils/run_hpp_boilerplate.sh", "r") as file:
-        boilerplate = file.read()
-
-    print(boilerplate)
-
     hiddenlayers = [128, 256, 512]
     lrs = [1e-3, 1e-4, 1e-5]
     dropouts = [0.1, 0.33, 0.5]
@@ -19,17 +11,16 @@ def main(data_name=None):
         data_names = ["retweet", "meme", "mimic2", "book_order", "so", "lastfm"]
     else:
         data_names = [data_name]
-    filenames = []
+    
     model = "model11"
     
-    
     gpu_partitions = {
-        "book_order": "m40-short",
-        "so": "m40-short",
-        "lastfm": "m40-short",
-        "retweet": "titanx-short",
-        "meme": "titanx-short",
-        "mimic2": "titanx-short",
+        "book_order": "m40-long",
+        "so": "m40-long",
+        "lastfm": "m40-long",
+        "retweet": "m40-long",
+        "meme": "m40-long",
+        "mimic2": "m40-long",
         }
     
     
@@ -42,7 +33,8 @@ def main(data_name=None):
         if not os.path.isdir(os.path.join('experiments', data_name)):
             os.makedirs(os.path.join('experiments', data_name))
         i = 0
-        
+        sbatch_commands_data = []
+
         for hiddenlayer in hiddenlayers:
             for lr in lrs:
                 for dropout in dropouts:
@@ -50,35 +42,38 @@ def main(data_name=None):
                         i += 1
                         print("{}\t{}\t{}\t{}\t{}\t{}".format(i, data_name, hiddenlayer, lr, dropout, n_cluster))
                         sbatch_command = "python3 main.py --max_iter=100 --model={} --data_name={} --hidden_dim={} --lr={} --time_loss={} --gamma=1.".format(model, data_name, hiddenlayer, lr, time_loss)
-                        filename = "./sbatch_hpp_{}_{}.sh".format(data_name, i)
-                        filenames.append(filename)
-                        print(filename)
+                        # filename = "./sbatch_hpp_{}_{}.sh".format(data_name, i)
+                        # filenames.append(filename)
+                        sbatch_commands_data.append(sbatch_command)
                         print(sbatch_command)
                         print()
-                        with open(os.path.join('experiments', data_name, filename),"w+") as file:
-                            # SBATCH commands
-                            file.write('#!/bin/bash')
-                            file.write('\n')
-                            file.write('#SBATCH --job-name=hpp_{}_{}'.format(data_name, i))
-                            file.write('\n')
-                            file.write('#SBATCH --partition {}'.format(gpu_partitions[data_name]))
-                            file.write('\n')
-                            file.write('#SBATCH --gres gpu:1')
-                            file.write('\n')
-                            file.write('#SBATCH --output=log_{}_{}.log'.format(data_name, i))
-                            file.write('\n')
-                            
-                            # Load environment/module
-                            file.write('. /home/abhishekshar/anaconda3/etc/profile.d/conda.sh')
-                            file.write('\n')
-                            file.write('conda activate hpp')
-                            file.write('\n')
-                            file.write('cd /home/abhishekshar/hierarchichal_point_process/src')
-                            file.write('\n')
 
-                            # Actual sbatch command
-                            file.write(sbatch_command)
-                            file.write('\n')
+        filename = "./sbatch_hpp_{}.sh".format(data_name)
+        with open(os.path.join('experiments', data_name, filename),"w+") as file:
+            # SBATCH commands
+            file.write('#!/bin/bash')
+            file.write('\n')
+            file.write('#SBATCH --job-name=hpp_{}'.format(data_name))
+            file.write('\n')
+            file.write('#SBATCH --partition {}'.format(gpu_partitions[data_name]))
+            file.write('\n')
+            file.write('#SBATCH --gres gpu:1')
+            file.write('\n')
+            file.write('#SBATCH --output=log_{}.log'.format(data_name))
+            file.write('\n')
+            
+            # Load environment/module
+            file.write('. /home/abhishekshar/anaconda3/etc/profile.d/conda.sh')
+            file.write('\n')
+            file.write('conda activate hpp')
+            file.write('\n')
+            file.write('cd /home/abhishekshar/hierarchichal_point_process/src')
+            file.write('\n')
+            
+            for cmd in sbatch_commands_data:
+                # Actual sbatch command
+                file.write(cmd)
+                file.write('\n')
 
     # with open("./{}_files".format(data_name),"w+") as file:
     #     for fname in filenames:
