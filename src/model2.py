@@ -233,7 +233,7 @@ class Model2(nn.Module):
         time_loss = (-1. *time_log_likelihood *mask)[1:,:].sum()
         
         NLL = self.gamma*time_loss + marker_loss
-        loss = NLL + KL
+        loss = NLL + anneal*KL
         true_loss = time_loss + marker_loss
         meta_info = {"marker_ll":marker_loss.detach().cpu(), "time_ll":time_loss.detach().cpu(), "true_ll": true_loss.detach().cpu(), "kl": KL.detach().cpu()}
         return loss, {**meta_info, **metric_dict}

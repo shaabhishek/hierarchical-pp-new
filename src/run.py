@@ -4,7 +4,7 @@ import math
 from sklearn import metrics
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-anneal_model = {'hrmtpp'}
+anneal_model = {'hrmtpp', 'model11', 'model2'}
 
 def compute_auc(all_target, all_pred):
     return metrics.roc_auc_score(all_target, all_pred)

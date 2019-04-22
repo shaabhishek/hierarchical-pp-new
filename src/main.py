@@ -148,7 +148,7 @@ if __name__ == '__main__':
 
     ###Validation Parameter###
     parser.add_argument('--max_iter', type=int, default=5, help='number of iterations')
-    parser.add_argument('--anneal_iter', type=int, default=100, help='number of iteration over which anneal goes to 1')
+    parser.add_argument('--anneal_iter', type=int, default=40, help='number of iteration over which anneal goes to 1')
     parser.add_argument('--hidden_dim', type=int, default=256, help='rnn hidden dim')
     parser.add_argument('--maxgradnorm', type=float, default=10.0, help='maximum gradient norm')
     parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
