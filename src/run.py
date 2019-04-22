@@ -184,6 +184,8 @@ def test(net, params,  optimizer,  x_data, t_data, label):
         else:
             input_x = torch.from_numpy(input_x).float().to(device)
         input_t = torch.from_numpy(input_t).float().to(device)
+        if params.time_scale:
+            input_t *= params.time_scale
         input_mask = torch.from_numpy(input_mask).float().to(device)
 
         with torch.no_grad():
