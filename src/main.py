@@ -212,8 +212,8 @@ if __name__ == '__main__':
         params.time_influence = 0.01
         params.marker_type = 'categorical'
         params.batch_size = 128
+        params.time_scale = 1e-3
 
-    
     elif params.data_name == 'book_order':
         params.marker_dim = 2
         params.time_dim = 2
@@ -223,7 +223,7 @@ if __name__ == '__main__':
         params.batch_size = 128
     
     elif params.data_name == 'lastfm':
-        params.marker_dim = 3149
+        params.marker_dim = 3150
         params.time_dim = 2
         params.base_intensity = 0.
         params.time_influence = 0.01

@@ -1,5 +1,6 @@
-for FILE in sbatch_hpp_${1}_*; do
-echo ${FILE}
-sbatch ${FILE} --output=log_${FILE}.log
+echo $data_name
+for FILE in `ls experiments/${data_name}`; do
+echo experiments/${data_name}/${FILE}
+sbatch ${FILE}
 sleep 1
 done
