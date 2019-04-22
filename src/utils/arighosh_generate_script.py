@@ -12,15 +12,15 @@ def main(data_name=None):
     else:
         data_names = [data_name]
     
-    model = "model11"
+    model = "model2"
     
     gpu_partitions = {
         "book_order": "m40-long",
-        "so": "m40-long",
+        "so": "titanx-long",
         "lastfm": "m40-long",
         "retweet": "m40-long",
         "meme": "m40-long",
-        "mimic2": "m40-long",
+        "mimic2": "1080ti-long",
         }
     
     
@@ -57,13 +57,14 @@ def main(data_name=None):
             file.write('\n')
             file.write('#SBATCH --partition {}'.format(gpu_partitions[data_name]))
             file.write('\n')
-            file.write('#SBATCH --gres gpu:1')
+            file.write('#SBATCH --gres gpu:1\n#SBATCH --mem=35000')
             file.write('\n')
             file.write('#SBATCH --output=log_{}.log'.format(data_name))
             file.write('\n')
+
             
             # Load environment/module
-            #file.write('. /home/abhishekshar/anaconda3/etc/profile.d/conda.sh')
+            file.write('module load python3/current\n')
             #file.write('\n')
             #file.write('conda activate hpp')
             #file.write('\n')
