@@ -18,8 +18,8 @@ def main(data_name=None):
         "book_order": "m40-long",
         "so": "titanx-long",
         "lastfm": "m40-long",
-        "retweet": "m40-long",
-        "meme": "m40-long",
+        "retweet": "titanx-long",
+        "meme": "1080ti-long",
         "mimic2": "1080ti-long",
         }
     
@@ -68,7 +68,7 @@ def main(data_name=None):
             #file.write('\n')
             #file.write('conda activate hpp')
             #file.write('\n')
-            file.write('cd ../../')
+            file.write('cd /mnt/nfs/scratch1/arighosh/hierarchichal_point_process/src')
             file.write('\n')
             
             for cmd in sbatch_commands_data:
