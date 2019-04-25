@@ -186,7 +186,7 @@ if __name__ == '__main__':
         params.time_influence = 1.
         params.time_dim = 2
         params.marker_type = 'categorical'
-        params.batch_size = 128
+        params.batch_size = 32
 
     elif params.data_name == 'so':
         params.marker_dim = 22
@@ -202,7 +202,7 @@ if __name__ == '__main__':
         params.base_intensity = 0.
         params.time_influence = 0.01
         params.marker_type = 'categorical'
-        params.batch_size = 128
+        params.batch_size = 64
         params.time_scale = 1e-3
     
     elif params.data_name == 'retweet':
@@ -211,7 +211,7 @@ if __name__ == '__main__':
         params.base_intensity = 0.
         params.time_influence = 0.01
         params.marker_type = 'categorical'
-        params.batch_size = 128
+        params.batch_size = 32
         params.time_scale = 1e-3
 
     elif params.data_name == 'book_order':
@@ -220,7 +220,7 @@ if __name__ == '__main__':
         params.base_intensity = 0.
         params.time_influence = 0.01
         params.marker_type = 'categorical'
-        params.batch_size = 128
+        params.batch_size = 10
     
     elif params.data_name == 'lastfm':
         params.marker_dim = 3150
@@ -228,7 +228,7 @@ if __name__ == '__main__':
         params.base_intensity = 0.
         params.time_influence = 0.01
         params.marker_type = 'categorical'
-        params.batch_size = 128
+        params.batch_size = 32
 
 
     else:#different dataset. Encode those details.
@@ -245,7 +245,7 @@ if __name__ == '__main__':
     torch.backends.cudnn.benchmark = False
     torch.manual_seed(seedNum)
     np.random.seed(seedNum)
-    file_name_identifier = [['_g', params.gamma], ['_do', params.dropout],['_b', params.batch_size],['_h',params.hidden_dim ] , ['_l2', params.l2], ['_l', params.latent_dim], ['_gn', params.maxgradnorm], ['_lr', params.lr], ['_c',params.n_cluster], ['_s',params.seed], ['_tl',params.time_loss]]
+    file_name_identifier = [['_g', params.gamma], ['_do', params.dropout],['_b', params.batch_size],['_h',params.hidden_dim ] , ['_l2', params.l2], ['_l', params.latent_dim], ['_gn', params.maxgradnorm], ['_lr', params.lr], ['_c',params.n_cluster], ['_s',params.seed], ['_tl',params.time_loss], ['_ai', params.anneal_iter]]
 
     if not params.test:
         d = vars(params)
