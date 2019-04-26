@@ -222,7 +222,7 @@ class Model11(nn.Module):
         
         # Prior is just a Normal(0,1) dist for z and Uniform Categorical for y
         #Why so complicated
-        prior_dist_z = Normal(0, 1)
+        prior_dist_z = Normal(torch.tensor([0]).to(device), torch.tensor([1]).to(device))
         
         prior_dist_y = Categorical(probs=1./self.cluster_dim* torch.ones(1,BS, self.cluster_dim).to(device))
 

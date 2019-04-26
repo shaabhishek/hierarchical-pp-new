@@ -34,9 +34,9 @@ def main():
     params['maxgradnorm'] = [ 0.1, 1.]
     params['n_cluster'] = [8, 16]
     params['dropout'] = [ 0.33, 0.5]
-    params['model'] = ['model11', 'model2']
+    params['model'] = ['model11', 'rmtpp']
     params['max_iter'] = [100]
-    params['time_loss'] = ['normal', 'intensity']
+    params['time_loss'] = ['normal']
     params['data_name'] = ['mimic2', 'so', 'lastfm', 'retweet', 'meme', 'book_order']
 
     keys_ = list(params.keys())
@@ -71,8 +71,9 @@ def main():
             outer_line = outer_line + '--'+p + '  ' +str(pv)+'  '
         script_name = script_name +'.sh'
         script_files.append('sbatch '+script_name+'\n')
+        logline = '#SBATCH --output=./../scripts/'+script_name[:-3]+'.log \n'
 
-        preped_list = [line1, gpu_partitions[dataset], line3]
+        preped_list = [line1, gpu_partitions[dataset], logline, line3]
         list_of_command = []
 
         for inner_idx in range(inner_total_params):
