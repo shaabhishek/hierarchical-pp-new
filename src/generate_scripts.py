@@ -34,7 +34,7 @@ def main():
     params['maxgradnorm'] = [ 0.1, 1.]
     params['n_cluster'] = [8, 16]
     params['dropout'] = [ 0.33, 0.5]
-    params['model'] = ['model11', 'rmtpp']
+    params['model'] = ['model11']
     params['max_iter'] = [100]
     params['time_loss'] = ['normal']
     params['data_name'] = ['mimic2', 'so', 'lastfm', 'retweet', 'meme', 'book_order']
