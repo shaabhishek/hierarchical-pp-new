@@ -41,13 +41,18 @@ def getdata_NHP(filepath, max_size=None):
 
 def list_to_stacked_time_array(x):
     intervals = pandas.Series(x) - pandas.Series(x).shift(1)
-    intervals[0] = x[0]
+    try:
+        intervals[0] = x[0]
+    except:
+        import pdb; pdb.set_trace()
     return np.stack([intervals, pandas.Series(x)]).T
 
 def getdata_Hawkes(filepath):
     t_data, x_data = [],[]
     with open(filepath,'r') as f:
         data=f.readlines()
+
+    print(len(data))
     # Split a line into list of floats
     data = list(map(lambda x: list(map(float, str.split(x))), data))
     t_data = list(map(list_to_stacked_time_array, data))
@@ -59,7 +64,7 @@ def getdata_Hawkes(filepath):
     return data_dict
 
 def convert_dataset(data_name):
-    if data_name not in {'lastfm', 'meme', 'retweet', 'simulated'}:
+    if data_name not in {'lastfm', 'meme', 'retweet', 'syntheticdata_nclusters_5', 'syntheticdata_nclusters_10', 'syntheticdata_nclusters_50', 'syntheticdata_nclusters_100'}:
         for idx in range(1,6):
             for ls in ['train', 'test']:
                 event_data_path = './../data/real/'+data_name+'/'+ 'event-'+str(idx)+'-'+ls+'.txt'
@@ -178,10 +183,10 @@ def convert_dataset(data_name):
                 pickle.dump(valid_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
             with open(test_file, 'wb') as handle:
                 pickle.dump(test_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    if data_name == 'simulated':
-            valid_dict = getdata_Hawkes('./../data/hawkesdataval.txt')
-            train_dict = getdata_Hawkes('./../data/hawkesdatatrain.txt')
-            test_dict = getdata_Hawkes('./../data/hawkesdatatest.txt')
+    if data_name in ['syntheticdata_nclusters_5', 'syntheticdata_nclusters_10', 'syntheticdata_nclusters_50', 'syntheticdata_nclusters_100']:
+            train_dict = getdata_Hawkes('./../data/dump/{}_train.txt'.format(data_name))
+            valid_dict = getdata_Hawkes('./../data/dump/{}_val.txt'.format(data_name))
+            test_dict = getdata_Hawkes('./../data/dump/{}_test.txt'.format(data_name))
 
             train_file = '../data/'+data_name+'_'+str(1)+'_train.pkl'
             valid_file = '../data/'+data_name+'_'+str(1)+'_valid.pkl'
@@ -203,4 +208,8 @@ if __name__ == "__main__":
     #convert_dataset('meme')
     # convert_dataset('lastfm')
     # convert_dataset('book_order')
-    convert_dataset('simulated')
+    # convert_dataset('syntheticdata_nclusters_5_val')
+    convert_dataset('syntheticdata_nclusters_5')
+    convert_dataset('syntheticdata_nclusters_10')
+    convert_dataset('syntheticdata_nclusters_50')
+    convert_dataset('syntheticdata_nclusters_100')
