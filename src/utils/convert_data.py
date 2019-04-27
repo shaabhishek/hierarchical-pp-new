@@ -1,4 +1,5 @@
 import numpy as np
+import pandas
 import pickle
 import random
 from helper import train_val_split
@@ -38,8 +39,27 @@ def getdata_NHP(filepath, max_size=None):
     }
     return data_dict
 
+def list_to_stacked_time_array(x):
+    intervals = pandas.Series(x) - pandas.Series(x).shift(1)
+    intervals[0] = x[0]
+    return np.stack([intervals, pandas.Series(x)]).T
+
+def getdata_Hawkes(filepath):
+    t_data, x_data = [],[]
+    with open(filepath,'r') as f:
+        data=f.readlines()
+    # Split a line into list of floats
+    data = list(map(lambda x: list(map(float, str.split(x))), data))
+    t_data = list(map(list_to_stacked_time_array, data))
+    x_data = list(map(lambda x: np.ones(len(x)), data))
+    data_dict = {
+        't': t_data,
+        'x': x_data
+    }
+    return data_dict
+
 def convert_dataset(data_name):
-    if data_name not in {'lastfm', 'meme', 'retweet'}:
+    if data_name not in {'lastfm', 'meme', 'retweet', 'simulated'}:
         for idx in range(1,6):
             for ls in ['train', 'test']:
                 event_data_path = './../data/real/'+data_name+'/'+ 'event-'+str(idx)+'-'+ls+'.txt'
@@ -158,6 +178,21 @@ def convert_dataset(data_name):
                 pickle.dump(valid_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
             with open(test_file, 'wb') as handle:
                 pickle.dump(test_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    if data_name == 'simulated':
+            valid_dict = getdata_Hawkes('./../data/hawkesdataval.txt')
+            train_dict = getdata_Hawkes('./../data/hawkesdatatrain.txt')
+            test_dict = getdata_Hawkes('./../data/hawkesdatatest.txt')
+
+            train_file = '../data/'+data_name+'_'+str(1)+'_train.pkl'
+            valid_file = '../data/'+data_name+'_'+str(1)+'_valid.pkl'
+            test_file = '../data/'+data_name+'_'+str(1)+'_test.pkl'
+            
+            with open(train_file, 'wb') as handle:
+                pickle.dump(train_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            with open(valid_file, 'wb') as handle:
+                pickle.dump(valid_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            with open(test_file, 'wb') as handle:
+                pickle.dump(test_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 
@@ -166,5 +201,6 @@ if __name__ == "__main__":
     #convert_dataset('mimic2')
     # convert_dataset('so')
     #convert_dataset('meme')
-    convert_dataset('lastfm')
-    convert_dataset('book_order')
+    # convert_dataset('lastfm')
+    # convert_dataset('book_order')
+    convert_dataset('simulated')

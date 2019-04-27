@@ -229,6 +229,14 @@ if __name__ == '__main__':
         params.time_influence = 0.01
         params.marker_type = 'categorical'
         params.batch_size = 128
+    
+    elif params.data_name == 'simulated':
+        params.marker_dim = 2
+        params.time_dim = 2
+        params.base_intensity = 0.
+        params.time_influence = 0.01
+        params.marker_type = 'categorical'
+        params.batch_size = 32
 
 
     else:#different dataset. Encode those details.
