@@ -65,7 +65,7 @@ class Model11(nn.Module):
         #Augmented Discriminative Network
         self.disc_alpha = disc_alpha
         self.aug_output_layer = nn.Sequential(
-            #nn.Softmax(dim =-1),
+            nn.Softmax(dim =-1),
             nn.Linear(self.cluster_dim, self.shared_output_layers[-1]),
             nn.ReLU(),nn.Dropout(self.dropout))
         self.aug_output_t_mu, self.aug_output_t_logvar, self.aug_output_x_mu, self.aug_output_x_logvar = self.create_output_nets()
