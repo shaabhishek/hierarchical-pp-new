@@ -30,7 +30,7 @@ class hrmtpp(nn.Module):
 
     def __init__(self, latent_dim = 20, marker_type='real', marker_dim=31, dropout = 0,  time_dim=2,\
          hidden_dim=128, x_given_t=False,base_intensity = 0.,time_influence = 1., gamma = 1.,\
-              time_loss = 'intensity'):
+              time_loss = 'intensity', n_cluster=5):
         super().__init__()
         """
             Input:
