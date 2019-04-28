@@ -201,7 +201,7 @@ class Model11(nn.Module):
         
         NLL = self.gamma*time_loss + marker_loss
         loss = NLL + anneal*KL
-        true_loss = time_loss + marker_loss
+        true_loss = time_loss + marker_loss +KL
         meta_info = {"marker_ll":marker_loss.detach().cpu(), "time_ll":time_loss.detach().cpu(), "true_ll": true_loss.detach().cpu(), "kl": KL.detach().cpu()}
         return loss, {**meta_info, **metric_dict}
     
