@@ -38,7 +38,7 @@ def reparameterize(mu, logvar):
     
     
 class Model2(nn.Module):
-    def __init__(self, latent_dim=20, marker_dim=31, marker_type='real', hidden_dim=128, time_dim=2, n_cluster=5, x_given_t=False, time_loss='normal', gamma=1., dropout=None, base_intensity=None, time_influence=None):
+    def __init__(self, latent_dim=20, marker_dim=31, marker_type='real', hidden_dim=128, time_dim=2, n_cluster=5, x_given_t=False, time_loss='normal', gamma=1., dropout=None, base_intensity=None, time_influence=None, disc_alpha = 0.1):
         super().__init__()
         self.marker_type = marker_type
         self.marker_dim = marker_dim
@@ -63,6 +63,15 @@ class Model2(nn.Module):
         
         # Forward RNN
         self.rnn = self.create_rnn()
+
+        #Augmented Discriminative Network
+        self.disc_alpha = disc_alpha
+        self.aug_output_layer = nn.Sequential(
+            #nn.Softmax(dim =-1),
+            nn.Linear(self.cluster_dim, self.shared_output_layers[-1]),
+            nn.ReLU(),nn.Dropout(self.dropout))
+        self.aug_output_t_mu, self.aug_output_t_logvar, self.aug_output_x_mu, self.aug_output_x_logvar = self.create_output_nets()
+
         # Backward RNN Cell
         self.reverse_cell = nn.GRUCell(input_size=self.x_embedding_layer[-1] + self.t_embedding_layer[-1]+ self.hidden_dim, hidden_size=self.hidden_dim)
 
@@ -227,13 +236,13 @@ class Model2(nn.Module):
         return sample_y, sample_z, logits_y, (mu_z, logvar_z)
     
     def forward(self, marker_seq, time_seq, anneal=1., mask=None, temp=0.5):
-        time_log_likelihood, marker_log_likelihood, KL, metric_dict = self._forward(marker_seq, time_seq, temp, mask)
+        time_log_likelihood, marker_log_likelihood, KL, metric_dict, aug_loss = self._forward(marker_seq, time_seq, temp, mask)
 
         marker_loss = (-1.* marker_log_likelihood *mask)[1:,:].sum()
         time_loss = (-1. *time_log_likelihood *mask)[1:,:].sum()
         
         NLL = self.gamma*time_loss + marker_loss
-        loss = NLL + anneal*KL
+        loss = NLL + anneal*KL +aug_loss
         true_loss = time_loss + marker_loss +KL
         meta_info = {"marker_ll":marker_loss.detach().cpu(), "time_ll":time_loss.detach().cpu(), "true_ll": true_loss.detach().cpu(), "kl": KL.detach().cpu()}
         return loss, {**meta_info, **metric_dict}
@@ -304,6 +313,21 @@ class Model2(nn.Module):
             assert (KL >= 0)
         except:
             import pdb; pdb.set_trace()
+        
+        ##Augmented loss
+        sl, bs = x.size(0), x.size(1)
+        temp_ = posterior_logits_y.expand(*(sl,-1,-1))
+        aug_layer = self.aug_output_layer(temp_)#1xBSxc
+        aug_x_mu = self.aug_output_x_mu(aug_layer)#1xBSxmarker_dim
+        aug_t_mu, aug_t_logvar = self.aug_output_t_mu(aug_layer), self.aug_output_t_logvar(aug_layer)
+        aug_t_sigma = (aug_t_logvar*0.5).exp()+self.sigma_min
+        aug_time_recon = Normal(aug_t_mu,aug_t_sigma)
+        aug_ll = (aug_time_recon.log_prob(t[:, :, 0][:, :, None])).sum(dim=-1)* mask #TxBS
+        aug_mu_ =  aug_x_mu.view(-1,self.marker_dim)#
+        x_ = x.view(-1)#TxBS
+        aug_ml = -1* F.cross_entropy(aug_mu_, x_, reduction='none').view(sl, bs) *mask #TxBS
+        aug_loss = -1.* (aug_ll[1:,:]+aug_ml[1:,:]).sum()
+
         metric_dict = {"z_cluster": posterior_logits_y.detach().cpu()}
         with torch.no_grad():
             if self.time_loss == 'intensity':
@@ -311,4 +335,4 @@ class Model2(nn.Module):
             get_marker_metric(self.marker_type, mu_marker, x, mask, metric_dict)
             get_time_metric(mu_time,  t, mask, metric_dict)
             
-        return time_log_likelihood, marker_log_likelihood, KL, metric_dict
+        return time_log_likelihood, marker_log_likelihood, KL, metric_dict, aug_loss
