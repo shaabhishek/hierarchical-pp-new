@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import os, os.path
 import glob
-
+import pickle
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -123,11 +123,17 @@ def test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch):
         checkpoint = torch.load(os.path.join('model', params.save, params.model, file_name)+ '_'+str(best_epoch[fs]))
         model.load_state_dict(checkpoint['model_state_dict'])
     
-        test_info = test(model, params, None, test_x_data, test_t_data, label='Test')
+        test_info = test(model, params, None, test_x_data, test_t_data, label='Test', dump_cluster=params.dump_cluster)
         print("test\t ", fs, ': ', test_info[fs])
         print("best epoch of metric: ",fs ,"\t", best_epoch[fs], "All Metrics for that epoch", test_info)
         f_save_log.write('Test results\t :'+ fs  +':\t'+ str(test_info[fs]) + "\n")
         f_save_log.write('Other results for taking best\t :'+ fs  +':\t'+ str(test_info) + "\n")
+        if fs == 'loss' and params.dump_cluster ==1:
+            f_save_cluster = os.path.join('result', params.save,params.model,  file_name+ '_cluster.pkl')
+            with open(f_save_cluster, 'wb') as handle:
+                pickle.dump(test_info, handle)
+
+
         # if params.marker_type != 'real':
         #     print("\ntest_auc\t", test_info['auc'])
         #     print("test_accuracy\t", test_info['accuracy'])
@@ -147,7 +153,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Script to test Marked Point Process.')
 
     ###Validation Parameter###
-    parser.add_argument('--max_iter', type=int, default=5, help='number of iterations')
+    parser.add_argument('--max_iter', type=int, default=1, help='number of iterations')
     parser.add_argument('--anneal_iter', type=int, default=40, help='number of iteration over which anneal goes to 1')
     parser.add_argument('--hidden_dim', type=int, default=256, help='rnn hidden dim')
     parser.add_argument('--maxgradnorm', type=float, default=10.0, help='maximum gradient norm')
@@ -163,7 +169,7 @@ if __name__ == '__main__':
     
 
     ###Helper Parameter###
-    parser.add_argument('--model', type=str, default='rmtpp', help='model name')
+    parser.add_argument('--model', type=str, default='model11', help='model name')
     parser.add_argument('--time_loss', type=str, default='normal', help='whether to use normal loss or intensity loss')
     parser.add_argument('--time_scale', type=float, default=1, help='scaling factor to multiply the timestamps with')
     parser.add_argument('--test', type=bool, default=False, help='enable testing')
@@ -172,6 +178,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_dir', type=str, default='../data/', help='data directory')
     parser.add_argument('--best_epoch', type=int, default=10, help='best epoch')
     parser.add_argument('--seed', type=int, default=1, help='seed')
+    parser.add_argument('--dump_cluster', type=int, default=1, help='whether to dump cluster while Testing')
 
 
 

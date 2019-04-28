@@ -133,7 +133,7 @@ def train(net, params, optimizer, x_data, t_data, label):
     return info
 
 
-def test(net, params,  optimizer,  x_data, t_data, label):
+def test(net, params,  optimizer,  x_data, t_data, label, dump_cluster = 0):
     """
     x_data: N, (t_i,D), A list of numpy array.
     t_data: N, (t_i, 2), A list of numpy array.
@@ -148,6 +148,8 @@ def test(net, params,  optimizer,  x_data, t_data, label):
     marker_acc, marker_acc_count = 0., 0.
     total_loss, marker_ll, time_ll = 0., 0, 0.
     total_sequence =0
+    if dump_cluster == 1:
+        zs = []
 
     if params.show:
         from utils.helper import ProgressBar
@@ -194,6 +196,8 @@ def test(net, params,  optimizer,  x_data, t_data, label):
         total_loss += meta_info['true_ll'].numpy()
         marker_ll -= meta_info['marker_ll'].numpy()
         time_ll -= meta_info['time_ll'].numpy()
+        if dump_cluster ==1:
+            zs.append(meta_info['z_cluster'].numpy())
 
         time_mse+= meta_info["time_mse"]
         time_mse_count += meta_info["time_mse_count"]
@@ -221,5 +225,10 @@ def test(net, params,  optimizer,  x_data, t_data, label):
     time_ll /= total_sequence
     info = {'loss': total_loss, 'time_rmse':time_rmse, 'accuracy': accuracy, 'auc':auc,\
         'marker_rmse': marker_rmse, 'marker_ll':marker_ll, 'time_ll': time_ll}
-
+    
+    if dump_cluster == 1:
+        zs = np.concatenate(zs, axis= 1)[0,:,:]
+        info['z_cluster'] = zs
     return info
+
+    

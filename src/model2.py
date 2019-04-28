@@ -304,7 +304,7 @@ class Model2(nn.Module):
             assert (KL >= 0)
         except:
             import pdb; pdb.set_trace()
-        metric_dict = {}
+        metric_dict = {"z_cluster": posterior_logits_y.detach().cpu()}
         with torch.no_grad():
             if self.time_loss == 'intensity':
                 mu_time = compute_time_expectation(self, hidden_seq, t, mask)[:,:, None]
