@@ -52,10 +52,13 @@ def getdata_Hawkes(filepath):
     with open(filepath,'r') as f:
         data=f.readlines()
 
-    print(len(data))
+    # import pdb; pdb.set_trace()
     # Split a line into list of floats
-    random.shuffle(data)
+    if not filepath.endswith('test.txt'):
+        random.shuffle(data)
     data = list(map(lambda x: list(map(float, str.split(x))), data))
+    print("Count:", len(data))
+    print("Length stats:",np.min(list(map(len, data))), np.max(list(map(len, data))), np.mean(list(map(len, data))))
     t_data = list(map(list_to_stacked_time_array, data))
     x_data = list(map(lambda x: np.ones(len(x)), data))
     data_dict = {
@@ -212,5 +215,5 @@ if __name__ == "__main__":
     # convert_dataset('syntheticdata_nclusters_5_val')
     convert_dataset('syntheticdata_nclusters_5')
     convert_dataset('syntheticdata_nclusters_10')
-    convert_dataset('syntheticdata_nclusters_50')
-    convert_dataset('syntheticdata_nclusters_100')
+    # convert_dataset('syntheticdata_nclusters_50')
+    # convert_dataset('syntheticdata_nclusters_100')
