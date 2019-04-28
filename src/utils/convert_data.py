@@ -54,6 +54,7 @@ def getdata_Hawkes(filepath):
 
     print(len(data))
     # Split a line into list of floats
+    random.shuffle(data)
     data = list(map(lambda x: list(map(float, str.split(x))), data))
     t_data = list(map(list_to_stacked_time_array, data))
     x_data = list(map(lambda x: np.ones(len(x)), data))
