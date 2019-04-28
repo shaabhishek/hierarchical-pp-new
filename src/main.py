@@ -178,7 +178,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_dir', type=str, default='../data/', help='data directory')
     parser.add_argument('--best_epoch', type=int, default=10, help='best epoch')
     parser.add_argument('--seed', type=int, default=1, help='seed')
-    parser.add_argument('--dump_cluster', type=int, default=1, help='whether to dump cluster while Testing')
+    parser.add_argument('--dump_cluster', type=int, default=0, help='whether to dump cluster while Testing')
 
 
 
