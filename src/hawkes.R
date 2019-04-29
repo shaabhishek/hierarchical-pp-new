@@ -1,8 +1,10 @@
+library(hawkes)
+library(poisson)
 setwd('/Users/abhisheksharma/Dev/hierarchichal_point_process/data/')
-params_data <- read.delim("synthetic_data_params.txt", header = FALSE, col.names = c('lambda0', 'alpha', 'beta', 'horizon'))
+params_data <- read.delim("synthetic_data_params.txt", header = FALSE) #col.names = c('lambda0', 'alpha', 'beta', 'horizon'))
 
 # n_cluster <- c(5, 10, 50, 100)
-n_cluster <- c(5, 10)
+n_cluster <- c(4)
 # lambda0 <- c(0.1, 0.2, 0.3, 0.4, 0.5)
 # n_cluster <- length(lambda0)
 # alpha <- c(0.6, 0.7, 0.9, 0.5, 0.4)
@@ -15,17 +17,29 @@ intensity_nhpp_wrapper <- function(coeff) {
 
 
 generate_hawkes <- function(params, splittype) {
+  # print(params)
   sim_pp <- function(idx, params) {
-    if (idx%%2 == 0){
-      res <- nhpp.sim(10, 50, intensity_nhpp_wrapper(params[1]), prepend.t0 = F)
+    if (params[1]=='Poisson'){
+      res <- nhpp.sim(10, 50, intensity_nhpp_wrapper(as.double(params[2])), prepend.t0 = F)
     }else{
       attempts = 0
-      res <- simulateHawkes(params[1], params[2], params[3], params[4])
+      lambda0 = as.double(params[2])
+      alpha = rnorm(1, mean=as.double(params[3]), 0.01)
+      beta = rnorm(1, mean=as.double(params[4]), 0.01)
+      beta = min(c(beta, 1.0))
+      alpha = min(c(alpha, beta-.01))
+      
+      horizon = 25
+      
+      # print(c(lambda0, alpha, beta))
+      res <- simulateHawkes(lambda0, alpha, beta, horizon)
       while (length(unlist(res)) < 2)
       {
         attempts <- attempts + 1
+        horizon <- 2*horizon
         # print(c(attempts, params))
-        res <- simulateHawkes(params[1], params[2], params[3], params[4])
+        res <- simulateHawkes(lambda0, alpha, beta, horizon)
+        # if (attempts == 100) break
       }
     }
     
@@ -37,7 +51,7 @@ generate_hawkes <- function(params, splittype) {
     n <- 50
   }
   
-  return (sapply(1:n, function(x) sim_pp(x, params)))
+  return (lapply(1:n, function(x) sim_pp(x, params)))
 }
 
 deletepreviousdata <- function(fn) {
@@ -59,7 +73,7 @@ simulate <- function(n_cluster) {
     test_data <- unlist(test_data, recursive = FALSE, use.names = FALSE)
     
     # File names
-    fn_base <- paste0('dump/syntheticdata_nclusters_', nclus) 
+    fn_base <- paste0('dump/syntheticdata_nclusters_', nclus)
     fn_train <- paste0(fn_base, '_train.txt')
     fn_val <- paste0(fn_base, '_val.txt')
     fn_test <- paste0(fn_base, '_test.txt')

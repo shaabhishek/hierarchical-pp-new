@@ -68,7 +68,7 @@ def getdata_Hawkes(filepath):
     return data_dict
 
 def convert_dataset(data_name):
-    if data_name not in {'lastfm', 'meme', 'retweet', 'syntheticdata_nclusters_5', 'syntheticdata_nclusters_10', 'syntheticdata_nclusters_50', 'syntheticdata_nclusters_100'}:
+    if data_name not in {'lastfm', 'meme', 'retweet', 'syntheticdata_nclusters_4', 'syntheticdata_nclusters_5', 'syntheticdata_nclusters_10', 'syntheticdata_nclusters_50', 'syntheticdata_nclusters_100'}:
         for idx in range(1,6):
             for ls in ['train', 'test']:
                 event_data_path = './../data/real/'+data_name+'/'+ 'event-'+str(idx)+'-'+ls+'.txt'
@@ -187,7 +187,7 @@ def convert_dataset(data_name):
                 pickle.dump(valid_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
             with open(test_file, 'wb') as handle:
                 pickle.dump(test_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    if data_name in ['syntheticdata_nclusters_5', 'syntheticdata_nclusters_10', 'syntheticdata_nclusters_50', 'syntheticdata_nclusters_100']:
+    if data_name in ['syntheticdata_nclusters_4', 'syntheticdata_nclusters_5', 'syntheticdata_nclusters_10', 'syntheticdata_nclusters_50', 'syntheticdata_nclusters_100']:
             train_dict = getdata_Hawkes('./../data/dump/{}_train.txt'.format(data_name))
             valid_dict = getdata_Hawkes('./../data/dump/{}_val.txt'.format(data_name))
             test_dict = getdata_Hawkes('./../data/dump/{}_test.txt'.format(data_name))
@@ -213,7 +213,8 @@ if __name__ == "__main__":
     # convert_dataset('lastfm')
     # convert_dataset('book_order')
     # convert_dataset('syntheticdata_nclusters_5_val')
-    convert_dataset('syntheticdata_nclusters_5')
-    convert_dataset('syntheticdata_nclusters_10')
+    convert_dataset('syntheticdata_nclusters_4')
+    # convert_dataset('syntheticdata_nclusters_5')
+    # convert_dataset('syntheticdata_nclusters_10')
     # convert_dataset('syntheticdata_nclusters_50')
     # convert_dataset('syntheticdata_nclusters_100')
