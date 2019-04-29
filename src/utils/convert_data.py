@@ -61,6 +61,7 @@ def getdata_Hawkes(filepath):
     print("Length stats:",np.min(list(map(len, data))), np.max(list(map(len, data))), np.mean(list(map(len, data))))
     t_data = list(map(list_to_stacked_time_array, data))
     x_data = list(map(lambda x: np.ones(len(x)), data))
+    print(np.min(list(map(lambda x: min(x[:,0]), t_data))))
     data_dict = {
         't': t_data,
         'x': x_data
