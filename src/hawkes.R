@@ -102,4 +102,158 @@ simulate <- function(n_cluster) {
   }
 }
 
-simulate(n_cluster)
+# simulate(n_cluster)
+
+
+intensity_hp <- function(t, P, params){
+  P_ <- P[P<t]
+  params[1] + params[2]*sum(exp(-1* (t - P_)/params[3]))
+}
+
+genHP <- function (T, intensity_hp, params) {
+  t = 0
+  P = c()
+  while(t < T){
+    m <- intensity_hp(t, P, params)+1
+    e <- rexp(1, rate = m)
+    t <- t + e
+    u <- runif(1, 0, m)
+    if ((t < T) && (u <= intensity_hp(t, P, params))){
+      P <- c(P, t)
+    }
+  }
+  return (P)
+}
+
+intensity_nhpp <- function(t, params) {
+  0.5*sinpi(params[1]*t) + 0.5*cospi(.2*params[1]*t) + 1
+}
+
+genNHPP <- function(T, intensity_nhpp, params) {
+  t = 0
+  P = c()
+  while(t < T){
+    m <- 5
+    e <- rexp(1, rate = m)
+    t <- t + e
+    u <- runif(1, 0, m)
+    if ((t < T) && (u <= intensity_nhpp(t, params))){
+      P <- c(P, t)
+    }
+  }
+  return (P)
+}
+
+intensity_scp <- function(t, P, params) {
+  P_ <- P[P<t]
+  # print(sum(table(P_)))
+  exp(params[1]*t - params[2]*sum(table(P_)))
+}
+
+genSCP <- function(T, intensity_scp, params) {
+  t = 0
+  P = c()
+  while(t < T){
+    m <- intensity_scp(t+1, P, params)
+    # print(c(t, m))
+    e <- rexp(1, rate = m)
+    t <- t + e
+    u <- runif(1, 0, m)
+    if ((t < T) && (u <= intensity_scp(t, P, params))){
+      P <- c(P, t)
+    }
+  }
+  return (P)
+}
+
+
+# sigmoid <- function(x) 1/(1+exp(x))
+
+markerSSCT <- function(r, y, params) {
+  P <- function(x, r, y, a) exp(x * sum(a*r*y))/(exp(-1 * sum(a*r*y)) + exp(1 * sum(a*r*y)))
+  # a <- as.integer(runif(3)*2)*2-1 #+1/-1
+  # r <- as.integer(runif(3)*2)
+  # y <- as.integer(runif(3)*2)*2-1
+  u <- runif(1)
+  if (u < P(1,r,y,params)){
+    m <- 1
+  }
+  else{
+    m <- -1
+  }
+  return (m)
+}
+
+
+intensity_ssct <- function(a,r,y) exp(sum(a*r*y))
+pointSSCT <- function(r, y, params) {
+  
+  lambda <- intensity_ssct(params,r,y)#/(exp(-1 * sum(a*r*y)) + exp(1 * sum(a*r*y)))
+  print(c(params, r, y, lambda))
+  # a <- as.integer(runif(3)*2)*2-1 #+1/-1
+  # r <- as.integer(runif(3)*2)
+  # y <- as.integer(runif(3)*2)*2-1
+  d <- rexp(1, lambda)
+  return (d)
+}
+
+genSSCT <- function(T, params) {
+  r_seq <- as.integer(runif(3)*2)
+  y_seq <- as.integer(runif(3)*2)*2-1
+  m <- 3
+  t <- 0
+  t_seq <- c()
+  while (t < T) {
+    tn <- pointSSCT(tail(r_seq, m), tail(y_seq, m), params)
+    t <- t + tn
+    # print(t)
+    rn <- as.integer(t%%24 < 12)
+    print(rn)
+    yn <- markerSSCT(tail(r_seq, m), tail(y_seq, m), params)
+    t_seq <- c(t_seq, t)
+    r_seq <- c(r_seq, rn)
+    y_seq <- c(y_seq, yn)
+  }
+  return(list(t_seq, y_seq))
+}
+
+genHPP <- function(T, params) {
+  t <- 0
+  P <- c()
+  while (t < T) {
+    e <- rexp(1, rate = params[1])
+    t <- t + e
+    P <- c(P, t)
+  }
+  return (P)
+}
+
+paramhpp <- c(.7)
+datahpp <- genHPP(100, paramhpp)
+plot(seq(1,100), rep(paramhpp[1], 100), type='l', ylim=c(0, paramhpp[1]+1))
+par()
+points(datahpp, rep_len(0.1, length(datahpp)))
+
+paramnhpp <- c(.1)
+datanhpp <- genNHPP(100, intensity_nhpp, paramnhpp)
+plot(seq(1,100,.5), sapply(seq(1,100,.5), function(x) intensity_nhpp(x, paramnhpp)), type='l')
+par()
+points(datanhpp, rep_len(0.1, length(datanhpp)))
+
+paramscp <- c(.5, .2)
+datascp <- genSCP(100, intensity_scp, paramscp)
+plot(seq(1,100,.5), sapply(seq(1,100,.5), function(x) intensity_scp(x, datascp, paramscp)), type='l')
+par()
+points(datascp, rep_len(1, length(datascp)))
+
+paramshp <- c(.9, .1, 1.0)
+datahp <- genHP(100, intensity_hp, paramshp)
+plot(seq(1,100,.5), sapply(seq(1,100,.5), function(x) intensity_hp(x, datahp, paramshp)), type='l')
+par()
+points(datahp, rep_len(1, length(datahp)))
+
+paramsssct <- c(-.2, 0.8, -.8)
+datassct <- genSSCT(100, paramsssct)
+plot(datassct[[1]][2:length(datassct[[1]])], diff(datassct[[1]]), type='l')
+par()
+points(datassct[[1]], rep_len(.1, length(datassct[[1]])), col=datassct[[2]]+2)
