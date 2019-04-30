@@ -69,8 +69,8 @@ def getdata_NHP(filepath, max_size=None):
 #     }
 #     return data_dict
 
-def convert_dataset(data_name):
-    if data_name not in {'lastfm', 'meme', 'retweet', 'syntheticdata_nclusters_4', 'syntheticdata_nclusters_5', 'syntheticdata_nclusters_10', 'syntheticdata_nclusters_50', 'syntheticdata_nclusters_100'}:
+def convert_dataset(data_name, **kwargs):
+    if data_name not in {'lastfm', 'meme', 'retweet', 'syntheticdata'}:
         for idx in range(1,6):
             for ls in ['train', 'test']:
                 event_data_path = './../data/real/'+data_name+'/'+ 'event-'+str(idx)+'-'+ls+'.txt'
@@ -189,15 +189,17 @@ def convert_dataset(data_name):
                 pickle.dump(valid_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
             with open(test_file, 'wb') as handle:
                 pickle.dump(test_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    if data_name in ['syntheticdata_nclusters_5']:
-            train_dict = generate_synthethic_data_wrapper(10000, shuffle=True)
-            valid_dict = generate_synthethic_data_wrapper(1000, shuffle=True)
-            test_dict = generate_synthethic_data_wrapper(1000, shuffle=False)
+    if data_name in ['syntheticdata']:
+            nclus = kwargs['nclus']
+            train_dict = generate_synthethic_data_wrapper(nperproc=200, nclus=nclus, T=25, shuffle=True)
+            valid_dict = generate_synthethic_data_wrapper(nperproc=40, nclus=nclus, T=25, shuffle=True)
+            test_dict = generate_synthethic_data_wrapper(nperproc=40, nclus=nclus, T=25, shuffle=False)
 
-            train_file = '../data/'+data_name+'_'+str(1)+'_train.pkl'
-            valid_file = '../data/'+data_name+'_'+str(1)+'_valid.pkl'
-            test_file = '../data/'+data_name+'_'+str(1)+'_test.pkl'
-            
+            train_file = '../data/'+data_name+'_p4_c'+str(nclus)+'_'+str(1)+'_train.pkl'
+            valid_file = '../data/'+data_name+'_p4_c'+str(nclus)+'_'+str(1)+'_valid.pkl'
+            test_file = '../data/'+data_name+'_p4_c'+str(nclus)+'_'+str(1)+'_test.pkl'
+            print(train_file)
+
             with open(train_file, 'wb') as handle:
                 pickle.dump(train_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
             with open(valid_file, 'wb') as handle:
@@ -215,7 +217,7 @@ if __name__ == "__main__":
     # convert_dataset('lastfm')
     # convert_dataset('book_order')
     # convert_dataset('syntheticdata_nclusters_5_val')
-    convert_dataset('syntheticdata_nclusters_5')
+    convert_dataset('syntheticdata', nclus=2)
     # convert_dataset('syntheticdata_nclusters_5')
     # convert_dataset('syntheticdata_nclusters_10')
     # convert_dataset('syntheticdata_nclusters_50')

@@ -102,12 +102,17 @@ def genSSCT(T, params):
     y_hist = list(map(lambda x: x if x==1 else 0, y_hist))
     return {'x': y_hist[m:], 't': hist}
 
-def generate_data(n, T, fn_param_pairs):
-    nperproc = n//len(fn_param_pairs)
+def generate_data(nperproc, T, fn_param_pairs):
+    # nperproc = n//len(fn_param_pairs)
     data = {'x': [], 't': []}
     for fn, params in fn_param_pairs:
-        for _ in range(nperproc):
-            data_i = fn(T, params)
+        for i in range(nperproc):
+            len_check = False
+            while not len_check:
+                data_i = fn(T, params)
+                # make sure data is at least length 2
+                if (len(data_i['x']) >= 2):
+                    len_check = True
             # Generate intervals
             intervals = np.diff([0]+data_i['t'])
             data_i['t'] = np.stack([intervals, data_i['t']]).T
@@ -117,23 +122,51 @@ def generate_data(n, T, fn_param_pairs):
             
     return data
 
-def generate_synthethic_data_wrapper(n, T=100, shuffle=False):
-    paramsSSCT = [-.2, 0.8, -.8]
-    paramsNonHomPP = [.1]
-    paramsHomPP = [.4]
-    paramsSCP = [.5, .5]
-    paramsHP = [.9, .1, 1.]
+def paramsHP():
+    alpha = random.random()
+    lambda0 = np.clip(random.random(), 0.2, 1)
+    beta = np.clip(random.random(), alpha+.1, 1)
+    return [lambda0, alpha, beta]
 
-    fn_param_pairs = [(genSSCT, paramsSSCT), (genHomPP, paramsHomPP), (genNonHomPP, paramsNonHomPP), (genHP, paramsHP), (genSCP, paramsSCP)]
-    data = generate_data(n, T, fn_param_pairs)
+def paramsNonHomPP():
+    #unif(0.2, 1)
+    lambd = .2 + random.random()*.8
+    return [lambd]
+
+def paramsHomPP():
+    #unif(0.1, 1)
+    lambd = .1 + random.random()*.9
+    return [lambd]
+
+def paramsSCP():
+    mu = 1 + random.random() #unif(0.5, 1.5)
+    alpha = .1 + random.random()*.4 #unif(0.1, .5)
+    return [mu, alpha]
+
+def generate_synthethic_data_wrapper(nperproc=100, nclus=2, T=100, shuffle=False):
+    fns_proc = [genHomPP, genNonHomPP, genHP, genSCP]
+    params_proc = [paramsHomPP, paramsNonHomPP, paramsHP, paramsSCP]
+    fn_param_pairs = []
+    # nperproc = 200
+
+    for proc in range(4):
+        for _ in range(nclus):
+            params = params_proc[proc]()
+            fn_param_pairs.append((fns_proc[proc], params))
+
+    data = generate_data(nperproc, T, fn_param_pairs)
     if shuffle:
         idxs = np.arange(len(data['x']))
         np.random.shuffle(idxs)
         data['x'] = [data['x'][i] for i in idxs]
         data['t'] = [data['t'][i] for i in idxs]
+
+    print("Count:", len(data['x']))
+    print("Length stats (min,max,mean,median):",np.min(list(map(len, data['x']))), np.max(list(map(len, data['x']))), np.mean(list(map(len, data['x']))), np.median(list(map(len, data['x']))))    
     return data
 
 if __name__ == "__main__":
     T=100
-    n = 100
-    data = generate_synthethic_data_wrapper(n,T)
+    nperproc = 50
+    nclus = 2
+    data = generate_synthethic_data_wrapper(nperproc=nperproc,nclus=nclus, T=T)
