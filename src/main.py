@@ -237,22 +237,14 @@ if __name__ == '__main__':
         params.marker_type = 'categorical'
         params.batch_size = 32
         
-    elif params.data_name == 'syntheticdata_nclusters_10':
+    elif 'syntheticdata' in params.data_name:
         params.marker_dim = 2
         params.time_dim = 2
         params.base_intensity = 0.
         params.time_influence = 0.01
         params.marker_type = 'categorical'
         params.batch_size = 32
-    elif params.data_name == 'syntheticdata_nclusters_5':
-        params.marker_dim = 2
-        params.time_dim = 2
-        params.base_intensity = 0.
-        params.time_influence = 0.01
-        params.marker_type = 'categorical'
-        params.batch_size = 32
-
-
+        
     else:#different dataset. Encode those details.
         pass
 

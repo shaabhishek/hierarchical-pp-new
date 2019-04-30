@@ -18,7 +18,7 @@ gpu_partitions = {
     "mimic2": line2_ti_lo,
     }
 
-script_partition_key = ['data_name', 'time_loss', 'model']
+script_partition_key = ['data_name', 'model']
 
 def write_to_file(file_name, lines, mode ='w'):
     with open(file_name, mode) as outfile:
@@ -27,17 +27,19 @@ def main():
     params = {}
     name = 'hpp_'
     params['hidden_dim'] = [128]
-    params['lr'] = [1e-3, 1e-4, 1e-5]
-    params['latent_dim'] = [ 32, 64]
-    params['anneal_iter'] = [20, 50]
-    params['gamma'] = [0.1, 1]
-    params['maxgradnorm'] = [ 1., 10., 100.]
-    params['n_cluster'] = [8, 16]
-    params['dropout'] = [ 0.25, 0.4]
-    params['model'] = ['model11', 'model2']
-    params['max_iter'] = [50]
+    params['batch_size'] = [32]
+    params['lr'] = [1e-3, 1e-4]
+    params['l2'] = [1e-4]
+    #params['latent_dim'] = [ 32]
+    #params['anneal_iter'] = [20, 50]
+    params['gamma'] = [1]
+    #params['maxgradnorm'] = [ 1., 10., 100.]
+    params['n_cluster'] = [10]
+    #params['dropout'] = [ 0.25, 0.4]
+    params['model'] = ['rmtpp','model11', 'model2']
+    params['max_iter'] = [100]
     params['time_loss'] = ['normal']
-    params['data_name'] = ['mimic2', 'so', 'lastfm', 'retweet', 'meme', 'book_order']
+    params['data_name'] = ['syntheticdata_p4_c2', 'syntheticdata_p4_c4', 'syntheticdata_p4_c8', 'syntheticdata_p4_c16']#'mimic2', 'so', 'lastfm', 'retweet', 'meme', 'book_order'
 
     keys_ = list(params.keys())
     
@@ -71,9 +73,9 @@ def main():
             outer_line = outer_line + '--'+p + '  ' +str(pv)+'  '
         script_name = script_name +'.sh'
         script_files.append('sbatch '+script_name+'\n')
-        logline = '#SBATCH --output=./../scripts/'+script_name[:-3]+'_rerun.log \n'
+        logline = '#SBATCH --output=./../scripts/'+script_name[:-3]+'.log \n'
 
-        preped_list = [line1, gpu_partitions[dataset], logline, line3]
+        preped_list = [line1, gpu_partitions.get(dataset,line2_x_sh ), logline, line3]
         list_of_command = []
 
         for inner_idx in range(inner_total_params):
