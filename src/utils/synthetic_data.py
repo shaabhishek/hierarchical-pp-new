@@ -111,7 +111,7 @@ def generate_data(n, T, fn_param_pairs):
             # Generate intervals
             intervals = np.diff([0]+data_i['t'])
             data_i['t'] = np.stack([intervals, data_i['t']]).T
-            
+            data_i['x'] = np.array(data_i['x'])
             data['t'].append(data_i['t'])
             data['x'].append(data_i['x'])
             
