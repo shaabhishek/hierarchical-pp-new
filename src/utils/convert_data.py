@@ -190,9 +190,9 @@ def convert_dataset(data_name):
             with open(test_file, 'wb') as handle:
                 pickle.dump(test_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
     if data_name in ['syntheticdata_nclusters_5']:
-            train_dict = generate_synthethic_data_wrapper(2000)
-            valid_dict = generate_synthethic_data_wrapper(200)
-            test_dict = generate_synthethic_data_wrapper(200)
+            train_dict = generate_synthethic_data_wrapper(10000, shuffle=True)
+            valid_dict = generate_synthethic_data_wrapper(1000, shuffle=True)
+            test_dict = generate_synthethic_data_wrapper(1000, shuffle=False)
 
             train_file = '../data/'+data_name+'_'+str(1)+'_train.pkl'
             valid_file = '../data/'+data_name+'_'+str(1)+'_valid.pkl'

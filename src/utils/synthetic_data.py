@@ -117,7 +117,7 @@ def generate_data(n, T, fn_param_pairs):
             
     return data
 
-def generate_synthethic_data_wrapper(n, T=100):
+def generate_synthethic_data_wrapper(n, T=100, shuffle=False):
     paramsSSCT = [-.2, 0.8, -.8]
     paramsNonHomPP = [.1]
     paramsHomPP = [.4]
@@ -126,9 +126,11 @@ def generate_synthethic_data_wrapper(n, T=100):
 
     fn_param_pairs = [(genSSCT, paramsSSCT), (genHomPP, paramsHomPP), (genNonHomPP, paramsNonHomPP), (genHP, paramsHP), (genSCP, paramsSCP)]
     data = generate_data(n, T, fn_param_pairs)
-
-    print("Count:", len(data['x']))
-    print("Length stats (min,max,mean,median):",np.min(list(map(len, data['x']))), np.max(list(map(len, data['x']))), np.mean(list(map(len, data['x']))), np.median(list(map(len, data['x']))))
+    if shuffle:
+        idxs = np.arange(len(data['x']))
+        np.random.shuffle(idxs)
+        data['x'] = [data['x'][i] for i in idxs]
+        data['t'] = [data['t'][i] for i in idxs]
     return data
 
 if __name__ == "__main__":
