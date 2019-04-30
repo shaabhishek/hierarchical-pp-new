@@ -3,6 +3,7 @@ import pandas
 import pickle
 import random
 from helper import train_val_split
+from synthetic_data import generate_synthethic_data_wrapper
 
 def seq_to_marker(seq):
     """
@@ -39,36 +40,37 @@ def getdata_NHP(filepath, max_size=None):
     }
     return data_dict
 
-def list_to_stacked_time_array(x):
-    intervals = pandas.Series(x) - pandas.Series(x).shift(1)
-    try:
-        intervals[0] = x[0]
-    except:
-        import pdb; pdb.set_trace()
-    return np.stack([intervals, pandas.Series(x)]).T
+# def list_to_stacked_time_array(x):
+#     intervals = pandas.Series(x) - pandas.Series(x).shift(1)
+#     try:
+#         intervals[0] = x[0]
+#     except:
+#         import pdb; pdb.set_trace()
+#     return np.stack([intervals, pandas.Series(x)]).T
 
-def getdata_Hawkes(filepath):
-    t_data, x_data = [],[]
-    with open(filepath,'r') as f:
-        data=f.readlines()
+# def getdata_Hawkes(filepath):
+#     t_data, x_data = [],[]
+#     with open(filepath,'r') as f:
+#         data=f.readlines()
 
-    # import pdb; pdb.set_trace()
-    # Split a line into list of floats
-    if not filepath.endswith('test.txt'):
-        random.shuffle(data)
-    data = list(map(lambda x: list(map(float, str.split(x))), data))
-    print("Count:", len(data))
-    print("Length stats:",np.min(list(map(len, data))), np.max(list(map(len, data))), np.mean(list(map(len, data))))
-    t_data = list(map(list_to_stacked_time_array, data))
-    x_data = list(map(lambda x: np.ones(len(x)), data))
-    data_dict = {
-        't': t_data,
-        'x': x_data
-    }
-    return data_dict
+#     # import pdb; pdb.set_trace()
+#     # Split a line into list of floats
+#     if not filepath.endswith('test.txt'):
+#         random.shuffle(data)
+#     data = list(map(lambda x: list(map(float, str.split(x))), data))
+#     print("Count:", len(data))
+#     print("Length stats:",np.min(list(map(len, data))), np.max(list(map(len, data))), np.mean(list(map(len, data))))
+#     t_data = list(map(list_to_stacked_time_array, data))
+#     x_data = list(map(lambda x: np.ones(len(x)), data))
+#     print(np.min(list(map(lambda x: min(x[:,0]), t_data))))
+#     data_dict = {
+#         't': t_data,
+#         'x': x_data
+#     }
+#     return data_dict
 
-def convert_dataset(data_name):
-    if data_name not in {'lastfm', 'meme', 'retweet', 'syntheticdata_nclusters_4', 'syntheticdata_nclusters_5', 'syntheticdata_nclusters_10', 'syntheticdata_nclusters_50', 'syntheticdata_nclusters_100'}:
+def convert_dataset(data_name, **kwargs):
+    if data_name not in {'lastfm', 'meme', 'retweet', 'syntheticdata'}:
         for idx in range(1,6):
             for ls in ['train', 'test']:
                 event_data_path = './../data/real/'+data_name+'/'+ 'event-'+str(idx)+'-'+ls+'.txt'
@@ -187,15 +189,17 @@ def convert_dataset(data_name):
                 pickle.dump(valid_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
             with open(test_file, 'wb') as handle:
                 pickle.dump(test_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    if data_name in ['syntheticdata_nclusters_4', 'syntheticdata_nclusters_5', 'syntheticdata_nclusters_10', 'syntheticdata_nclusters_50', 'syntheticdata_nclusters_100']:
-            train_dict = getdata_Hawkes('./../data/dump/{}_train.txt'.format(data_name))
-            valid_dict = getdata_Hawkes('./../data/dump/{}_val.txt'.format(data_name))
-            test_dict = getdata_Hawkes('./../data/dump/{}_test.txt'.format(data_name))
+    if data_name in ['syntheticdata']:
+            nclus = kwargs['nclus']
+            train_dict = generate_synthethic_data_wrapper(nperproc=200, nclus=nclus, T=25, shuffle=True)
+            valid_dict = generate_synthethic_data_wrapper(nperproc=40, nclus=nclus, T=25, shuffle=True)
+            test_dict = generate_synthethic_data_wrapper(nperproc=40, nclus=nclus, T=25, shuffle=False)
 
-            train_file = '../data/'+data_name+'_'+str(1)+'_train.pkl'
-            valid_file = '../data/'+data_name+'_'+str(1)+'_valid.pkl'
-            test_file = '../data/'+data_name+'_'+str(1)+'_test.pkl'
-            
+            train_file = '../data/'+data_name+'_p4_c'+str(nclus)+'_'+str(1)+'_train.pkl'
+            valid_file = '../data/'+data_name+'_p4_c'+str(nclus)+'_'+str(1)+'_valid.pkl'
+            test_file = '../data/'+data_name+'_p4_c'+str(nclus)+'_'+str(1)+'_test.pkl'
+            print(train_file)
+
             with open(train_file, 'wb') as handle:
                 pickle.dump(train_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
             with open(valid_file, 'wb') as handle:
@@ -213,7 +217,7 @@ if __name__ == "__main__":
     # convert_dataset('lastfm')
     # convert_dataset('book_order')
     # convert_dataset('syntheticdata_nclusters_5_val')
-    convert_dataset('syntheticdata_nclusters_4')
+    convert_dataset('syntheticdata', nclus=2)
     # convert_dataset('syntheticdata_nclusters_5')
     # convert_dataset('syntheticdata_nclusters_10')
     # convert_dataset('syntheticdata_nclusters_50')
