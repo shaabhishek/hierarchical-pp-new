@@ -3,9 +3,15 @@ import numpy as np
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 def get_time_metric(mu_time,  t, mask, metric_dict):
-    time_mse = ((mu_time[:,:,0]- t[:,:,0])[1:, :] * mask[1:, :]) **2.
-    metric_dict['time_mse'] = time_mse.sum().detach().cpu().numpy()
-    metric_dict['time_mse_count'] = mask[1:,:].sum().detach().cpu().numpy()
+    if len(mu_time.data.size()) == 3:
+        time_mse = ((mu_time[:,:,0]- t[:,:,0])[1:, :] * mask[1:, :]) **2.
+        metric_dict['time_mse'] = time_mse.sum().detach().cpu().numpy()
+        metric_dict['time_mse_count'] = mask[1:,:].sum().detach().cpu().numpy()
+    else: 
+        mu_time = torch.mean(mu_time, dim =1)
+        time_mse = ((mu_time[:,:,0]- t[:,:,0])[1:, :] * mask[1:, :]) **2.
+        metric_dict['time_mse'] = time_mse.sum().detach().cpu().numpy()
+        metric_dict['time_mse_count'] = mask[1:,:].sum().detach().cpu().numpy()
     
 
 def get_marker_metric(marker_type, marker_out_mu, x, mask, metric_dict):
@@ -25,14 +31,27 @@ def get_marker_metric(marker_type, marker_out_mu, x, mask, metric_dict):
         # metric_dict['marker_acc_count'] = (true_out * (mask[:,:,None] ==1.)).sum().detach().cpu().numpy()
         metric_dict['marker_acc_count'] = (torch.ones_like(x).to(device)*mask[:,:,None]).sum().cpu().numpy()
     else:
-        out = torch.argmax(marker_out_mu, dim =-1)
-        true_out = x 
-        # acc = (out == true_out)* (mask[:,:,None]== 1.) *true_out
-        acc = (out[1:,:] == true_out[1:,:])*(mask[1:,:]== 1.)
-        metric_dict['marker_acc'] = acc.sum().detach().cpu().numpy()
-        # metric_dict['marker_acc_count'] = (true_out * (mask[:,:,None] ==1.)).sum().detach().cpu().numpy()
-        metric_dict['marker_acc_count'] = (mask[1:,:]).sum().cpu().numpy()
-        #implement categorical
+        if len(marker_out_mu.data.size()) == 3:
+            out = torch.argmax(marker_out_mu, dim =-1)
+            true_out = x 
+            # acc = (out == true_out)* (mask[:,:,None]== 1.) *true_out
+            acc = (out[1:,:] == true_out[1:,:])*(mask[1:,:]== 1.)
+            metric_dict['marker_acc'] = acc.sum().detach().cpu().numpy()
+            # metric_dict['marker_acc_count'] = (true_out * (mask[:,:,None] ==1.)).sum().detach().cpu().numpy()
+            metric_dict['marker_acc_count'] = (mask[1:,:]).sum().cpu().numpy()
+        else: # T x n_sample x BS x dim
+            m = torch.nn.Softmax(dim =-1)
+            out = m(marker_out_mu) # Txn_sample X BS x dim
+            out = torch.mean(out, dim = [1]) #T xBS x dim
+            out = torch.argmax(out, dim =-1)
+            true_out = x 
+            acc = (out[1:,:] == true_out[1:,:])*(mask[1:,:]== 1.)
+            metric_dict['marker_acc'] = acc.sum().detach().cpu().numpy()
+            # metric_dict['marker_acc_count'] = (true_out * (mask[:,:,None] ==1.)).sum().detach().cpu().numpy()
+            metric_dict['marker_acc_count'] = (mask[1:,:]).sum().cpu().numpy()
+
+
+        
         
 
 def compute_point_log_likelihood(model, h, d_js):

@@ -52,7 +52,7 @@ class Model2Filter(nn.Module):
         self.x_given_t = x_given_t
         self.time_loss = time_loss
         self.logvar_min = math.log(1e-6)
-        self.sigma_min = 1e-2
+        self.sigma_min = 1e-3
         self.gamma = gamma
         self.dropout = dropout
 
@@ -333,7 +333,7 @@ class Model2Filter(nn.Module):
             [pred_h, pred_z, pred_y], dim=-1)
         pred_hzy = self.gen_pre_module(pred_hzy)
         pred_mu_marker, pred_logvar_marker = generate_marker(self, pred_hzy, None) #T x n_sample x BS x dim
-
+        pred_mu_time =  self.time_mu(pred_hzy)#TxsamplexBSx1
         # time_log_likelihood, mu_time = compute_point_log_likelihood(
         #     self, phi_hzy, t)
 
@@ -345,6 +345,6 @@ class Model2Filter(nn.Module):
                     self, hidden_seq, t, mask)[:, :, None]
             get_marker_metric(self.marker_type, pred_mu_marker,
                               x, mask, metric_dict)
-            get_time_metric(mu_time,  t, mask, metric_dict)
+            get_time_metric(pred_mu_time,  t, mask, metric_dict)
 
         return time_log_likelihood, marker_log_likelihood, KL, metric_dict

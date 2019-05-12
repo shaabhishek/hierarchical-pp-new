@@ -58,7 +58,7 @@ class rmtpp(nn.Module):
         self.use_rnn_cell = False
         assert_input(self)
 
-        self.sigma_min = 1e-2
+        self.sigma_min = 1e-3
 
         # Set up layer dimensions
         self.x_embedding_layer = [256]

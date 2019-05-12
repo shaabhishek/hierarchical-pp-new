@@ -49,9 +49,10 @@ class Model2(nn.Module):
         self.x_given_t = x_given_t
         self.time_loss = time_loss
         self.logvar_min = math.log(1e-6)
-        self.sigma_min = 1e-2
+        self.sigma_min = 1e-3
         self.gamma = gamma
         self.dropout = dropout
+        
         
         # Preprocessing networks
         # Embedding network
