@@ -36,7 +36,7 @@ def reparameterize(mu, logvar):
         return mu + epsilon.mul(sigma)
     
     
-class Model11(nn.Module):
+class Model1(nn.Module):
     def __init__(self, latent_dim=20, marker_dim=31, marker_type='real', hidden_dim=128, time_dim=2, n_cluster=5, x_given_t=False, time_loss='normal', gamma=1., dropout=None, base_intensity=None, time_influence=None):
         super().__init__()
         self.marker_type = marker_type
