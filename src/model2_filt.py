@@ -10,17 +10,19 @@ from utils.metric import get_marker_metric, compute_time_expectation, get_time_m
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+
 def sample_gumbel(shape, eps=1e-20):
     unif = torch.rand(*shape).to(device)
-    g = -torch.log(-torch.log(unif + eps) +eps)
+    g = -torch.log(-torch.log(unif + eps) + eps)
     return g
+
 
 def sample_gumbel_softmax(logits, temperature):
     """
         Input:
         logits: Tensor of log probs, shape = BS x k
         temperature = scalar
-        
+
         Output: Tensor of values sampled from Gumbel softmax.
                 These will tend towards a one-hot representation in the limit of temp -> 0
                 shape = BS x k
@@ -31,12 +33,13 @@ def sample_gumbel_softmax(logits, temperature):
     y = F.softmax(h, dim=-1)
     return y
 
+
 def reparameterize(mu, logvar):
-        epsilon = torch.randn_like(mu).to(device)
-        sigma = torch.exp(0.5 * logvar)
-        return mu + epsilon.mul(sigma)
-    
-    
+    epsilon = torch.randn_like(mu).to(device)
+    sigma = torch.exp(0.5 * logvar)
+    return mu + epsilon.mul(sigma)
+
+
 class Model2Filter(nn.Module):
     def __init__(self, latent_dim=20, marker_dim=31, marker_type='real', hidden_dim=128, time_dim=2, n_cluster=5, x_given_t=False, time_loss='normal', gamma=1., dropout=None, base_intensity=None, time_influence=None):
         super().__init__()
@@ -52,8 +55,7 @@ class Model2Filter(nn.Module):
         self.sigma_min = 1e-2
         self.gamma = gamma
         self.dropout = dropout
-        
-        
+
         # Preprocessing networks
         # Embedding network
         self.x_embedding_layer = [128]
@@ -61,27 +63,25 @@ class Model2Filter(nn.Module):
         self.embed_x, self.embed_t = self.create_embedding_nets()
         self.shared_output_layers = [256]
         self.inf_pre_module, self.gen_pre_module = self.create_preprocess_nets()
-        
+
         # Forward RNN
         self.rnn = self.create_rnn()
 
-
-        
         # Inference network
         self.encoder_layers = [64, 64]
         self.y_encoder, self.encoder_rnn, self.z_intmd_module, self.z_mu_module, self.z_logvar_module = self.create_inference_nets()
-        
+
         # Generative network
         self.time_mu, self.time_logvar, self.output_x_mu, self.output_x_logvar = self.create_output_nets()
 
-        #Prior on z
+        # Prior on z
         self.prior_net = nn.Sequential(
             nn.Linear(self.latent_dim, self.hidden_dim),
             nn.ReLU()
         )
         self.prior_mu = nn.Linear(self.hidden_dim, self.latent_dim)
         self.prior_logvar = nn.Linear(self.hidden_dim, self.latent_dim)
-    
+
     def create_embedding_nets(self):
         # marker_dim is passed. timeseries_dim is 2
         if self.marker_type == 'categorical':
@@ -90,49 +90,50 @@ class Model2Filter(nn.Module):
             x_module = nn.Sequential(
                 nn.Linear(self.marker_dim, self.x_embedding_layer[0]),
                 nn.ReLU(),
-        )
-        
+            )
+
         t_module = nn.Sequential(
             nn.Linear(self.time_dim, self.t_embedding_layer[0]),
             nn.ReLU()
         )
         return x_module, t_module
-    
+
     def create_preprocess_nets(self):
         # Inference net preprocessing
-        hxty_input_dim = self.hidden_dim+self.latent_dim+self.cluster_dim + self.x_embedding_layer[-1] + self.t_embedding_layer[-1]
+        hxty_input_dim = self.hidden_dim+self.latent_dim+self.cluster_dim + \
+            self.x_embedding_layer[-1] + self.t_embedding_layer[-1]
         inf_pre_module = nn.Sequential(
             # nn.ReLU(),nn.Dropout(self.dropout),
             nn.Linear(hxty_input_dim, hxty_input_dim),
-            nn.ReLU(),nn.Dropout(self.dropout))
-        
+            nn.ReLU(), nn.Dropout(self.dropout))
+
         # Generative net preprocessing
         hzy_input_dim = self.hidden_dim+self.latent_dim+self.cluster_dim
         gen_pre_module = nn.Sequential(
             # nn.ReLU(),nn.Dropout(self.dropout),
             nn.Linear(hzy_input_dim, self.shared_output_layers[-1]),
-            nn.ReLU(),nn.Dropout(self.dropout))
+            nn.ReLU(), nn.Dropout(self.dropout))
         return inf_pre_module, gen_pre_module
-        
-    
+
     def create_rnn(self):
         rnn = nn.GRU(
             input_size=self.x_embedding_layer[-1]+self.t_embedding_layer[-1],
             hidden_size=self.hidden_dim,
         )
         return rnn
-    
+
     def create_inference_nets(self):
         y_module = nn.Sequential(
             nn.Linear(self.hidden_dim, self.cluster_dim)
         )
-        
+
         encoder_rnn = nn.GRU(
             input_size=self.x_embedding_layer[-1]+self.t_embedding_layer[-1],
             hidden_size=self.hidden_dim,
         )
-        
-        z_input_dim = self.hidden_dim+self.latent_dim+self.cluster_dim + self.x_embedding_layer[-1] + self.t_embedding_layer[-1]
+
+        z_input_dim = self.hidden_dim+self.latent_dim+self.cluster_dim + \
+            self.x_embedding_layer[-1] + self.t_embedding_layer[-1]
         z_intmd_module = nn.Sequential(
             nn.Linear(z_input_dim, self.encoder_layers[0]),
             nn.ReLU(),
@@ -147,26 +148,26 @@ class Model2Filter(nn.Module):
         l = self.shared_output_layers[-1]
         t_module_mu = nn.Linear(l, 1)
         t_module_logvar = nn.Linear(l, 1)
-        
+
         x_module_logvar = None
         if self.x_given_t:
             l += 1
         if self.marker_type == 'real':
             x_module_mu = nn.Linear(l, self.marker_dim)
             x_module_logvar = nn.Linear(l, self.marker_dim)
-        elif self.marker_type == 'binary':#Fix binary
+        elif self.marker_type == 'binary':  # Fix binary
             x_module_mu = nn.Sequential(
                 nn.Linear(l, self.marker_dim),
                 nn.Sigmoid())
         elif self.marker_type == 'categorical':
             x_module_mu = nn.Sequential(
-                nn.Linear(l, self.marker_dim)#,
-                #nn.Softmax(dim=-1)
+                nn.Linear(l, self.marker_dim)  # ,
+                # nn.Softmax(dim=-1)
             )
         return t_module_mu, t_module_logvar, x_module_mu, x_module_logvar
-    
+
     ### ENCODER ###
-    def encoder(self, phi_xt, h_t, temp, mask, n_sample = 10):
+    def encoder(self, phi_xt, h_t, temp, mask, n_sample=10):
         """
         Input:
             phi_xt: Tensor of shape T x BS x (self.x_embedding_layer[-1]+self.t_embedding_layer[-1])
@@ -174,8 +175,8 @@ class Model2Filter(nn.Module):
             temp: scalar
             mask : Tensor TxBS
         Output:
-            sample_y: Tensor of shape T x BS x cluster_dim for filtering
-            sample_z: Tensor of shape T x BS x latent_dim
+            sample_filter_y: Tensor of shape T x BS x cluster_dim for filtering
+            sample_filter_z: Tensor of shape T x BS x latent_dim
             logits_y: Tensor of shape T x BS x cluster_dim for filtering
             mu_z: Tensor of shape T x BS x latent_dim
             logvar_z: Tensor of shape T x BS x latent_dim
@@ -183,31 +184,42 @@ class Model2Filter(nn.Module):
             pred_z : T x n_sample x BS x latent_dim for prediction
 
         """
-        T,BS,_ = phi_xt.shape
+        T, BS, _ = phi_xt.shape
 
         # Compute encoder RNN hidden states for y
         h_0 = torch.zeros(1, BS, self.hidden_dim).to(device)
         hidden_seq, _ = self.encoder_rnn(phi_xt, h_0)
-        hidden_seq = torch.cat([h_0, hidden_seq], dim = 0 ) #T+1 x BS x hidden_dim
-        logits_y = self.y_encoder(hidden_seq)[:, None, :, :] #T+1 x 1 x BS x k
-        repeat_vals = (-1,n_sample, -1,-1)
-        logits_y = logits_y.expand(*repeat_vals) #T+1 x n_sample x BS x k
-        sample_y = sample_gumbel_softmax(logits_y, temp) # T+1 x n_sample x BS x k
-        logits_filter_y = logits_y[1:, 0, :,:] #T x BS x K
-        logits_pred_y = logits_y[:-1, :, : , :] #T x n_sample x BS x k
-        sample_filter_y = sample_y[1:,0, :,:] #T x BS x K used for filtering loglikelihood
-        sample_pred_y = sample_y[:-1,:,: ,:] #T x n_sample x BS x K used for prediction
-        
+        # T+1 x BS x hidden_dim
+        hidden_seq = torch.cat([h_0, hidden_seq], dim=0)
+        logits_y = self.y_encoder(hidden_seq)[
+            :, None, :, :]  # T+1 x 1 x BS x k
+
+        # n_sample and pred
+        repeat_vals = (-1, n_sample, -1, -1)
+        logits_y = logits_y.expand(*repeat_vals)  # T+1 x n_sample x BS x k
+        sample_y = sample_gumbel_softmax(
+            logits_y, temp)  # T+1 x n_sample x BS x k
+        pred_y = logits_y[:-1, :, :, :]  # T x n_sample x BS x k
+        # T x n_sample x BS x K used for prediction
+        sample_pred_y = sample_y[:-1, :, :, :]
+
+        logits_filter_y = logits_y[1:, 0, :, :]  # T x BS x K
+        # T x BS x K used for filtering loglikelihood
+        sample_filter_y = sample_y[1:, 0, :, :]
+
         # Encoder for z Forward Filtering RNN
         # rh_ = torch.zeros(1, BS, self.hidden_dim).to(device)
-        concat_hx = torch.cat([phi_xt, h_t], dim = -1) #T x BS x hidden_dim + embedding_dim
+        # T x BS x hidden_dim + embedding_dim
+        concat_hx = torch.cat([phi_xt, h_t], dim=-1)
         # rh = self.filter_network(concat_hx) #T x BS x hidden_dim
 
-        mu_z, logvar_z, sample_z  = [], [], []
+        mu_z, logvar_z, sample_z = [], [], []
         z = torch.zeros(1, BS, self.latent_dim).to(device)
         for seq in range(T):
-            concat_ayz = torch.cat([concat_hx[seq,:,:][None,:,:], z,sample_filter_y[seq,:,:][None,:,:] ], dim = -1)#1, BS, latent+cluster+hidden_dim+embedding_dim
-            phi_ayz = self.inf_pre_module(concat_ayz)#1, BS, ...
+            # 1, BS, latent+cluster+hidden_dim+embedding_dim
+            concat_ayz = torch.cat(
+                [concat_hx[seq, :, :][None, :, :], z, sample_filter_y[seq, :, :][None, :, :]], dim=-1)
+            phi_ayz = self.inf_pre_module(concat_ayz)  # 1, BS, ...
             z_intmd = self.z_intmd_module(phi_ayz)
             mu_z_ = self.z_mu_module(z_intmd)
             logvar_z_ = self.z_logvar_module(z_intmd)
@@ -216,97 +228,123 @@ class Model2Filter(nn.Module):
             logvar_z.append(logvar_z_)
             sample_z.append(sample_z_)
             z = sample_z_
-        
-        mu_z = torch.cat(mu_z, dim =0)
-        logvar_z = torch.cat(logvar_z, dim =0)
-        sample_z = torch.cat(sample_z, dim = 0)
-        return sample_filter_y, sample_z, logits_filter_y, (mu_z, logvar_z)
-    
-    def forward(self, marker_seq, time_seq, anneal=1., mask=None, temp=0.5):
-        time_log_likelihood, marker_log_likelihood, KL, metric_dict = self._forward(marker_seq, time_seq, temp, mask)
 
-        marker_loss = (-1.* marker_log_likelihood *mask)[1:,:].sum()
-        time_loss = (-1. *time_log_likelihood *mask)[1:,:].sum()
-        
+        mu_z = torch.cat(mu_z, dim=0)
+        logvar_z = torch.cat(logvar_z, dim=0)
+        sample_z = torch.cat(sample_z, dim=0)
+
+        # Prior Distribution For Prediction
+        prior_mu, prior_logvar = self.prior(sample_z)  # Prior mu, logvar T x BS x latent_dim
+        repeat_vals = (-1,n_sample, -1, -1)
+        prior_mu, prior_logvar = prior_mu[:,None, :, :].expand(*repeat_vals), prior_logvar[:,None, :, :].expand(*repeat_vals)
+        pred_z = reparameterize(prior_mu, prior_logvar)
+
+        return sample_filter_y, sample_z, logits_filter_y, (mu_z, logvar_z), pred_y, pred_z
+
+    def forward(self, marker_seq, time_seq, anneal=1., mask=None, temp=0.5):
+        time_log_likelihood, marker_log_likelihood, KL, metric_dict = self._forward(
+            marker_seq, time_seq, temp, mask)
+
+        marker_loss = (-1. * marker_log_likelihood * mask)[1:, :].sum()
+        time_loss = (-1. * time_log_likelihood * mask)[1:, :].sum()
+
         NLL = self.gamma*time_loss + marker_loss
-        loss = NLL + anneal*KL 
-        true_loss = time_loss + marker_loss +KL
-        meta_info = {"marker_ll":marker_loss.detach().cpu(), "time_ll":time_loss.detach().cpu(), "true_ll": true_loss.detach().cpu(), "kl": KL.detach().cpu()}
+        loss = NLL + anneal*KL
+        true_loss = time_loss + marker_loss + KL
+        meta_info = {"marker_ll": marker_loss.detach().cpu(), "time_ll": time_loss.detach(
+        ).cpu(), "true_ll": true_loss.detach().cpu(), "kl": KL.detach().cpu()}
         return loss, {**meta_info, **metric_dict}
 
     def prior(self, sample_z):
-        #Sample_z is shape T, BS, latent_dim
-        T,BS, l_dim = sample_z.shape
+        # Sample_z is shape T, BS, latent_dim
+        T, BS, l_dim = sample_z.shape
         hiddenlayer = self.prior_net(sample_z)
         mu = self.prior_mu(hiddenlayer)
-        logvar = torch.clamp(self.prior_logvar(hiddenlayer), min = self.logvar_min)#T,BS, dim
-        base_mu = torch.zeros(1,BS, l_dim).to(device)
-        base_logvar = torch.zeros(1,BS, l_dim).to(device)
-        mu = torch.cat([base_mu, mu[:-1,:,:]], dim =0)
-        logvar = torch.cat([base_logvar, logvar[:-1,:,:]], dim =0)
+        logvar = torch.clamp(self.prior_logvar(hiddenlayer),
+                             min=self.logvar_min)  # T,BS, dim
+        base_mu = torch.zeros(1, BS, l_dim).to(device)
+        base_logvar = torch.zeros(1, BS, l_dim).to(device)
+        mu = torch.cat([base_mu, mu[:-1, :, :]], dim=0)
+        logvar = torch.cat([base_logvar, logvar[:-1, :, :]], dim=0)
         return mu, logvar
-    
-    def _forward(self, x, t, temp, mask):
+
+    def _forward(self, x, t, temp, mask, n_sample =10):
         # Transform markers and timesteps into the embedding spaces
         phi_x, phi_t = self.embed_x(x), self.embed_t(t)
         phi_xt = torch.cat([phi_x, phi_t], dim=-1)
-        T,BS,_ = phi_x.shape
+        T, BS, _ = phi_x.shape
 
-        ##Compute h_t Shape T+1, BS, dim
+        # Compute h_t Shape T+1, BS, dim
         # Run RNN over the concatenated embedded sequence
         h_0 = torch.zeros(1, BS, self.hidden_dim).to(device)
         # Run RNN
         hidden_seq, _ = self.rnn(phi_xt, h_0)
         # Append h_0 to h_1 .. h_T
         hidden_seq = torch.cat([h_0, hidden_seq], dim=0)
-                
-        ## Inference a_t= q([x_t, h_t], a_{t+1})
+
+        # Inference a_t= q([x_t, h_t], a_{t+1})
         # Get the sampled value and (mean + var) latent variable
         # using the hidden state sequence
-        posterior_sample_y, posterior_sample_z, posterior_logits_y, (posterior_mu_z, posterior_logvar_z) = self.encoder(phi_xt, hidden_seq[:-1, :,:], temp, mask)
+        posterior_sample_y, posterior_sample_z, posterior_logits_y, (
+            posterior_mu_z, posterior_logvar_z), pred_y, pred_z = self.encoder(phi_xt, hidden_seq[:-1, :, :], temp, mask, n_sample=n_sample)
 
-    
         # Create distributions for Posterior random vars
-        posterior_dist_z = Normal(posterior_mu_z, torch.exp(posterior_logvar_z*0.5))
+        posterior_dist_z = Normal(
+            posterior_mu_z, torch.exp(posterior_logvar_z*0.5))
         posterior_dist_y = Categorical(logits=posterior_logits_y)
-        
+
         # Prior is just a Normal(0,1) dist for z and Uniform Categorical for y
-        #prior dist z is TxBSx latent_dim. T=0=> Normal(0,1)
-        prior_mu, prior_logvar = self.prior(posterior_sample_z)##Normal(0, 1)
-        prior_dist_z  = Normal(prior_mu, (prior_logvar*0.5).exp())
+        # prior dist z is TxBSx latent_dim. T=0=> Normal(0,1)
+        prior_mu, prior_logvar = self.prior(posterior_sample_z)  # Normal(0, 1)
+        prior_dist_z = Normal(prior_mu, (prior_logvar*0.5).exp())
 
+        prior_dist_y = Categorical(
+            probs=1./self.cluster_dim * torch.ones(1, BS, self.cluster_dim).to(device))
 
-        
-        prior_dist_y = Categorical(probs=1./self.cluster_dim* torch.ones(1,BS, self.cluster_dim).to(device))
+        # Generative Part
 
-        ## Generative Part
-        
-        # Use the embedded markers and times to create another set of 
+        # Use the embedded markers and times to create another set of
         # hidden vectors. Can reuse the h_0 and time_marker combined computed above
 
-
-        
         # Combine (z_t, h_t, y) form the input for the generative part
-        concat_hzy = torch.cat([hidden_seq[:-1], posterior_sample_z, posterior_sample_y], dim=-1)
+        concat_hzy = torch.cat(
+            [hidden_seq[:-1], posterior_sample_z, posterior_sample_y], dim=-1)
         phi_hzy = self.gen_pre_module(concat_hzy)
         mu_marker, logvar_marker = generate_marker(self, phi_hzy, None)
-        time_log_likelihood, mu_time = compute_point_log_likelihood(self, phi_hzy, t)
-        marker_log_likelihood = compute_marker_log_likelihood(self, x, mu_marker, logvar_marker)
-        
+        time_log_likelihood, mu_time = compute_point_log_likelihood(
+            self, phi_hzy, t)
+        marker_log_likelihood = compute_marker_log_likelihood(
+            self, x, mu_marker, logvar_marker)
+
         KL_cluster = kl_divergence(posterior_dist_y, prior_dist_y)
         KL_z = kl_divergence(posterior_dist_z, prior_dist_z).sum(-1)*mask
         KL = KL_cluster.sum() + KL_z.sum()
         try:
             assert (KL >= 0)
         except:
-            import pdb; pdb.set_trace()
-        
+            import pdb
+            pdb.set_trace()
+
+        # Prediction Layer # T x 10 x BS x dim
+        pred_h = hidden_seq[:-1][:, None, :, :] # T x 1 x BS x dim
+        repeat_vals = (-1,n_sample, -1, -1) 
+        pred_h = pred_h.expand(*repeat_vals)#T x n_sample x BS x dim
+        pred_hzy = torch.cat(
+            [pred_h, pred_z, pred_y], dim=-1)
+        pred_hzy = self.gen_pre_module(pred_hzy)
+        pred_mu_marker, pred_logvar_marker = generate_marker(self, pred_hzy, None) #T x n_sample x BS x dim
+
+        # time_log_likelihood, mu_time = compute_point_log_likelihood(
+        #     self, phi_hzy, t)
+
 
         metric_dict = {"z_cluster": posterior_logits_y.detach().cpu()}
         with torch.no_grad():
             if self.time_loss == 'intensity':
-                mu_time = compute_time_expectation(self, hidden_seq, t, mask)[:,:, None]
-            get_marker_metric(self.marker_type, mu_marker, x, mask, metric_dict)
+                mu_time = compute_time_expectation(
+                    self, hidden_seq, t, mask)[:, :, None]
+            get_marker_metric(self.marker_type, pred_mu_marker,
+                              x, mask, metric_dict)
             get_time_metric(mu_time,  t, mask, metric_dict)
-            
+
         return time_log_likelihood, marker_log_likelihood, KL, metric_dict
