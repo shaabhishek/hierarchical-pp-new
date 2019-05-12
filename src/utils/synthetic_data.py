@@ -1,188 +1,172 @@
-import torch
-import numpy as np
 import random
-import time
-import matplotlib.pyplot as plt
-from torch.distributions import Categorical, Exponential
+import numpy as np
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def intensityHP(t, hist, params):
+    # params: {lambda0, alpha, beta}
+    # hist must be numpy array
+    hist = hist[(hist < t)]
+    return params[0] + params[1] * np.sum(np.exp( -1.* (t - hist)/params[2] ))
 
-def intensity_hawkes(t,history, mu=torch.tensor(0.2), alpha=torch.tensor(0.8), beta=torch.tensor(1.)):
-    # intensity = mu + alpha*sum(torch.exp(-beta*(t - ti)) for ti in history if ti <= t)
-    time_diffs = t - torch.tensor(history, dtype=torch.float)
-    intensity = mu + alpha * torch.sum(torch.exp(-beta * time_diffs[time_diffs > 0]))
-    return intensity.item()
+def genHP(T, params):
+    t = 0
+    hist = []
+    while (t < T):
+        upperbnd = intensityHP(t, np.array(hist), params)
+        increment = np.random.exponential(1/upperbnd)
+        t += increment
+        u = random.random()*increment
+        if ((t<T) and (u <= intensityHP(t, np.array(hist), params))):
+            hist.append(t)
+    return {'t': hist, 'x': list(np.ones_like(hist))}
 
+def intensitySCP(t, hist, params):
+    # params: {mu, alpha}
+    # hist must be numpy array
+    hist = hist[(hist < t)]
+    return np.exp(params[0]*t - np.sum(len(hist)*params[1]))
 
-def homo_poisson(mu, last_time):
+def genSCP(T, params):
+    t = 0
+    hist = []
+    while (t < T):
+        upperbnd = intensitySCP(t+1, np.array(hist), params)
+        increment = np.random.exponential(1/upperbnd)
+        t += increment
+        u = random.random()*increment
+        if ((t<T) and (u <= intensitySCP(t, np.array(hist), params))):
+            hist.append(t)
+    return {'t': hist, 'x': list(np.ones_like(hist))}
+
+def genHomPP(T, params):
+    # params = [lambda]
+    t = 0
+    hist = []
+    while (t < T):
+        increment = np.random.exponential(1/params[0])
+        t += increment
+        if ((t<T)):
+            hist.append(t)
+    return {'t': hist, 'x': list(np.ones_like(hist))}
+
+def intensityNonHomPP(t, params):
+    # params: {alpha}
+    return (0.1*np.sin(np.pi*t) + 0.3*np.cos(.4 * np.pi*t) + 1)*.08
+
+def genNonHomPP(T, params):
+    t = 0
+    hist = []
+    while (t < T):
+        upperbnd = 2
+        increment = np.random.exponential(1/upperbnd)
+        t += increment
+        u = random.random()*increment
+        if ((t<T) and (u <= intensityNonHomPP(t, params))):
+            hist.append(t)
+    return {'t': hist, 'x': list(np.ones_like(hist))}
+
+def intensitySSCT(r, y, params):
+    # params: [a1...am]
+    return np.exp(np.dot(params, r*y))
+
+def genpointSSCT(r, y, params):
+    intensity = intensitySSCT(np.array(r), np.array(y), params)
+    increment = np.random.exponential(1/intensity)
+    return increment
+
+def markerprobSSCT(k, r, y, params):
+    # k is the config of marker : +/- 1
+    # all others must be np arrays
+    kernel = lambda x: np.exp(x * np.dot(params, r*y))
+    return kernel(1)/(kernel(1) + kernel(-1))
+
+def genmarkerSSCT(r, y, params):
+    prob_1 = markerprobSSCT(1, np.array(r), np.array(y), np.array(params))
     u = random.random()
-    return last_time - np.log(1-u)/mu 
+    return 1 if (u < prob_1) else -1
 
-def hawkes(intensity_fn, time_step=100):
-    history = [0]
-    
-    for point_idx in range(time_step):
-        intensity_max = intensity_fn(history[-1], history)
-        t = history[-1]
-        while True:
-            t = homo_poisson(intensity_max, t)
-            u = random.random()
-            if u <= intensity_fn(t, history)/intensity_max:# and (t - history[-1])>1e-1:
-                history.append(t)
-                break
-    return history
+def genSSCT(T, params):
+    m = 3
+    t = 0
+    r_hist = [random.random() for _ in range(m)]
+    y_hist = list(np.random.randint(0, 2, m)*2 - 1)
+    hist = []
+    while (t<T):
+        increment = genpointSSCT(r_hist[-m:], y_hist[-m:], params)
+        t += increment
+        rn = int(t%24 < 12)
+        yn = genmarkerSSCT(r_hist[-m:], y_hist[-m:], params)
+        if (t<T):
+            hist.append(t)
+            r_hist.append(rn)
+            y_hist.append(yn)
+    y_hist = list(map(lambda x: x if x==1 else 0, y_hist))
+    return {'x': y_hist[m:], 't': hist}
 
-def get_intervals(timeseries, time_dim=0):
-    """
-        time_dim: axis of time
-    """
-    if time_dim != 0:
-        timeseries = timeseries.transpose(0,time_dim)
-    shifted = torch.cat([torch.zeros_like(timeseries[0:1]), timeseries[:-1]], dim=0)
-    intervals = timeseries - shifted
-    if time_dim != 0:
-        intevals = intevals.transpose(0,time_dim)
-    return intervals
+def generate_data(nperproc, T, fn_param_pairs):
+    # nperproc = n//len(fn_param_pairs)
+    data = {'x': [], 't': []}
+    for fn, params in fn_param_pairs:
+        for i in range(nperproc):
+            len_check = False
+            while not len_check:
+                data_i = fn(T, params)
+                # make sure data is at least length 2
+                if (len(data_i['x']) >= 2):
+                    len_check = True
+            # Generate intervals
+            intervals = np.diff([0]+data_i['t'])
+            data_i['t'] = np.stack([intervals, data_i['t']]).T
+            data_i['x'] = np.array(data_i['x'])
+            data['t'].append(data_i['t'])
+            data['x'].append(data_i['x'])
+            
+    return data
 
-def generate_hawkes(time_step, num_sample, num_clusters):
-    history = [[0] for _ in range(num_sample)]
+def paramsHP():
+    alpha = random.random()
+    lambda0 = np.clip(random.random(), 0.2, 1)
+    beta = np.clip(random.random(), alpha+.1, 1)
+    return [lambda0, alpha, beta]
 
-    vals_mu = torch.rand(num_clusters)
-    prob_mu = torch.rand(num_clusters)
-    prob_mu /= prob_mu.sum()
-    mu_dist = Categorical(probs=prob_mu)
-    
-    for sample_idx in range(num_sample):
-        mu = vals_mu[mu_dist.sample()]
-        intensity_fn = lambda t, history: intensity_hawkes(t, history, mu=mu)
-        timeseries = hawkes(intensity_fn, time_step)
-        history[sample_idx] = timeseries
+def paramsNonHomPP():
+    #unif(0.2, 1)
+    lambd = .2 + random.random()*.8
+    return [lambd]
 
-    history = torch.tensor(history).transpose(0,1)[1:]
-    intervals = get_intervals(history, time_dim=0)
-    # intervals = intervals.clamp(0.1, 2.5)
-    t = torch.stack([history, intervals], dim=2)
-    
-    return t
+def paramsHomPP():
+    #unif(0.1, 1)
+    lambd = .1 + random.random()*.9
+    return [lambd]
 
-def generate_autoregressive_data(time_step = 100, num_sample = 80, num_clusters=3, m=2, debug=False):
-    def _alpha_n(interval_history, mu, gamma, mem_vec, m):
-        """
-            Input:
-                interval_history: Tensor of shape num_clusters x n-1
-                mu: base duration, Tensor of length num_clusters
-                gamma: Tensor of length num_clusters
-                mem_vec: Tensor of shape num_clusters x m
-                m: number of lookback steps, Scalar
-            Output:
-                alpha_n: Tensor of shape num_clusters
-        """
-        _, _, history_size = interval_history.shape
-        window_size = min(m, history_size)
-        past_effects = interval_history[:,:,-window_size:]*mem_vec[:,-window_size:]
-        inverse_alpha = mu + gamma * past_effects.sum(dim=-1)
-        return torch.div(1, inverse_alpha)
-    
-    ### for each cluster, we have different
-    ### base_mu, gamma, and memory_vector
-    # memory_vector is a probability vector
-    vals_base_mu = torch.rand(num_clusters)
-    vals_gamma = torch.rand(num_clusters)
-    mem_vec = torch.rand(num_clusters, m)
-    
-    ## Fixed parameters
-    # vals_base_mu = torch.tensor([0.5, 0.9, 0.9])[:num_clusters]
-    # vals_gamma = torch.tensor([0.5, 0.5, 0.25])[:num_clusters]
-    # ### Make the first mem_vec as the one with equal probability
-    # ### Second one gives more weights to recent past
-    # ### Third one gives more weights to older events
-    # mem_vec = torch.tensor([
-    #                         [1 for _ in range(m)],
-    #                         [i for i in range(1,m+1)],
-    #                         [i for i in range(m, 0, -1)]], dtype=torch.float)
-    # mem_vec = mem_vec[:num_clusters]
+def paramsSCP():
+    mu = 1 + random.random() #unif(0.5, 1.5)
+    alpha = .1 + random.random()*.4 #unif(0.1, .5)
+    return [mu, alpha]
 
-    mem_vec /= mem_vec.sum(dim=-1, keepdim=True)
-    
-    
-    interval_history = torch.zeros(num_sample, num_clusters, 1)
-    # for each time, get alpha and using it compute
-    # the duration of the interval.
-    # Here the intervals are distributed according to the
-    # exponential distribution with rate = alpha
+def generate_synthethic_data_wrapper(nperproc=100, nclus=2, T=100, shuffle=False):
+    fns_proc = [genHomPP, genNonHomPP, genHP, genSCP]
+    params_proc = [paramsHomPP, paramsNonHomPP, paramsHP, paramsSCP]
+    fn_param_pairs = []
+    # nperproc = 200
 
-    rates = []
-    for n in range(time_step):
-        rate = _alpha_n(interval_history, vals_base_mu, vals_gamma, mem_vec, m)
-        rates.append(rate)
-        interval_dist = Exponential(rate=rate)
-        duration_n = interval_dist.sample()
-        interval_history = torch.cat([interval_history, duration_n.view(num_sample, -1, 1)], dim=-1)
-    
-    # first interval was all zeros for convenience
-    interval_history = interval_history[:,:,1:]
-    # combine the data from different clusters into one
-    interval_history = interval_history.view(-1, time_step)
-    # shape = T x N
-    interval_history = interval_history.transpose(0,1)
-    timeseries = interval_history.cumsum(0)
-    # shape = T x N x 2
-    t = torch.stack([timeseries, interval_history], dim=-1)
-    if debug == False:
-        return t
-    else:
-        # shape = T x N
-        rates = torch.stack(rates, dim=-1).view(-1,time_step).transpose(0,1)
-        info = {
-            'vals_base_mu': vals_base_mu,
-            'vals_gamma': vals_gamma,
-            'mem_vec': mem_vec,
-            'intensities': rates
-            }
-        return t, info
+    for proc in range(4):
+        for _ in range(nclus):
+            params = params_proc[proc]()
+            fn_param_pairs.append((fns_proc[proc], params))
 
-def generate_mpp(type='hawkes', time_step = 100, num_sample = 80, marker_dim = 20, num_clusters=3, seed = 1, **kwargs):
-    torch.manual_seed(seed)
-    if type == 'hawkes':
-        t = generate_hawkes(time_step, num_sample, num_clusters, **kwargs).to(device)
-        markers = torch.randn(time_step, num_sample, marker_dim).to(device)
-    elif type == 'autoregressive':
-        t = generate_autoregressive_data(time_step, num_sample, num_clusters, **kwargs).to(device)
-        markers = torch.randn(time_step, num_sample*num_clusters, marker_dim).to(device)
+    data = generate_data(nperproc, T, fn_param_pairs)
+    if shuffle:
+        idxs = np.arange(len(data['x']))
+        np.random.shuffle(idxs)
+        data['x'] = [data['x'][i] for i in idxs]
+        data['t'] = [data['t'][i] for i in idxs]
 
-    data = {'x': markers, 't': t}
-    return data, None
+    print("Count:", len(data['x']))
+    print("Length stats (min,max,mean,median):",np.min(list(map(len, data['x']))), np.max(list(map(len, data['x']))), np.mean(list(map(len, data['x']))), np.median(list(map(len, data['x']))))    
+    return data
 
-def plot_process(timeseries):
-    history = np.array(timeseries)
-    time = np.linspace(0, history[-1], 1000)
-    intensities = [intensity_hawkes(t, history) for t in time]
-    plt.plot(time, intensities)
-    plt.scatter(history, np.zeros_like(history))
-
-def train_val_split(data, mask=None, val_ratio=0.2):
-    """
-        Input:
-            data: dict with keys 'x' and 't'.
-            data['x']: Tensor of shape T x N x marker_dim
-            data['t']: Tensor of shape T x N x 2
-            mask: Tensor of shape T x N x 1
-        Output:
-            train_split, val_split, train_mask, val_mask
-    """
-    _, N, _ = data['x'].shape
-    train_mask, val_mask = None, None
-    val_size = int(val_ratio * N)
-    
-    random_order = torch.randperm(N).to(device)
-    
-    train_split = {}
-    val_split = {}
-    for key, value in data.items():
-        train_split[key] = data[key][:,random_order[:N-val_size]]
-        val_split[key] = data[key][:,random_order[N-val_size:]]
-
-    if mask is not None:
-        train_mask = mask[:,random_order[:N-val_size]]
-        val_mask = mask[:,random_order[N-val_size:]]
-    return train_split, val_split, train_mask, val_mask
+if __name__ == "__main__":
+    T=100
+    nperproc = 50
+    nclus = 2
+    data = generate_synthethic_data_wrapper(nperproc=nperproc,nclus=nclus, T=T)

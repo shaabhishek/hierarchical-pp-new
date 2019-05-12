@@ -236,7 +236,7 @@ if __name__ == '__main__':
         params.time_influence = 0.01
         params.marker_type = 'categorical'
         params.batch_size = 32
-        
+
     elif 'syntheticdata' in params.data_name:
         params.marker_dim = 2
         params.time_dim = 2
@@ -244,7 +244,8 @@ if __name__ == '__main__':
         params.time_influence = 0.01
         params.marker_type = 'categorical'
         params.batch_size = 32
-        
+
+
     else:#different dataset. Encode those details.
         pass
 

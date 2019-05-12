@@ -1,4 +1,4 @@
-Hawkes	0.01	0.9	1.0
-Hawkes	1	0.01	1.0
+Hawkes	0.1	0.9	1.0
+Hawkes	0.9	0.10	1.0
 Poisson	0.1	-	-
 Poisson	0.5	-	-
