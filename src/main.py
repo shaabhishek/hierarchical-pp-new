@@ -153,7 +153,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Script to test Marked Point Process.')
 
     ###Validation Parameter###
-    parser.add_argument('--max_iter', type=int, default=1, help='number of iterations')
+    parser.add_argument('--max_iter', type=int, default=5, help='number of iterations')
     parser.add_argument('--anneal_iter', type=int, default=40, help='number of iteration over which anneal goes to 1')
     parser.add_argument('--hidden_dim', type=int, default=256, help='rnn hidden dim')
     parser.add_argument('--maxgradnorm', type=float, default=10.0, help='maximum gradient norm')
@@ -169,7 +169,7 @@ if __name__ == '__main__':
     
 
     ###Helper Parameter###
-    parser.add_argument('--model', type=str, default='model11', help='model name')
+    parser.add_argument('--model', type=str, default='model2', help='model name')
     parser.add_argument('--time_loss', type=str, default='normal', help='whether to use normal loss or intensity loss')
     parser.add_argument('--time_scale', type=float, default=1, help='scaling factor to multiply the timestamps with')
     parser.add_argument('--test', type=bool, default=False, help='enable testing')
