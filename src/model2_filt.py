@@ -66,9 +66,6 @@ class Model2Filter(nn.Module):
         self.rnn = self.create_rnn()
 
 
-        # filtering RNN
-        self.filter_rnn = nn.GRU(input_size=self.x_embedding_layer[-1] + self.t_embedding_layer[-1]+ self.hidden_dim, hidden_size=self.hidden_dim)
-
         
         # Inference network
         self.encoder_layers = [64, 64]
@@ -103,16 +100,16 @@ class Model2Filter(nn.Module):
     
     def create_preprocess_nets(self):
         # Inference net preprocessing
-        hxty_input_dim = self.hidden_dim+self.latent_dim+self.cluster_dim
+        hxty_input_dim = self.hidden_dim+self.latent_dim+self.cluster_dim + self.x_embedding_layer[-1] + self.t_embedding_layer[-1]
         inf_pre_module = nn.Sequential(
-            nn.ReLU(),nn.Dropout(self.dropout),
+            # nn.ReLU(),nn.Dropout(self.dropout),
             nn.Linear(hxty_input_dim, hxty_input_dim),
             nn.ReLU(),nn.Dropout(self.dropout))
         
         # Generative net preprocessing
         hzy_input_dim = self.hidden_dim+self.latent_dim+self.cluster_dim
         gen_pre_module = nn.Sequential(
-            nn.ReLU(),nn.Dropout(self.dropout),
+            # nn.ReLU(),nn.Dropout(self.dropout),
             nn.Linear(hzy_input_dim, self.shared_output_layers[-1]),
             nn.ReLU(),nn.Dropout(self.dropout))
         return inf_pre_module, gen_pre_module
@@ -135,7 +132,7 @@ class Model2Filter(nn.Module):
             hidden_size=self.hidden_dim,
         )
         
-        z_input_dim = self.hidden_dim+self.latent_dim+self.cluster_dim
+        z_input_dim = self.hidden_dim+self.latent_dim+self.cluster_dim + self.x_embedding_layer[-1] + self.t_embedding_layer[-1]
         z_intmd_module = nn.Sequential(
             nn.Linear(z_input_dim, self.encoder_layers[0]),
             nn.ReLU(),
@@ -169,7 +166,7 @@ class Model2Filter(nn.Module):
         return t_module_mu, t_module_logvar, x_module_mu, x_module_logvar
     
     ### ENCODER ###
-    def encoder(self, phi_xt, h_t, temp, mask):
+    def encoder(self, phi_xt, h_t, temp, mask, n_sample = 10):
         """
         Input:
             phi_xt: Tensor of shape T x BS x (self.x_embedding_layer[-1]+self.t_embedding_layer[-1])
@@ -177,11 +174,14 @@ class Model2Filter(nn.Module):
             temp: scalar
             mask : Tensor TxBS
         Output:
-            sample_y: Tensor of shape T x BS x cluster_dim
+            sample_y: Tensor of shape T x BS x cluster_dim for filtering
             sample_z: Tensor of shape T x BS x latent_dim
-            logits_y: Tensor of shape 1 x BS x cluster_dim
+            logits_y: Tensor of shape T x BS x cluster_dim for filtering
             mu_z: Tensor of shape T x BS x latent_dim
             logvar_z: Tensor of shape T x BS x latent_dim
+            pred_y : T x n_sample x BS x cluster_dim for prediction
+            pred_z : T x n_sample x BS x latent_dim for prediction
+
         """
         T,BS,_ = phi_xt.shape
 
@@ -189,20 +189,24 @@ class Model2Filter(nn.Module):
         h_0 = torch.zeros(1, BS, self.hidden_dim).to(device)
         hidden_seq, _ = self.encoder_rnn(phi_xt, h_0)
         hidden_seq = torch.cat([h_0, hidden_seq], dim = 0 ) #T+1 x BS x hidden_dim
-        logits_y = self.y_encoder(hidden_seq) #T+1 x BS x k
-        sample_y = sample_gumbel_softmax(logits_y, temp) # T+1 x BS x k
-        sample_filter_y = sample_y[1:,:,:] #T x BS x K used for filtering loglikelihood
-        sample_pred_y = sample_y[:-1,:,:] #T x BS x K used for prediction
+        logits_y = self.y_encoder(hidden_seq)[:, None, :, :] #T+1 x 1 x BS x k
+        repeat_vals = (-1,n_sample, -1,-1)
+        logits_y = logits_y.expand(*repeat_vals) #T+1 x n_sample x BS x k
+        sample_y = sample_gumbel_softmax(logits_y, temp) # T+1 x n_sample x BS x k
+        logits_filter_y = logits_y[1:, 0, :,:] #T x BS x K
+        logits_pred_y = logits_y[:-1, :, : , :] #T x n_sample x BS x k
+        sample_filter_y = sample_y[1:,0, :,:] #T x BS x K used for filtering loglikelihood
+        sample_pred_y = sample_y[:-1,:,: ,:] #T x n_sample x BS x K used for prediction
         
         # Encoder for z Forward Filtering RNN
-        rh_ = torch.zeros(1, BS, self.hidden_dim).to(device)
+        # rh_ = torch.zeros(1, BS, self.hidden_dim).to(device)
         concat_hx = torch.cat([phi_xt, h_t], dim = -1) #T x BS x hidden_dim + embedding_dim
-        rh , _ = self.filter_rnn(concat_hx, rh_) #T x BS x hidden_dim
+        # rh = self.filter_network(concat_hx) #T x BS x hidden_dim
 
         mu_z, logvar_z, sample_z  = [], [], []
         z = torch.zeros(1, BS, self.latent_dim).to(device)
         for seq in range(T):
-            concat_ayz = torch.cat([rh[seq,:,:][None,:,:], z,sample_y[seq,:,:][None,:,:] ], dim = -1)#1, BS, latent+cluster+hidden_dim
+            concat_ayz = torch.cat([concat_hx[seq,:,:][None,:,:], z,sample_filter_y[seq,:,:][None,:,:] ], dim = -1)#1, BS, latent+cluster+hidden_dim+embedding_dim
             phi_ayz = self.inf_pre_module(concat_ayz)#1, BS, ...
             z_intmd = self.z_intmd_module(phi_ayz)
             mu_z_ = self.z_mu_module(z_intmd)
@@ -216,7 +220,7 @@ class Model2Filter(nn.Module):
         mu_z = torch.cat(mu_z, dim =0)
         logvar_z = torch.cat(logvar_z, dim =0)
         sample_z = torch.cat(sample_z, dim = 0)
-        return sample_y[1:,:,:], sample_z, logits_y[1:,:,:], (mu_z, logvar_z)
+        return sample_filter_y, sample_z, logits_filter_y, (mu_z, logvar_z)
     
     def forward(self, marker_seq, time_seq, anneal=1., mask=None, temp=0.5):
         time_log_likelihood, marker_log_likelihood, KL, metric_dict = self._forward(marker_seq, time_seq, temp, mask)
