@@ -167,7 +167,7 @@ class Model2Filter(nn.Module):
         return t_module_mu, t_module_logvar, x_module_mu, x_module_logvar
 
     ### ENCODER ###
-    def encoder(self, phi_xt, h_t, temp, mask, n_sample=10):
+    def encoder(self, phi_xt, h_t, temp, mask, n_sample=5):
         """
         Input:
             phi_xt: Tensor of shape T x BS x (self.x_embedding_layer[-1]+self.t_embedding_layer[-1])
@@ -198,9 +198,7 @@ class Model2Filter(nn.Module):
         logits_y = logits_y.expand(*repeat_vals)  # T+1 x n_sample x BS x k
         sample_y = sample_gumbel_softmax(
             logits_y, temp)  # T+1 x n_sample x BS x k
-        logits_pred_y = logits_y[:-1, :, :, :]  # T x n_sample x BS x k
-        # T x n_sample x BS x K used for prediction
-        sample_pred_y = sample_y[:-1, :, :, :]
+        sample_pred_y = sample_y[:-1, :, :, :] # T x sample x BS x k
 
         logits_filter_y = logits_y[1:, :, :, :]  # T x n_sample x BS x K
         # T x BS x K used for filtering loglikelihood
@@ -208,7 +206,7 @@ class Model2Filter(nn.Module):
 
         # T x BS x hidden_dim + embedding_dim
         concat_hx = torch.cat([phi_xt, h_t], dim=-1)
-        concat_hx = concat_hx[:,None, : , :].expand(*repeat_vals)#.view(T, BS *n_sample, -1) 
+        concat_hx = concat_hx[:,None, : , :].expand(*repeat_vals)#(T, BS ,n_sample, -1) 
         concat_hx = concat_hx.contiguous().view(T, BS *n_sample, -1) # T x n_sample * BS x dim
         mu_z, logvar_z, sample_z = [], [], []
         z = torch.zeros(1, BS*n_sample, self.latent_dim).to(device)
@@ -236,8 +234,6 @@ class Model2Filter(nn.Module):
         prior_mu, prior_logvar = self.prior(sample_z)  # Prior mu, logvar T x n_sample x BS x latent_dim
         pred_z = reparameterize(prior_mu, prior_logvar) # T x sample x BS x latent_dim
         pred_z = pred_z.view(T, n_sample, BS, -1)
-        prior_mu = prior_mu.view(T, n_sample, BS, -1)
-        prior_logvar = prior_logvar.view(T, n_sample, BS, -1)
 
         # Reshape
         sample_filter_y = sample_filter_y.view(T, n_sample, BS, -1)
@@ -274,7 +270,7 @@ class Model2Filter(nn.Module):
         logvar = torch.cat([base_logvar, logvar[:-1, :, :]], dim=0)
         return mu, logvar
 
-    def _forward(self, x, t, temp, mask, n_sample =10):
+    def _forward(self, x, t, temp, mask, n_sample =5):
         # Transform markers and timesteps into the embedding spaces
         phi_x, phi_t = self.embed_x(x), self.embed_t(t)
         phi_xt = torch.cat([phi_x, phi_t], dim=-1)
@@ -338,11 +334,8 @@ class Model2Filter(nn.Module):
         pred_hzy = torch.cat(
             [pred_h, pred_z, pred_y], dim=-1)
         pred_hzy = self.gen_pre_module(pred_hzy)
-        pred_mu_marker, pred_logvar_marker = generate_marker(self, pred_hzy, None) #T x n_sample x BS x dim
+        pred_mu_marker, _ = generate_marker(self, pred_hzy, None) #T x n_sample x BS x dim
         pred_mu_time =  self.time_mu(pred_hzy)#TxsamplexBSx1
-        # time_log_likelihood, mu_time = compute_point_log_likelihood(
-        #     self, phi_hzy, t)
-
 
         metric_dict = {"z_cluster": posterior_logits_y.detach().cpu()}
         with torch.no_grad():
