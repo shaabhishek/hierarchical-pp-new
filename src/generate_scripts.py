@@ -10,15 +10,15 @@ line2_ti_lo = '#SBATCH --partition 1080ti-long\n'
 line2_x_lo = '#SBATCH --partition titanx-long\n'
 
 gpu_partitions = {
-    "book_order": line2_x_lo,
-    "so": line2_x_lo,
-    "lastfm": line2_x_lo,
-    "retweet": line2_x_lo,
-    "meme": line2_x_lo,
+    "book_order": line2_ti_lo,
+    "so": line2_ti_lo,
+    "lastfm": line2_ti_lo,
+    "retweet": line2_ti_lo,
+    "meme": line2_ti_lo,
     "mimic2": line2_ti_lo,
     }
 
-script_partition_key = ['data_name', 'model']
+script_partition_key = ['data_name', 'model', 'lr']
 
 def write_to_file(file_name, lines, mode ='w'):
     with open(file_name, mode) as outfile:
@@ -28,18 +28,18 @@ def main():
     name = 'hpp_'
     params['hidden_dim'] = [128]
     params['batch_size'] = [32]
-    params['lr'] = [1e-3, 1e-4]
+    params['lr'] = [1e-3, 1e-4, 2e-5]
     params['l2'] = [1e-4]
-    #params['latent_dim'] = [ 32]
-    #params['anneal_iter'] = [20, 50]
+    params['latent_dim'] = [ 32]
+    params['anneal_iter'] = [20, 50]
     params['gamma'] = [1]
-    #params['maxgradnorm'] = [ 1., 10., 100.]
+    params['maxgradnorm'] = [ 10., 100.]
     params['n_cluster'] = [10]
-    #params['dropout'] = [ 0.25, 0.4]
-    params['model'] = ['rmtpp','model11', 'model2']
+    params['dropout'] = [ 0.25, 0.4]
+    params['model'] = [ 'model2_filt']
     params['max_iter'] = [100]
-    params['time_loss'] = ['normal']
-    params['data_name'] = ['syntheticdata_p4_c2', 'syntheticdata_p4_c4', 'syntheticdata_p4_c8', 'syntheticdata_p4_c16']#'mimic2', 'so', 'lastfm', 'retweet', 'meme', 'book_order'
+    params['time_loss'] = ['normal', 'intensity']
+    params['data_name'] = ['mimic2', 'so', 'lastfm', 'retweet', 'meme', 'book_order']# ['syntheticdata_p4_c2', 'syntheticdata_p4_c4', 'syntheticdata_p4_c8', 'syntheticdata_p4_c16']#'mimic2', 'so', 'lastfm', 'retweet', 'meme', 'book_order'
 
     keys_ = list(params.keys())
     
@@ -73,9 +73,9 @@ def main():
             outer_line = outer_line + '--'+p + '  ' +str(pv)+'  '
         script_name = script_name +'.sh'
         script_files.append('sbatch '+script_name+'\n')
-        logline = '#SBATCH --output=./../scripts/'+script_name[:-3]+'.log \n'
+        logline = '#SBATCH --output='+script_name[:-3]+'.log \n'
 
-        preped_list = [line1, gpu_partitions.get(dataset,line2_x_sh ), logline, line3]
+        preped_list = [line1, gpu_partitions.get(dataset,line2_ti_lo ), logline, line3]
         list_of_command = []
 
         for inner_idx in range(inner_total_params):
