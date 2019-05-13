@@ -105,14 +105,14 @@ class Model2(nn.Module):
         # Inference net preprocessing
         hxty_input_dim = self.hidden_dim+self.latent_dim+self.cluster_dim
         inf_pre_module = nn.Sequential(
-            nn.ReLU(),nn.Dropout(self.dropout),
+            # nn.ReLU(),nn.Dropout(self.dropout),
             nn.Linear(hxty_input_dim, hxty_input_dim),
             nn.ReLU(),nn.Dropout(self.dropout))
         
         # Generative net preprocessing
         hzy_input_dim = self.hidden_dim+self.latent_dim+self.cluster_dim
         gen_pre_module = nn.Sequential(
-            nn.ReLU(),nn.Dropout(self.dropout),
+            # nn.ReLU(),nn.Dropout(self.dropout),
             nn.Linear(hzy_input_dim, self.shared_output_layers[-1]),
             nn.ReLU(),nn.Dropout(self.dropout))
         return inf_pre_module, gen_pre_module

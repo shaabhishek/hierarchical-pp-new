@@ -103,14 +103,14 @@ class Model2Filter(nn.Module):
         hxty_input_dim = self.hidden_dim+self.latent_dim+self.cluster_dim + \
             self.x_embedding_layer[-1] + self.t_embedding_layer[-1]
         inf_pre_module = nn.Sequential(
-            # nn.ReLU(),nn.Dropout(self.dropout),
+            # nn.Dropout(self.dropout),
             nn.Linear(hxty_input_dim, hxty_input_dim),
             nn.ReLU(), nn.Dropout(self.dropout))
 
         # Generative net preprocessing
         hzy_input_dim = self.hidden_dim+self.latent_dim+self.cluster_dim
         gen_pre_module = nn.Sequential(
-            # nn.ReLU(),nn.Dropout(self.dropout),
+            # nn.Dropout(self.dropout),
             nn.Linear(hzy_input_dim, self.shared_output_layers[-1]),
             nn.ReLU(), nn.Dropout(self.dropout))
         return inf_pre_module, gen_pre_module
@@ -193,28 +193,27 @@ class Model2Filter(nn.Module):
         hidden_seq = torch.cat([h_0, hidden_seq], dim=0)
         logits_y = self.y_encoder(hidden_seq)[
             :, None, :, :]  # T+1 x 1 x BS x k
-
         # n_sample and pred
         repeat_vals = (-1, n_sample, -1, -1)
         logits_y = logits_y.expand(*repeat_vals)  # T+1 x n_sample x BS x k
         sample_y = sample_gumbel_softmax(
             logits_y, temp)  # T+1 x n_sample x BS x k
-        pred_y = logits_y[:-1, :, :, :]  # T x n_sample x BS x k
+        logits_pred_y = logits_y[:-1, :, :, :]  # T x n_sample x BS x k
         # T x n_sample x BS x K used for prediction
         sample_pred_y = sample_y[:-1, :, :, :]
 
-        logits_filter_y = logits_y[1:, 0, :, :]  # T x BS x K
+        logits_filter_y = logits_y[1:, :, :, :]  # T x n_sample x BS x K
         # T x BS x K used for filtering loglikelihood
-        sample_filter_y = sample_y[1:, 0, :, :]
+        sample_filter_y = sample_y[1:, :, :, :].contiguous().view(T, BS *n_sample, -1) # T x n_sample * BS x k
 
-        # Encoder for z Forward Filtering RNN
-        # rh_ = torch.zeros(1, BS, self.hidden_dim).to(device)
         # T x BS x hidden_dim + embedding_dim
         concat_hx = torch.cat([phi_xt, h_t], dim=-1)
-        # rh = self.filter_network(concat_hx) #T x BS x hidden_dim
-
+        concat_hx = concat_hx[:,None, : , :].expand(*repeat_vals)#.view(T, BS *n_sample, -1) 
+        concat_hx = concat_hx.contiguous().view(T, BS *n_sample, -1) # T x n_sample * BS x dim
         mu_z, logvar_z, sample_z = [], [], []
-        z = torch.zeros(1, BS, self.latent_dim).to(device)
+        z = torch.zeros(1, BS*n_sample, self.latent_dim).to(device)
+        
+
         for seq in range(T):
             # 1, BS, latent+cluster+hidden_dim+embedding_dim
             concat_ayz = torch.cat(
@@ -229,17 +228,24 @@ class Model2Filter(nn.Module):
             sample_z.append(sample_z_)
             z = sample_z_
 
-        mu_z = torch.cat(mu_z, dim=0)
-        logvar_z = torch.cat(logvar_z, dim=0)
-        sample_z = torch.cat(sample_z, dim=0)
+        mu_z = torch.cat(mu_z, dim=0)#.view(T, n_sample, BS, -1)
+        logvar_z = torch.cat(logvar_z, dim=0)#.view(T, n_sample, BS, -1)
+        sample_z = torch.cat(sample_z, dim=0)#.view(T, n_sample, BS, -1)
 
         # Prior Distribution For Prediction
-        prior_mu, prior_logvar = self.prior(sample_z)  # Prior mu, logvar T x BS x latent_dim
-        repeat_vals = (-1,n_sample, -1, -1)
-        prior_mu, prior_logvar = prior_mu[:,None, :, :].expand(*repeat_vals), prior_logvar[:,None, :, :].expand(*repeat_vals)
-        pred_z = reparameterize(prior_mu, prior_logvar)
+        prior_mu, prior_logvar = self.prior(sample_z)  # Prior mu, logvar T x n_sample x BS x latent_dim
+        pred_z = reparameterize(prior_mu, prior_logvar) # T x sample x BS x latent_dim
+        pred_z = pred_z.view(T, n_sample, BS, -1)
+        prior_mu = prior_mu.view(T, n_sample, BS, -1)
+        prior_logvar = prior_logvar.view(T, n_sample, BS, -1)
 
-        return sample_filter_y, sample_z, logits_filter_y, (mu_z, logvar_z), pred_y, pred_z
+        # Reshape
+        sample_filter_y = sample_filter_y.view(T, n_sample, BS, -1)
+        sample_z = sample_z.view(T, n_sample, BS, -1)
+        mu_z = mu_z.view(T, n_sample, BS, -1)
+        logvar_z = logvar_z.view(T, n_sample, BS, -1)
+
+        return sample_filter_y[:,0,:,:], sample_z[:,0,:,:], logits_filter_y[:,0,:,:], (mu_z[:,0,:,:], logvar_z[:,0,:,:]), sample_pred_y, pred_z
 
     def forward(self, marker_seq, time_seq, anneal=1., mask=None, temp=0.5):
         time_log_likelihood, marker_log_likelihood, KL, metric_dict = self._forward(
