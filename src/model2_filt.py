@@ -336,11 +336,11 @@ class Model2Filter(nn.Module):
         KL_cluster=kl_divergence(posterior_dist_y, prior_dist_y) * mask
         KL_z=kl_divergence(posterior_dist_z, prior_dist_z).sum(-1)*mask
         KL=(KL_cluster/batch_len).sum() + KL_z.sum()
-        try:
-            assert (KL >= 0)
-        except:
-            import pdb
-            pdb.set_trace()
+        # try:
+        #     assert (KL >= 0)
+        # except:
+        #     import pdb
+        #     pdb.set_trace()
 
         metric_dict={"z_cluster": 0}
         if self.training:
