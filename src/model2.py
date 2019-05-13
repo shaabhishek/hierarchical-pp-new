@@ -303,13 +303,13 @@ class Model2(nn.Module):
         KL_cluster = kl_divergence(posterior_dist_y, prior_dist_y)
         KL_z = kl_divergence(posterior_dist_z, prior_dist_z).sum(-1)*mask
         KL = KL_cluster.sum() + KL_z.sum()
-        try:
-            assert (KL >= 0)
-        except:
-            import pdb; pdb.set_trace()
+        # try:
+        #     assert (KL >= 0)
+        # except:
+        #     import pdb; pdb.set_trace()
         
 
-        metric_dict = {"z_cluster": posterior_logits_y.detach().cpu()}
+        metric_dict = {"z_cluster":0}
         with torch.no_grad():
             # Metric not needed
             """
