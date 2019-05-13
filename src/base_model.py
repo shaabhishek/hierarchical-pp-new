@@ -91,6 +91,33 @@ def create_output_time_layer(model, b, ti):
         model.time_logvar =   nn.Linear(l, 1)
     return
 
+def create_output_nets(model, b, ti):
+    l = model.shared_output_layers[-1]
+    if model.time_loss == 'intensity':
+        h_influence = nn.Linear(l, 1, bias = False)
+        time_influence = nn.Parameter(ti*torch.ones(1, 1, 1))  # 0.005*
+        base_intensity = nn.Parameter(torch.zeros(1, 1, 1)-b)  # -8
+        model.h_influence, model.time_influence, model.base_intensity=h_influence, time_influence, base_intensity
+    else:
+        model.time_mu = nn.Linear(l, 1)
+        model.time_logvar = nn.Linear(l, 1)
+
+    x_module_logvar = None
+    if model.x_given_t:
+        l += 1
+    if model.marker_type == 'real':
+        x_module_mu = nn.Linear(l, model.marker_dim)
+        x_module_logvar = nn.Linear(l, model.marker_dim)
+    elif model.marker_type == 'binary':  # Fix binary
+        x_module_mu = nn.Sequential(
+            nn.Linear(l, model.marker_dim),
+            nn.Sigmoid())
+    elif model.marker_type == 'categorical':
+        x_module_mu = nn.Sequential(
+            nn.Linear(l, model.marker_dim)  # ,
+            # nn.Softmax(dim=-1)
+        )
+    model.output_x_mu, model.output_x_logvar=x_module_mu, x_module_logvar
 
 def compute_marker_log_likelihood(model, x, mu, logvar):
     """

@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch.distributions import kl_divergence, Normal, Categorical
 import math
 
-from base_model import compute_marker_log_likelihood, compute_point_log_likelihood, generate_marker
+from base_model import compute_marker_log_likelihood, compute_point_log_likelihood, generate_marker,create_output_nets
 from utils.metric import get_marker_metric, compute_time_expectation, get_time_metric
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -38,7 +38,7 @@ def reparameterize(mu, logvar):
     
     
 class Model2(nn.Module):
-    def __init__(self, latent_dim=20, marker_dim=31, marker_type='real', hidden_dim=128, time_dim=2, n_cluster=5, x_given_t=False, time_loss='normal', gamma=1., dropout=None, base_intensity=None, time_influence=None):
+    def __init__(self, latent_dim=20, marker_dim=31, marker_type='real', hidden_dim=128, time_dim=2, n_cluster=5, x_given_t=False, time_loss='normal', gamma=1., dropout=None, base_intensity=0, time_influence=0.1):
         super().__init__()
         self.marker_type = marker_type
         self.marker_dim = marker_dim
@@ -75,7 +75,7 @@ class Model2(nn.Module):
         self.y_encoder, self.encoder_rnn, self.z_intmd_module, self.z_mu_module, self.z_logvar_module = self.create_inference_nets()
         
         # Generative network
-        self.time_mu, self.time_logvar, self.output_x_mu, self.output_x_logvar = self.create_output_nets()
+        create_output_nets(self, base_intensity, time_influence)
 
         #Prior on z
         self.prior_net = nn.Sequential(
