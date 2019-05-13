@@ -342,7 +342,7 @@ class Model2Filter(nn.Module):
             import pdb
             pdb.set_trace()
 
-        metric_dict={"z_cluster": posterior_logits_y.detach().cpu()}
+        metric_dict={"z_cluster": 0}
         if self.training:
             metric_dict['marker_acc'] = -1.
             metric_dict['marker_acc_count']  = 1.
