@@ -41,7 +41,7 @@ def reparameterize(mu, logvar):
 
 
 class Model2Filter(nn.Module):
-    def __init__(self, latent_dim=20, marker_dim=31, marker_type='real', hidden_dim=128, time_dim=2, n_cluster=5, x_given_t=False, time_loss='normal', gamma=1., dropout=None, base_intensity=0., time_influence=0.1, n_sample = 10):
+    def __init__(self, latent_dim=20, marker_dim=31, marker_type='real', hidden_dim=128, time_dim=2, n_cluster=5, x_given_t=False, time_loss='normal', gamma=1., dropout=None, base_intensity=0., time_influence=0.1, n_sample = 3):
         super().__init__()
         self.marker_type = marker_type
         self.marker_dim = marker_dim

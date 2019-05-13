@@ -42,7 +42,7 @@ def get_marker_metric(marker_type, marker_out_mu, x, mask, metric_dict):
         else: # T x n_sample x BS x dim
             m = torch.nn.Softmax(dim =-1)
             out = m(marker_out_mu) # Txn_sample X BS x dim
-            out = torch.mean(out, dim = [1]) #T xBS x dim
+            out = torch.mean(out, dim = 1) #T xBS x dim
             out = torch.argmax(out, dim =-1)
             true_out = x 
             acc = (out[1:,:] == true_out[1:,:])*(mask[1:,:]== 1.)
