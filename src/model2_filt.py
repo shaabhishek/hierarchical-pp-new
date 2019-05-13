@@ -285,6 +285,7 @@ class Model2Filter(nn.Module):
 
     def _forward(self, x, t, temp, mask):
         n_sample= self.n_sample
+        batch_len = mask.sum(dim= 0, keepdim = True)
         # Transform markers and timesteps into the embedding spaces
         phi_x, phi_t=self.embed_x(x), self.embed_t(t)
         phi_xt=torch.cat([phi_x, phi_t], dim=-1)
@@ -315,7 +316,7 @@ class Model2Filter(nn.Module):
         prior_dist_z=Normal(prior_mu, (prior_logvar*0.5).exp())
 
         prior_dist_y=Categorical(
-            probs=1./self.cluster_dim * torch.ones(1, BS, self.cluster_dim).to(device))
+            probs=1./self.cluster_dim * torch.ones(T, BS, self.cluster_dim).to(device))
 
         # Generative Part
 
@@ -332,9 +333,9 @@ class Model2Filter(nn.Module):
         marker_log_likelihood=compute_marker_log_likelihood(
             self, x, mu_marker, logvar_marker)
 
-        KL_cluster=kl_divergence(posterior_dist_y, prior_dist_y)
+        KL_cluster=kl_divergence(posterior_dist_y, prior_dist_y) * mask
         KL_z=kl_divergence(posterior_dist_z, prior_dist_z).sum(-1)*mask
-        KL=KL_cluster.sum() + KL_z.sum()
+        KL=(KL_cluster/batch_len).sum() + KL_z.sum()
         try:
             assert (KL >= 0)
         except:

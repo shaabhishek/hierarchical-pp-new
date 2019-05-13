@@ -169,7 +169,7 @@ if __name__ == '__main__':
 
     ###Helper Parameter###
     parser.add_argument('--model', type=str, default='model2_filt', help='model name')
-    parser.add_argument('--time_loss', type=str, default='intensity', help='whether to use normal loss or intensity loss')
+    parser.add_argument('--time_loss', type=str, default='normal', help='whether to use normal loss or intensity loss')
     parser.add_argument('--time_scale', type=float, default=1, help='scaling factor to multiply the timestamps with')
     parser.add_argument('--test', type=bool, default=False, help='enable testing')
     parser.add_argument('--train_test', type=bool, default=True, help='enable testing')
