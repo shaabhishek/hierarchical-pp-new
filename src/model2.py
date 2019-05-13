@@ -312,7 +312,7 @@ class Model2(nn.Module):
         metric_dict = {"z_cluster": posterior_logits_y.detach().cpu()}
         with torch.no_grad():
             if self.time_loss == 'intensity':
-                mu_time = compute_time_expectation(self, hidden_seq, t, mask)[:,:, None]
+                mu_time = compute_time_expectation(self, phi_hzy, t, mask)[:,:, None]
             get_marker_metric(self.marker_type, mu_marker, x, mask, metric_dict)
             get_time_metric(mu_time,  t, mask, metric_dict)
             

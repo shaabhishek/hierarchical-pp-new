@@ -57,7 +57,7 @@ def get_marker_metric(marker_type, marker_out_mu, x, mask, metric_dict):
 def compute_point_log_likelihood(model, h, d_js):
         """
             Input:
-                h : Tensor of shape TxBSxCx self.shared_output_layers[-1]
+                h : Tensor of shape TxBSx self.shared_output_layers[-1]
                 d_js: Tensor of shape TxBSx1x(N+1) [j,:,:,k] represents the k*delta_x in trapezoidal rule
                 [j,:,:,0] is 0
                 https://en.wikipedia.org/wiki/Trapezoidal_rule#Uniform_grid
@@ -70,7 +70,7 @@ def compute_point_log_likelihood(model, h, d_js):
         
         #d_js = tj[:, :, 0:1, None]  # Shape TxBSx1xN Time differences
 
-        past_influence = model.h_influence(h)[:,:,:,None]  # TxBSx1,x1
+        past_influence = model.h_influence(h)  # TxBSx1,x1
 
 
         # TxBSx1x1
@@ -78,7 +78,7 @@ def compute_point_log_likelihood(model, h, d_js):
             ti = torch.clamp(model.time_influence, min = 1e-5)
         else:
             ti = torch.clamp(model.time_influence, max = -1e-5)
-        current_influence = ti * d_js#TxBSx1xN
+        current_influence = ti[:,:,:, None] * d_js#TxBSx1xN
         base_intensity = model.base_intensity[:,:,:, None]  # 1x1x1x1
         #print(past_influence.shape,current_influence.shape, base_intensity.shape)
 
@@ -99,6 +99,7 @@ def compute_time_expectation(model, hz_embedded , t, mask , N = 10000, tol = 0.0
             x : Torch of shape TxBSxmarker_dim
             t : Torch of shape TxBSx2. Last column is indexed by [actual time point, interval]
             mask is needed here.
+
         Output:
             y : Torch of shape TxBS
     """
@@ -107,24 +108,38 @@ def compute_time_expectation(model, hz_embedded , t, mask , N = 10000, tol = 0.0
     actual_interval = t[:,:,0][:,:,None, None]#TxBSx1x1
     d_max = actual_interval.max()
     init_max = 3.
-    init_N = N
-    try_count = 1
-    init_tol = tol +1.
     delta_x = (d_max* init_max )/N
     d_js = (torch.arange(0, N).float().to(device)*delta_x)[None,None,None,:]#1x1x1xN
     #Add a dummy row for the actual time
     #Interval starts from 0 to max
     repeat_val = (seq_len,batch_size,-1,-1)
     d_js = d_js.expand(*repeat_val)#TxBSx1xN
-    time_log_likelihood = compute_point_log_likelihood(model, hz_embedded, d_js) #TxBSx1xN
+    if len(hz_embedded.data.size()) == 3:
+        hz_embedded = hz_embedded[:,None, :, :]# T, 1, BS, dim
+    hz_embedded = hz_embedded.transpose(1,2) #T , BS, 1 , dim
 
-    time_likelihood = time_log_likelihood.exp()[:,:,0,:]#TxBSxN (Maybe should be using some stable version of that)
-    #Check whether prob sums to 1 or not. If sum< 1, increase integration max limit. If sum>1. Increase N.
-    sum_probs = time_likelihood.sum(dim =[2])*delta_x #TxBS
-    mean_t_prob = sum_probs.mean()
-    #Compute Expectation
-    #t*f(t)
-    g = time_likelihood * d_js[:,:,0,:]*delta_x# TxBSxN
-    expectation = g.sum(dim =-1)#TxBS
-    #print("tolerance achieved: ", mean_t_prob-1.)
-    return expectation #TxBS
+    time_log_likelihood = compute_point_log_likelihood(model, hz_embedded, d_js) #TxBSx1xN  or Tx BS xsample xN
+
+    if time_log_likelihood.size(2) == 1:
+        time_likelihood = time_log_likelihood.exp()[:,:,0,:]#TxBSxN (Maybe should be using some stable version of that)
+        #Check whether prob sums to 1 or not. If sum< 1, increase integration max limit. If sum>1. Increase N.
+        sum_probs = time_likelihood.sum(dim =[2])*delta_x #TxBS
+        mean_t_prob = sum_probs.mean()
+        #Compute Expectation
+        #t*f(t)
+        g = time_likelihood * d_js[:,:,0,:]*delta_x# TxBSxN
+        expectation = g.sum(dim =-1)#TxBS
+        #print("tolerance achieved: ", mean_t_prob-1.)
+        return expectation #TxBS
+    else: #Number of sample is more
+        time_likelihood = time_log_likelihood.exp()#TxBSxSample xN 
+        sum_probs = time_likelihood.sum(dim =[3])*delta_x #TxBSxsample
+        mean_t_prob = sum_probs.mean()
+        #Compute Expectation
+        #t*f(t)
+        g = time_likelihood * d_js*delta_x# TxBSxsamplexN
+        expectation = g.sum(dim =-1)#TxBSxsample
+        expectation = expectation.mean(dim = -1)
+        #print("tolerance achieved: ", mean_t_prob-1.)
+        return expectation #TxBS
+

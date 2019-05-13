@@ -299,7 +299,7 @@ class Model2Filter(nn.Module):
             [hidden_seq[:-1], posterior_sample_z, posterior_sample_y], dim=-1)
         phi_hzy=self.gen_pre_module(concat_hzy)
         mu_marker, logvar_marker=generate_marker(self, phi_hzy, None)
-        time_log_likelihood, mu_time=compute_point_log_likelihood(
+        time_log_likelihood, _ =compute_point_log_likelihood(
             self, phi_hzy, t)
         marker_log_likelihood=compute_marker_log_likelihood(
             self, x, mu_marker, logvar_marker)
@@ -313,22 +313,21 @@ class Model2Filter(nn.Module):
             import pdb
             pdb.set_trace()
 
-        # Prediction Layer # T x 10 x BS x dim
-        pred_h = hidden_seq[:-1][:, None, :, :]  # T x 1 x BS x dim
-        repeat_vals = (-1, n_sample, -1, -1)
-        pred_h = pred_h.expand(*repeat_vals)  # T x n_sample x BS x dim
-        pred_hzy = torch.cat(
-            [pred_h, pred_z, pred_y], dim = -1)
-        pred_hzy = self.gen_pre_module(pred_hzy)
-        pred_mu_marker, _=generate_marker(
-            self, pred_hzy, None)  # T x n_sample x BS x dim
-        pred_mu_time=self.time_mu(pred_hzy)  # TxsamplexBSx1
-
         metric_dict={"z_cluster": posterior_logits_y.detach().cpu()}
         with torch.no_grad():
+            # Prediction Layer # T x 10 x BS x dim
+            pred_h = hidden_seq[:-1][:, None, :, :]  # T x 1 x BS x dim
+            repeat_vals = (-1, n_sample, -1, -1)
+            pred_h = pred_h.expand(*repeat_vals)  # T x n_sample x BS x dim
+            pred_hzy = torch.cat([pred_h, pred_z, pred_y], dim = -1)
+            pred_hzy = self.gen_pre_module(pred_hzy)
+            pred_mu_marker, _=generate_marker(self, pred_hzy, None)  # T x n_sample x BS x dim
             if self.time_loss == 'intensity':
-                mu_time = compute_time_expectation(
-                    self, hidden_seq, t, mask)[:, :, None]
+                pred_mu_time = compute_time_expectation(
+                    self, pred_hzy, t, mask)[:, :, None]
+            else:
+                pred_mu_time=self.time_mu(pred_hzy)  # TxsamplexBSx1
+
             get_marker_metric(self.marker_type, pred_mu_marker,
                               x, mask, metric_dict)
             get_time_metric(pred_mu_time,  t, mask, metric_dict)
