@@ -38,7 +38,7 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
     print("\n")
 
     ### ================================== start training ==================================
-    fields = ['loss', 'marker_ll', 'time_ll', 'auc','accuracy', 'marker_rmse', 'time_rmse']
+    fields = ['loss', 'marker_ll', 'time_ll', 'accuracy',  'time_rmse']
     fs_map = {'loss':'small', 'marker_ll':'large', 'time_ll':'large', 'auc':'large','accuracy':'large', 'marker_rmse':'small', 'time_rmse':'small'}
 
 
@@ -116,7 +116,7 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
 
 def test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch):
     print("\n\nStart testing ......................\n Best epoch:", best_epoch)
-    fields = ['loss', 'marker_ll', 'time_ll', 'auc','accuracy', 'marker_rmse', 'time_rmse']
+    fields = ['loss', 'marker_ll', 'time_ll', 'accuracy',  'time_rmse']
     f_save_log = open(os.path.join('result', params.save,params.model,  file_name), 'a')
     for fs in fields:
         model = load_model(params).to(device)
@@ -153,7 +153,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Script to test Marked Point Process.')
 
     ###Validation Parameter###
-    parser.add_argument('--max_iter', type=int, default=3, help='number of iterations')
+    parser.add_argument('--max_iter', type=int, default=10, help='number of iterations')
     parser.add_argument('--anneal_iter', type=int, default=40, help='number of iteration over which anneal goes to 1')
     parser.add_argument('--hidden_dim', type=int, default=256, help='rnn hidden dim')
     parser.add_argument('--maxgradnorm', type=float, default=10.0, help='maximum gradient norm')
@@ -168,7 +168,7 @@ if __name__ == '__main__':
     
 
     ###Helper Parameter###
-    parser.add_argument('--model', type=str, default='model2', help='model name')
+    parser.add_argument('--model', type=str, default='model2_filt', help='model name')
     parser.add_argument('--time_loss', type=str, default='intensity', help='whether to use normal loss or intensity loss')
     parser.add_argument('--time_scale', type=float, default=1, help='scaling factor to multiply the timestamps with')
     parser.add_argument('--test', type=bool, default=False, help='enable testing')

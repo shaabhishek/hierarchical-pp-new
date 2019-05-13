@@ -41,7 +41,7 @@ def reparameterize(mu, logvar):
 
 
 class Model2Filter(nn.Module):
-    def __init__(self, latent_dim=20, marker_dim=31, marker_type='real', hidden_dim=128, time_dim=2, n_cluster=5, x_given_t=False, time_loss='normal', gamma=1., dropout=None, base_intensity=0., time_influence=0.1):
+    def __init__(self, latent_dim=20, marker_dim=31, marker_type='real', hidden_dim=128, time_dim=2, n_cluster=5, x_given_t=False, time_loss='normal', gamma=1., dropout=None, base_intensity=0., time_influence=0.1, n_sample = 10):
         super().__init__()
         self.marker_type = marker_type
         self.marker_dim = marker_dim
@@ -55,6 +55,7 @@ class Model2Filter(nn.Module):
         self.sigma_min = 1e-3
         self.gamma = gamma
         self.dropout = dropout
+        self.n_sample = n_sample
 
         # Preprocessing networks
         # Embedding network
@@ -148,7 +149,7 @@ class Model2Filter(nn.Module):
 
 
     ### ENCODER ###
-    def encoder(self, phi_xt, h_t, temp, mask, n_sample=5):
+    def encoder(self, phi_xt, h_t, temp, mask, n_sample=3):
         """
         Input:
             phi_xt: Tensor of shape T x BS x (self.x_embedding_layer[-1]+self.t_embedding_layer[-1])
@@ -188,18 +189,11 @@ class Model2Filter(nn.Module):
 
         # T x BS x hidden_dim + embedding_dim
         concat_hx=torch.cat([phi_xt, h_t], dim=-1)
-        concat_hx=concat_hx[:, None, :, :].expand(
-            *repeat_vals)  # (T, BS ,n_sample, -1)
-        concat_hx=concat_hx.contiguous().view(
-            T, BS * n_sample, -1)  # T x n_sample * BS x dim
         mu_z, logvar_z, sample_z=[], [], []
-        z=torch.zeros(1, BS*n_sample, self.latent_dim).to(device)
-
-
+        z=torch.zeros(1, BS, self.latent_dim).to(device)
         for seq in range(T):
-            # 1, BS, latent+cluster+hidden_dim+embedding_dim
             concat_ayz = torch.cat(
-                [concat_hx[seq, :, :][None, :, :], z, sample_filter_y[seq, :, :][None, :, :]], dim = -1)
+                [concat_hx[seq, :, :][None, :, :], z, sample_y[seq, 0,:, :][None, :, :]], dim = -1)
             phi_ayz = self.inf_pre_module(concat_ayz)  # 1, BS, ...
             z_intmd = self.z_intmd_module(phi_ayz)
             mu_z_ = self.z_mu_module(z_intmd)
@@ -210,24 +204,57 @@ class Model2Filter(nn.Module):
             sample_z.append(sample_z_)
             z = sample_z_
 
-        mu_z = torch.cat(mu_z, dim = 0)  # .view(T, n_sample, BS, -1)
-        logvar_z = torch.cat(logvar_z, dim = 0)  # .view(T, n_sample, BS, -1)
-        sample_z = torch.cat(sample_z, dim = 0)  # .view(T, n_sample, BS, -1)
+        ret_mu_z = torch.cat(mu_z, dim = 0)  # .view(T, n_sample, BS, -1)
+        ret_logvar_z = torch.cat(logvar_z, dim = 0)  # .view(T, n_sample, BS, -1)
+        ret_sample_z = torch.cat(sample_z, dim = 0)  # .view(T, n_sample, BS, -1)
+        
 
-        # Prior Distribution For Prediction
-        # Prior mu, logvar T x n_sample x BS x latent_dim
-        prior_mu, prior_logvar=self.prior(sample_z)
-        # T x sample x BS x latent_dim
-        pred_z=reparameterize(prior_mu, prior_logvar)
-        pred_z=pred_z.view(T, n_sample, BS, -1)
 
-        # Reshape
-        sample_filter_y=sample_filter_y.view(T, n_sample, BS, -1)
-        sample_z=sample_z.view(T, n_sample, BS, -1)
-        mu_z=mu_z.view(T, n_sample, BS, -1)
-        logvar_z=logvar_z.view(T, n_sample, BS, -1)
+        
+        #For prediction
+        if self.training == False:
+            concat_hx_pred=concat_hx[:, None, :, :].expand(
+                *repeat_vals)  # (T, BS ,n_sample, -1)
+            concat_hx_pred=concat_hx_pred.contiguous().view(
+                T, BS * n_sample, -1)  # T x n_sample * BS x dim
+            mu_z, logvar_z, sample_z=[], [], []
+            z=torch.zeros(1, BS*n_sample, self.latent_dim).to(device)
 
-        return sample_filter_y[:, 0, :, :], sample_z[:, 0, :, :], logits_filter_y[:, 0, :, :], (mu_z[:, 0, :, :], logvar_z[:, 0, :, :]), sample_pred_y, pred_z
+
+            for seq in range(T):
+                # 1, BS, latent+cluster+hidden_dim+embedding_dim
+                concat_ayz = torch.cat(
+                    [concat_hx_pred[seq, :, :][None, :, :], z, sample_filter_y[seq, :, :][None, :, :]], dim = -1)
+                phi_ayz = self.inf_pre_module(concat_ayz)  # 1, BS, ...
+                z_intmd = self.z_intmd_module(phi_ayz)
+                mu_z_ = self.z_mu_module(z_intmd)
+                logvar_z_ = self.z_logvar_module(z_intmd)
+                sample_z_ = reparameterize(mu_z_, logvar_z_)
+                mu_z.append(mu_z_)
+                logvar_z.append(logvar_z_)
+                sample_z.append(sample_z_)
+                z = sample_z_
+
+            mu_z = torch.cat(mu_z, dim = 0)  # .view(T, n_sample, BS, -1)
+            logvar_z = torch.cat(logvar_z, dim = 0)  # .view(T, n_sample, BS, -1)
+            sample_z = torch.cat(sample_z, dim = 0)  # .view(T, n_sample, BS, -1)
+
+            # Prior Distribution For Prediction
+            # Prior mu, logvar T x n_sample x BS x latent_dim
+            prior_mu, prior_logvar=self.prior(sample_z)
+            # T x sample x BS x latent_dim
+            pred_z=reparameterize(prior_mu, prior_logvar)
+            pred_z=pred_z.view(T, n_sample, BS, -1)
+
+            # # Reshape
+            # sample_filter_y=sample_filter_y.view(T, n_sample, BS, -1)
+            # sample_z=sample_z.view(T, n_sample, BS, -1)
+            # mu_z=mu_z.view(T, n_sample, BS, -1)
+            # logvar_z=logvar_z.view(T, n_sample, BS, -1)
+        else:
+            sample_pred_y, pred_z = None, None
+
+        return sample_y[1:, 0, :, :], ret_sample_z[:, :, :], logits_filter_y[:, 0, :, :], (ret_mu_z[:, :, :], ret_logvar_z[:,  :, :]), sample_pred_y, pred_z
 
     def forward(self, marker_seq, time_seq, anneal=1., mask=None, temp=0.5):
         time_log_likelihood, marker_log_likelihood, KL, metric_dict=self._forward(
@@ -256,7 +283,8 @@ class Model2Filter(nn.Module):
         logvar=torch.cat([base_logvar, logvar[:-1, :, :]], dim=0)
         return mu, logvar
 
-    def _forward(self, x, t, temp, mask, n_sample=5):
+    def _forward(self, x, t, temp, mask):
+        n_sample= self.n_sample
         # Transform markers and timesteps into the embedding spaces
         phi_x, phi_t=self.embed_x(x), self.embed_t(t)
         phi_xt=torch.cat([phi_x, phi_t], dim=-1)
@@ -314,22 +342,28 @@ class Model2Filter(nn.Module):
             pdb.set_trace()
 
         metric_dict={"z_cluster": posterior_logits_y.detach().cpu()}
-        with torch.no_grad():
-            # Prediction Layer # T x 10 x BS x dim
-            pred_h = hidden_seq[:-1][:, None, :, :]  # T x 1 x BS x dim
-            repeat_vals = (-1, n_sample, -1, -1)
-            pred_h = pred_h.expand(*repeat_vals)  # T x n_sample x BS x dim
-            pred_hzy = torch.cat([pred_h, pred_z, pred_y], dim = -1)
-            pred_hzy = self.gen_pre_module(pred_hzy)
-            pred_mu_marker, _=generate_marker(self, pred_hzy, None)  # T x n_sample x BS x dim
-            if self.time_loss == 'intensity':
-                pred_mu_time = compute_time_expectation(
-                    self, pred_hzy, t, mask)[:, :, None]
-            else:
-                pred_mu_time=self.time_mu(pred_hzy)  # TxsamplexBSx1
+        if self.training:
+            metric_dict['marker_acc'] = -1.
+            metric_dict['marker_acc_count']  = 1.
+            metric_dict['time_mse'] = 1.
+            metric_dict['time_mse_count'] = 1.
+        else:
+            with torch.no_grad():
+                # Prediction Layer # T x 10 x BS x dim
+                pred_h = hidden_seq[:-1][:, None, :, :]  # T x 1 x BS x dim
+                repeat_vals = (-1, n_sample, -1, -1)
+                pred_h = pred_h.expand(*repeat_vals)  # T x n_sample x BS x dim
+                pred_hzy = torch.cat([pred_h, pred_z, pred_y], dim = -1)
+                pred_hzy = self.gen_pre_module(pred_hzy)
+                pred_mu_marker, _=generate_marker(self, pred_hzy, None)  # T x n_sample x BS x dim
+                if self.time_loss == 'intensity':
+                    pred_mu_time = compute_time_expectation(
+                        self, pred_hzy, t, mask)[:, :, None]
+                else:
+                    pred_mu_time=self.time_mu(pred_hzy)  # TxsamplexBSx1
 
-            get_marker_metric(self.marker_type, pred_mu_marker,
-                              x, mask, metric_dict)
-            get_time_metric(pred_mu_time,  t, mask, metric_dict)
+                get_marker_metric(self.marker_type, pred_mu_marker,
+                                x, mask, metric_dict)
+                get_time_metric(pred_mu_time,  t, mask, metric_dict)
 
         return time_log_likelihood, marker_log_likelihood, KL, metric_dict
