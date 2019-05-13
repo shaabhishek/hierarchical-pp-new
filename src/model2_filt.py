@@ -41,7 +41,7 @@ def reparameterize(mu, logvar):
 
 
 class Model2Filter(nn.Module):
-    def __init__(self, latent_dim=20, marker_dim=31, marker_type='real', hidden_dim=128, time_dim=2, n_cluster=5, x_given_t=False, time_loss='normal', gamma=1., dropout=None, base_intensity=0., time_influence=0.1, n_sample = 3):
+    def __init__(self,n_sample , latent_dim=20, marker_dim=31, marker_type='real', hidden_dim=128, time_dim=2, n_cluster=5, x_given_t=False, time_loss='normal', gamma=1., dropout=None, base_intensity=0., time_influence=0.1):
         super().__init__()
         self.marker_type = marker_type
         self.marker_dim = marker_dim
@@ -149,7 +149,7 @@ class Model2Filter(nn.Module):
 
 
     ### ENCODER ###
-    def encoder(self, phi_xt, h_t, temp, mask, n_sample=3):
+    def encoder(self, phi_xt, h_t, temp, mask, n_sample):
         """
         Input:
             phi_xt: Tensor of shape T x BS x (self.x_embedding_layer[-1]+self.t_embedding_layer[-1])

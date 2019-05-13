@@ -91,7 +91,7 @@ def compute_point_log_likelihood(model, h, d_js):
         return log_f_t  # TxBSxCx(N+1)
 
 
-def compute_time_expectation(model, hz_embedded , t, mask , N = 10000, tol = 0.01, max_try = 3):
+def compute_time_expectation(model, hz_embedded , t, mask , N = 5000, tol = 0.01, max_try = 3):
     """
         Compute numerical integration.
         Input: 

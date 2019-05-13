@@ -210,6 +210,7 @@ if __name__ == '__main__':
         params.marker_type = 'categorical'
         params.batch_size = 64
         params.time_scale = 1e-3
+
     
     elif params.data_name == 'retweet':
         params.marker_dim = 3
@@ -248,6 +249,10 @@ if __name__ == '__main__':
     else:#different dataset. Encode those details.
         pass
 
+    if params.time_loss == 'intensity':
+        params.n_sample = 1
+    if params.time_loss == 'normal':
+        params.n_sample = 5
 
     params.load = params.data_name
     params.save = params.data_name    
