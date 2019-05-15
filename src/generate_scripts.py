@@ -1,6 +1,6 @@
 import numpy
 from random import shuffle
-line1 = "#!/bin/bash \n#SBATCH --gres gpu:2\n#SBATCH --cpus-per-task=2\n#SBATCH --mem=35000\n"
+line1 = "#!/bin/bash \n#SBATCH --gres gpu:1\n#SBATCH --cpus-per-task=2\n#SBATCH --mem=35000\n"
 line3 ='module load python3/current\ncd /mnt/nfs/scratch1/arighosh/hierarchichal_point_process/src\n' 
 line2_m40_sh = '#SBATCH --partition m40-short\n'
 line2_ti_sh = '#SBATCH --partition 1080ti-short\n'
