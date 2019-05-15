@@ -109,7 +109,7 @@ def rmtpp():
     params['gamma'] = [1]
     params['maxgradnorm'] = [ 10., 100.]
     params['dropout'] = [ 0.25, 0.4]
-    params['model'] = ['model1', 'model2']# [ 'model2_filt']
+    params['model'] = ['rmtpp']# [ 'model2_filt']
     params['max_iter'] = [100]
     params['time_loss'] = ['normal', 'intensity']
     params['data_name'] = ['mimic2', 'so', 'lastfm', 'retweet', 'meme', 'book_order']# ['syntheticdata_p4_c2', 'syntheticdata_p4_c4', 'syntheticdata_p4_c8', 'syntheticdata_p4_c16']#'mimic2', 'so', 'lastfm', 'retweet', 'meme', 'book_order'
