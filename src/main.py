@@ -12,7 +12,11 @@ from run import train, test
 from utils.data_loader import load_data
 from utils.model_loader import load_model
 
-
+def makedir(name):
+    try:
+        os.makedirs(name)
+    except:
+        pass
 
 def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_data, valid_t_data):
     """
@@ -70,13 +74,13 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
         print("valid_loss\t", valid_info['loss'], "\ttrain_loss\t", train_info['loss'])
         print("valid marker likelihood\t", valid_info['marker_ll'], "\t train marker likelihood\t", train_info['marker_ll'])
         print("valid time likelihood\t", valid_info['time_ll'], "\t train time likelihood\t", train_info['time_ll'])
-
+        
         if not os.path.isdir('model'):
-            os.makedirs('model')
+            makedir('model')
         if not os.path.isdir(os.path.join('model', params.save)):
-            os.makedirs(os.path.join('model', params.save))
+            makedir(os.path.join('model', params.save))
         if not os.path.isdir(os.path.join('model', params.save, params.model)):
-            os.makedirs(os.path.join('model', params.save, params.model))
+            makedir(os.path.join('model', params.save, params.model))
         #net.save_checkpoint(prefix=os.path.join('model', params.save, file_name), epoch=idx+1)
         torch.save({'epoch':idx,
                     'model_state_dict': model.state_dict(),
@@ -101,11 +105,11 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
                 best_epoch[fs] = idx+1
 
     if not os.path.isdir('result'):
-        os.makedirs('result')
+        makedir('result')
     if not os.path.isdir(os.path.join('result', params.save)):
-        os.makedirs(os.path.join('result', params.save))
+        makedir(os.path.join('result', params.save))
     if not os.path.isdir(os.path.join('result', params.save, params.model)):
-            os.makedirs(os.path.join('result', params.save, params.model))
+            makedir(os.path.join('result', params.save, params.model))
 
     f_save_log = open(os.path.join('result', params.save,params.model,  file_name), 'w')
     for fs in fields:
@@ -153,7 +157,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Script to test Marked Point Process.')
 
     ###Validation Parameter###
-    parser.add_argument('--max_iter', type=int, default=10, help='number of iterations')
+    parser.add_argument('--max_iter', type=int, default=1, help='number of iterations')
     parser.add_argument('--anneal_iter', type=int, default=40, help='number of iteration over which anneal goes to 1')
     parser.add_argument('--hidden_dim', type=int, default=256, help='rnn hidden dim')
     parser.add_argument('--maxgradnorm', type=float, default=10.0, help='maximum gradient norm')
@@ -168,8 +172,8 @@ if __name__ == '__main__':
     
 
     ###Helper Parameter###
-    parser.add_argument('--model', type=str, default='model2_filt', help='model name')
-    parser.add_argument('--time_loss', type=str, default='normal', help='whether to use normal loss or intensity loss')
+    parser.add_argument('--model', type=str, default='model2', help='model name')
+    parser.add_argument('--time_loss', type=str, default='intensity', help='whether to use normal loss or intensity loss')
     parser.add_argument('--time_scale', type=float, default=1, help='scaling factor to multiply the timestamps with')
     parser.add_argument('--test', type=bool, default=False, help='enable testing')
     parser.add_argument('--train_test', type=bool, default=True, help='enable testing')
