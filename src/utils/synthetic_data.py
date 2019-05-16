@@ -124,8 +124,9 @@ def generate_data(nperproc, T, fn_param_pairs):
 
 def paramsHP():
     alpha = random.random()
-    lambda0 = np.clip(random.random(), 0.2, 1)
-    beta = np.clip(random.random(), alpha+.1, 1)
+    #unif(.2, 1)
+    lambda0 = .2 + random.random()*.8 #np.clip(random.random(), 0.2, 1)
+    beta = alpha + random.random()*(1-alpha) #np.clip(random.random(), alpha+.1, 1)
     return [lambda0, alpha, beta]
 
 def paramsNonHomPP():
@@ -139,7 +140,7 @@ def paramsHomPP():
     return [lambd]
 
 def paramsSCP():
-    mu = 1 + random.random() #unif(0.5, 1.5)
+    mu = 0.5 + random.random() #unif(0.5, 1.5)
     alpha = .1 + random.random()*.4 #unif(0.1, .5)
     return [mu, alpha]
 
@@ -166,7 +167,7 @@ def generate_synthethic_data_wrapper(nperproc=100, nclus=2, T=100, shuffle=False
     return data
 
 if __name__ == "__main__":
-    T=100
+    T=25
     nperproc = 50
     nclus = 2
     data = generate_synthethic_data_wrapper(nperproc=nperproc,nclus=nclus, T=T)
