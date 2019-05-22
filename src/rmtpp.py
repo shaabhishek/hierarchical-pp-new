@@ -189,8 +189,12 @@ class rmtpp(nn.Module):
                 mu_time = compute_time_expectation(self, hidden_states, t, mask)[:,:, None]
             get_marker_metric(self.marker_type, marker_out_mu, x, mask, metric_dict)
             get_time_metric(mu_time,  t, mask, metric_dict)
+
             if preds_file is not None:
-                np.savetxt(preds_file, (mu_time[1:,:,0]*mask[1:, :]).numpy().T)
+                if len(mu_time.data.size()) == 3:
+                    np.savetxt(preds_file, (mu_time[1:,:,0]*mask[1:, :]).cpu().numpy().T)
+                else:
+                    np.savetxt(preds_file, (torch.mean(mu_time, dim =1)[1:,:,0]*mask[1:, :]).cpu().numpy().T)
             
 
         

@@ -369,9 +369,9 @@ class Model2Filter(nn.Module):
                 get_time_metric(pred_mu_time,  t, mask, metric_dict)
                 if preds_file is not None:
                     if len(pred_mu_time.data.size()) == 3:
-                        np.savetxt(preds_file, (pred_mu_time[1:,:,0]*mask[1:, :]).numpy().T)
+                        np.savetxt(preds_file, (pred_mu_time[1:,:,0]*mask[1:, :]).cpu().numpy().T)
                     else:
-                        np.savetxt(preds_file, (torch.mean(pred_mu_time, dim =1)[1:,:,0]*mask[1:, :]).numpy().T)
+                        np.savetxt(preds_file, (torch.mean(pred_mu_time, dim =1)[1:,:,0]*mask[1:, :]).cpu().numpy().T)
 
 
 
