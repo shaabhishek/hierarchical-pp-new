@@ -133,7 +133,7 @@ def train(net, params, optimizer, x_data, t_data, label):
     return info
 
 
-def test(net, params,  optimizer,  x_data, t_data, label, dump_cluster = 0):
+def test(net, params,  optimizer,  x_data, t_data, label, dump_cluster = 0, preds_file=None):
     """
     x_data: N, (t_i,D), A list of numpy array.
     t_data: N, (t_i, 2), A list of numpy array.
@@ -191,7 +191,7 @@ def test(net, params,  optimizer,  x_data, t_data, label, dump_cluster = 0):
         input_mask = torch.from_numpy(input_mask).float().to(device)
 
         with torch.no_grad():
-            loss, meta_info = net(input_x, input_t, mask= input_mask)
+            loss, meta_info = net(input_x, input_t, mask= input_mask, preds_file=preds_file)
 
         total_loss += meta_info['true_ll'].numpy()
         marker_ll -= meta_info['marker_ll'].numpy()

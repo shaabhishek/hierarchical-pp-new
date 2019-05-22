@@ -4,6 +4,7 @@ from torch.optim import Adam
 import torch.nn.functional as F
 from torch.distributions import kl_divergence, Normal, Categorical
 import math
+import numpy as np
 
 from base_model import compute_marker_log_likelihood, compute_point_log_likelihood, generate_marker, create_output_nets
 from utils.metric import get_marker_metric, compute_time_expectation, get_time_metric
@@ -256,9 +257,9 @@ class Model2Filter(nn.Module):
 
         return sample_y[1:, 0, :, :], ret_sample_z[:, :, :], logits_filter_y[:, 0, :, :], (ret_mu_z[:, :, :], ret_logvar_z[:,  :, :]), sample_pred_y, pred_z
 
-    def forward(self, marker_seq, time_seq, anneal=1., mask=None, temp=0.5):
+    def forward(self, marker_seq, time_seq, anneal=1., mask=None, temp=0.5, preds_file=None):
         time_log_likelihood, marker_log_likelihood, KL, metric_dict=self._forward(
-            marker_seq, time_seq, temp, mask)
+            marker_seq, time_seq, temp, mask, preds_file)
 
         marker_loss=(-1. * marker_log_likelihood * mask)[1:, :].sum()
         time_loss=(-1. * time_log_likelihood * mask)[1:, :].sum()
@@ -283,7 +284,7 @@ class Model2Filter(nn.Module):
         logvar=torch.cat([base_logvar, logvar[:-1, :, :]], dim=0)
         return mu, logvar
 
-    def _forward(self, x, t, temp, mask):
+    def _forward(self, x, t, temp, mask, preds_file):
         n_sample= self.n_sample
         batch_len = mask.sum(dim= 0, keepdim = True)
         # Transform markers and timesteps into the embedding spaces
@@ -366,5 +367,12 @@ class Model2Filter(nn.Module):
                 get_marker_metric(self.marker_type, pred_mu_marker,
                                 x, mask, metric_dict)
                 get_time_metric(pred_mu_time,  t, mask, metric_dict)
+                if preds_file is not None:
+                    if len(pred_mu_time.data.size()) == 3:
+                        np.savetxt(preds_file, (pred_mu_time[1:,:,0]*mask[1:, :]).numpy().T)
+                    else:
+                        np.savetxt(preds_file, (torch.mean(pred_mu_time, dim =1)[1:,:,0]*mask[1:, :]).numpy().T)
+
+
 
         return time_log_likelihood, marker_log_likelihood, KL, metric_dict

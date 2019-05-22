@@ -82,7 +82,7 @@ class rmtpp(nn.Module):
         create_output_time_layer(self, base_intensity, time_influence)
 
 
-    def forward(self, x, t,anneal = 1., mask= None):
+    def forward(self, x, t,anneal = 1., mask= None, preds_file=None):
         """
             Input: 
                 x   : Tensor of shape TxBSxmarker_dim (if real)
@@ -96,7 +96,7 @@ class rmtpp(nn.Module):
         """
         #TxBS and TxBS
         time_log_likelihood, marker_log_likelihood, metric_dict = self._forward(
-            x, t, mask)
+            x, t, mask, preds_file)
         
         marker_loss = (-1.* marker_log_likelihood *mask)[1:,:].sum()
         time_loss = (-1. *time_log_likelihood *mask)[1:,:].sum()
@@ -160,7 +160,7 @@ class rmtpp(nn.Module):
         return hidden_states
 
 
-    def _forward(self, x, t, mask):
+    def _forward(self, x, t, mask, preds_file):
         """
             Input: 
                 x   : Tensor of shape TxBSxmarker_dim (if real)
@@ -189,6 +189,8 @@ class rmtpp(nn.Module):
                 mu_time = compute_time_expectation(self, hidden_states, t, mask)[:,:, None]
             get_marker_metric(self.marker_type, marker_out_mu, x, mask, metric_dict)
             get_time_metric(mu_time,  t, mask, metric_dict)
+            if preds_file is not None:
+                np.savetxt(preds_file, (mu_time[1:,:,0]*mask[1:, :]).numpy().T)
             
 
         

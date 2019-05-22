@@ -118,16 +118,28 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
     f_save_log.close()
     return best_epoch
 
-def test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch):
+def test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch, save=False):
     print("\n\nStart testing ......................\n Best epoch:", best_epoch)
     fields = ['loss', 'marker_ll', 'time_ll', 'accuracy',  'time_rmse']
     f_save_log = open(os.path.join('result', params.save,params.model,  file_name), 'a')
+
     for fs in fields:
         model = load_model(params).to(device)
         checkpoint = torch.load(os.path.join('model', params.save, params.model, file_name)+ '_'+str(best_epoch[fs]))
         model.load_state_dict(checkpoint['model_state_dict'])
-    
-        test_info = test(model, params, None, test_x_data, test_t_data, label='Test', dump_cluster=params.dump_cluster)
+
+        if save and (fs == "loss"):
+            if not os.path.isdir('preds'):
+                makedir('preds')
+            if not os.path.isdir(os.path.join('preds', params.save)):
+                makedir(os.path.join('preds', params.save))
+            if not os.path.isdir(os.path.join('preds', params.save, params.model)):
+                    makedir(os.path.join('preds', params.save, params.model))
+            f_save_preds = open(os.path.join('preds', params.save,params.model,  file_name), 'a')
+        else:
+            f_save_preds = None
+
+        test_info = test(model, params, None, test_x_data, test_t_data, label='Test', dump_cluster=params.dump_cluster, preds_file=f_save_preds)
         print("test\t ", fs, ': ', test_info[fs])
         print("best epoch of metric: ",fs ,"\t", best_epoch[fs], "All Metrics for that epoch", test_info)
         f_save_log.write('Test results\t :'+ fs  +':\t'+ str(test_info[fs]) + "\n")
@@ -292,7 +304,7 @@ if __name__ == '__main__':
         if params.train_test:
             test_data_path = params.data_dir + "/" + params.data_name + '_'+str(params.cv_idx)+ "_test.pkl"
             test_x_data, test_t_data = load_data(test_data_path)
-            test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch)
+            test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch, save=True)
     else:
         test_data_path = params.data_dir + "/" + params.data_name  +'_'+str(params.cv_idx)+"_test.pkl"
         test_x_data, test_t_data = load_data(test_data_path)
