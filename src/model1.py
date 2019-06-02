@@ -47,7 +47,7 @@ class Model1(nn.Module):
         self.cluster_dim = n_cluster
         self.x_given_t = x_given_t
         self.time_loss = time_loss
-        self.sigma_min = 1e-3
+        self.sigma_min = 1e-10
         self.gamma = gamma
         self.dropout = dropout
         

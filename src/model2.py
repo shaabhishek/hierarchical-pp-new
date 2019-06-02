@@ -48,8 +48,8 @@ class Model2(nn.Module):
         self.cluster_dim = n_cluster
         self.x_given_t = x_given_t
         self.time_loss = time_loss
-        self.logvar_min = math.log(1e-6)
-        self.sigma_min = 1e-3
+        self.logvar_min = math.log(1e-20)
+        self.sigma_min = 1e-10
         self.gamma = gamma
         self.dropout = dropout
         
