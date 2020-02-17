@@ -191,6 +191,7 @@ class rmtpp(nn.Module):
             get_time_metric(mu_time,  t, mask, metric_dict)
 
             if preds_file is not None:
+                import pdb; pdb.set_trace()
                 if len(mu_time.data.size()) == 3:
                     np.savetxt(preds_file, (mu_time[1:,:,0]*mask[1:, :]).cpu().numpy().T)
                 else:

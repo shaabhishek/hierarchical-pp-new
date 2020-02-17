@@ -368,6 +368,7 @@ class Model2Filter(nn.Module):
                                 x, mask, metric_dict)
                 get_time_metric(pred_mu_time,  t, mask, metric_dict)
                 if preds_file is not None:
+                    import pdb; pdb.set_trace()
                     if len(pred_mu_time.data.size()) == 3:
                         np.savetxt(preds_file, (pred_mu_time[1:,:,0]*mask[1:, :]).cpu().numpy().T)
                     else:
