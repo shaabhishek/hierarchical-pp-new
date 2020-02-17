@@ -7,3 +7,4 @@ __pycache__
 src/model/*
 src/result/*
 *.pyc
+*.log
