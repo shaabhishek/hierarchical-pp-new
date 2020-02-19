@@ -92,7 +92,14 @@ def create_output_time_layer(model, b, ti):
     return
 
 def create_output_nets(model, b, ti):
+    """
+    b: (float) base intensity #TODO
+    ti: (float) time influence #TODO
+    """
+    
     l = model.shared_output_layers[-1]
+    
+    # Output net for time
     if model.time_loss == 'intensity':
         h_influence = nn.Linear(l, 1, bias = False)
         time_influence = nn.Parameter(ti*torch.ones(1, 1, 1))  # 0.005*
@@ -102,6 +109,7 @@ def create_output_nets(model, b, ti):
         model.time_mu = nn.Linear(l, 1)
         model.time_logvar = nn.Linear(l, 1)
 
+    # Output net for markers
     x_module_logvar = None
     if model.x_given_t:
         l += 1
@@ -117,7 +125,7 @@ def create_output_nets(model, b, ti):
             nn.Linear(l, model.marker_dim)  # ,
             # nn.Softmax(dim=-1)
         )
-    model.output_x_mu, model.output_x_logvar=x_module_mu, x_module_logvar
+    model.output_x_mu, model.output_x_logvar = x_module_mu, x_module_logvar
 
 def compute_marker_log_likelihood(model, x, mu, logvar):
     """

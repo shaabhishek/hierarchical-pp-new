@@ -9,7 +9,7 @@ import pickle
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 from run import train, test
-from utils.data_loader import load_data
+from utils.data_loader import load_data, DSetCategorical, DLoaderCategorical
 from utils.model_loader import load_model
 
 def makedir(name):
@@ -18,15 +18,13 @@ def makedir(name):
     except:
         pass
 
-def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_data, valid_t_data):
+def train_one_dataset(params, file_name, train_dataloader, valid_dataloader):
     """
         Input:
             params: Namespace class with hyperparameter values
             file_name: file to save the model
-            train_x_data: list of length num_data_train, each element is numpy array of shape T_i x marker_dim
-            train_t_data: list of length num_data_train, each element is numpy array of shape T_i x 2
-            valid_x_data: list of length num_data_val, each element is numpy array of shape T_i x marker_dim
-            valid_t_data: list of length num_data_val, each element is numpy array of shape T_i x 2
+            train_dataloader: list of length num_data_train, each element is numpy array of shape T_i x marker_dim
+            valid_dataloader: list of length num_data_val, each element is numpy array of shape T_i x marker_dim
     """
     ### ================================== model initialization ==================================
     model = load_model(params).to(device)
@@ -62,8 +60,8 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
     for idx in range(params.max_iter):
         params.iter = idx +1
         #### Loss is the ELBO, accuracy is for categorical/binary marker, AUC is for binary/categorical marker.  Time RMSE is w.r.t expectation. marker rmse for real marker####
-        train_info = train(model, params, optimizer, train_x_data, train_t_data,  label='Train')
-        valid_info = test(model,  params, optimizer, valid_x_data, valid_t_data, label='Valid')
+        train_info = train(model, params, optimizer, train_dataloader,  label='Train')
+        valid_info = test(model,  params, optimizer, valid_dataloader, label='Valid')
         print('epoch', idx + 1)
         if params.marker_type != 'real':
             print("valid_auc\t", valid_info['auc'], "\ttrain_auc\t", train_info['auc'])
@@ -118,7 +116,7 @@ def train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_dat
     f_save_log.close()
     return best_epoch
 
-def test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch, save=False):
+def test_one_dataset(params, file_name, test_dataloader, best_epoch, save=False):
     print("\n\nStart testing ......................\n Best epoch:", best_epoch)
     fields = ['loss', 'marker_ll', 'time_ll', 'accuracy',  'time_rmse']
     f_save_log = open(os.path.join('result', params.save,params.model,  file_name), 'a')
@@ -139,7 +137,7 @@ def test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch, sa
         else:
             f_save_preds = None
 
-        test_info = test(model, params, None, test_x_data, test_t_data, label='Test', dump_cluster=params.dump_cluster, preds_file=f_save_preds)
+        test_info = test(model, params, None, test_dataloader, label='Test', dump_cluster=params.dump_cluster, preds_file=f_save_preds)
         print("test\t ", fs, ': ', test_info[fs])
         print("best epoch of metric: ",fs ,"\t", best_epoch[fs], "All Metrics for that epoch", test_info)
         f_save_log.write('Test results\t :'+ fs  +':\t'+ str(test_info[fs]) + "\n")
@@ -263,7 +261,7 @@ if __name__ == '__main__':
 
 
     else:#different dataset. Encode those details.
-        pass
+        raise ValueError
 
     if params.time_loss == 'intensity':
         params.n_sample = 1
@@ -275,7 +273,7 @@ if __name__ == '__main__':
     # Read data
     
     #Set Seed for reproducibility
-    seedNum =params.seed
+    seedNum = params.seed
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     torch.manual_seed(seedNum)
@@ -294,23 +292,36 @@ if __name__ == '__main__':
         train_data_path = params.data_dir + params.data_name +'_'+str(params.cv_idx)+ "_train.pkl"
         valid_data_path = params.data_dir + params.data_name + '_'+str(params.cv_idx)+"_test.pkl"
         #That pkl file should give two list of x and t. It should not be tensor.
-        train_x_data, train_t_data = load_data(train_data_path)
-        valid_x_data, valid_t_data = load_data(valid_data_path)
+        if params.marker_type == "categorical":
+            train_dataset = DSetCategorical(train_data_path)
+            valid_dataset = DSetCategorical(valid_data_path)
+
+            train_dataloader = DLoaderCategorical(train_dataset)
+            valid_dataloader = DLoaderCategorical(valid_dataset)
+        else:
+            raise NotImplementedError
+        # train_x_data, train_t_data = load_data(train_data_path)
+        # valid_x_data, valid_t_data = load_data(valid_data_path)
         print("\n")
-        print("train data length", len(train_x_data))
-        print("valid data length", len(valid_x_data))
+        print("train data length", len(train_dataset))
+        print("valid data length", len(valid_dataset))
         print("\n")
-        best_epoch = train_one_dataset(params, file_name, train_x_data, train_t_data, valid_x_data, valid_t_data)
+        best_epoch = train_one_dataset(params, file_name, train_dataloader, valid_dataloader)
         if params.train_test:
             test_data_path = params.data_dir + "/" + params.data_name + '_'+str(params.cv_idx)+ "_test.pkl"
             test_x_data, test_t_data = load_data(test_data_path)
             test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch, save=True)
     else:
         test_data_path = params.data_dir + "/" + params.data_name  +'_'+str(params.cv_idx)+"_test.pkl"
-        test_x_data, test_t_data = load_data(test_data_path)
+        if params.marker_type == "categorical":
+            test_dataset = DSetCategorical(test_data_path)
+            test_dataloader = DLoaderCategorical(test_dataset)
+        else:
+            raise NotImplementedError
+        # test_x_data, test_t_data = load_data(test_data_path)
         best_epoch = params.best_epoch
         file_name = ''
         for item_ in file_name_identifier:
             file_name = file_name+item_[0]+ str(item_[1])
 
-        test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch)
+        test_one_dataset(params, file_name, test_dataloader, best_epoch)
