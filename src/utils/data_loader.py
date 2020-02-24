@@ -5,6 +5,8 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 def load_data(data_path):
     # Data is stored as a dict with keys 'x' and 't' into a file with path='path_data'
     # The values of the keys are x_data and t_data:
@@ -13,6 +15,14 @@ def load_data(data_path):
     with open(data_path, 'rb') as handle:
         data = pickle.load(handle)
     return data['x'], data['t']
+
+def get_dataloader(data_path, marker_type, batch_size):
+    if marker_type == "categorical":
+        dataset = DSetCategorical(data_path)
+        dataloader = DLoaderCategorical(dataset, bs=batch_size)
+    else:
+        raise NotImplementedError
+    return dataloader
 
 def collate_fn_categorical_marker(xt_tuples):
     """
@@ -59,12 +69,12 @@ def collate_fn_real_marker(xt_tuples):
     seq_len = [len(t) for t in t_data]
     max_seq_len = max(seq_len)
     
-    x_tensor = np.zeros((BS, max_seq_len))
+    x_tensor = np.zeros((BS, max_seq_len, x_dim))
     t_tensor = np.zeros((BS, max_seq_len, t_dim))
     mask_tensor = np.zeros((BS, max_seq_len))
     
     for idx in range(BS):
-        x_tensor[idx, :seq_len[idx] ] = x_data[idx].flatten()
+        x_tensor[idx, :seq_len[idx] ] = x_data[idx]
         t_tensor[idx, :seq_len[idx] ] = t_data[idx]
         mask_tensor[idx, :seq_len[idx]] = 1.
         

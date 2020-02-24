@@ -14,12 +14,12 @@ def compute_accuracy(all_target, all_pred):
     all_pred[all_pred <= 0.5] = 0.0
     return metrics.accuracy_score(all_target, all_pred)
 
-def shuffle_data(x_data, t_data):
-    shuffled_ind = np.arange(len(x_data))
-    np.random.shuffle(shuffled_ind)
-    x_data = [x_data[i] for i in shuffled_ind]
-    t_data = [t_data[i] for i in shuffled_ind]
-    return x_data, t_data
+# def shuffle_data(x_data, t_data):
+#     shuffled_ind = np.arange(len(x_data))
+#     np.random.shuffle(shuffled_ind)
+#     x_data = [x_data[i] for i in shuffled_ind]
+#     t_data = [t_data[i] for i in shuffled_ind]
+#     return x_data, t_data
 
 
 def train(net, params, optimizer, dataloader, label):
@@ -46,8 +46,11 @@ def train(net, params, optimizer, dataloader, label):
         from utils.helper import ProgressBar
         bar = ProgressBar(label, max=N_batches)
 
-    for input_x, input_t, input_mask in dataloader:
-        if params.show: bar.next()
+    for b_idx, (input_x, input_t, input_mask) in enumerate(dataloader):
+        try:
+            if params.show: bar.update(b_idx)
+        except:
+            import pdb; pdb.set_trace()
 
         optimizer.zero_grad()
 
@@ -104,8 +107,8 @@ def test(net, params,  optimizer,  dataloader, label, dump_cluster = 0, preds_fi
     t_data: N, (t_i, 2), A list of numpy array.
     """
     net.eval()
-    N_batches = int(math.ceil(len(x_data) / params.batch_size))
-    batch_size = params.batch_size
+    N_batches = int(math.ceil(len(dataloader.dataset) / params.batch_size))
+    # batch_size = params.batch_size
     # Shuffle the data
     # x_data, t_data = shuffle_data(x_data, t_data)
     time_mse, time_mse_count = 0., 0.
@@ -120,8 +123,8 @@ def test(net, params,  optimizer,  dataloader, label, dump_cluster = 0, preds_fi
         from utils.helper import ProgressBar
         bar = ProgressBar(label, max=N_batches)
 
-    for input_x, input_t, input_mask in dataloader:
-        if params.show: bar.next()
+    for b_idx, (input_x, input_t, input_mask) in enumerate(dataloader):
+        if params.show: bar.update(b_idx)
         with torch.no_grad():
             loss, meta_info = net(input_x, input_t, mask=input_mask, preds_file=preds_file)
 
@@ -140,11 +143,6 @@ def test(net, params,  optimizer,  dataloader, label, dump_cluster = 0, preds_fi
         else:
             marker_acc+=  meta_info["marker_acc"]
             marker_acc_count += meta_info["marker_acc_count"]
-
-        loss.backward()
-        if params.maxgradnorm > 0:
-            norm = torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm = params.maxgradnorm)
-        optimizer.step()
 
     if params.show: bar.finish()
 

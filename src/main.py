@@ -9,13 +9,13 @@ import pickle
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 from run import train, test
-from utils.data_loader import load_data, DSetCategorical, DLoaderCategorical
+from utils.data_loader import load_data, get_dataloader
 from utils.model_loader import load_model
 
 def makedir(name):
     try:
         os.makedirs(name)
-    except:
+    except OSError:
         pass
 
 def train_one_dataset(params, file_name, train_dataloader, valid_dataloader):
@@ -91,9 +91,6 @@ def train_one_dataset(params, file_name, train_dataloader, valid_dataloader):
         for fs in fields:
             all_data['train'][fs][idx+1] =  train_info.get(fs, 0.)
             all_data['valid'][fs][idx+1] =  valid_info.get(fs, 0.)
-
-        
-        
 
         # output the epoch with the best validation auc
         for fs in fields:
@@ -292,33 +289,23 @@ if __name__ == '__main__':
         train_data_path = params.data_dir + params.data_name +'_'+str(params.cv_idx)+ "_train.pkl"
         valid_data_path = params.data_dir + params.data_name + '_'+str(params.cv_idx)+"_test.pkl"
         #That pkl file should give two list of x and t. It should not be tensor.
-        if params.marker_type == "categorical":
-            train_dataset = DSetCategorical(train_data_path)
-            valid_dataset = DSetCategorical(valid_data_path)
-
-            train_dataloader = DLoaderCategorical(train_dataset)
-            valid_dataloader = DLoaderCategorical(valid_dataset)
-        else:
-            raise NotImplementedError
+        train_dataloader = get_dataloader(train_data_path, params.marker_type, params.batch_size)
+        valid_dataloader = get_dataloader(valid_data_path, params.marker_type, params.batch_size)
+        
         # train_x_data, train_t_data = load_data(train_data_path)
         # valid_x_data, valid_t_data = load_data(valid_data_path)
         print("\n")
-        print("train data length", len(train_dataset))
-        print("valid data length", len(valid_dataset))
+        print("train data length", len(train_dataloader.dataset))
+        print("valid data length", len(valid_dataloader.dataset))
         print("\n")
         best_epoch = train_one_dataset(params, file_name, train_dataloader, valid_dataloader)
         if params.train_test:
             test_data_path = params.data_dir + "/" + params.data_name + '_'+str(params.cv_idx)+ "_test.pkl"
-            test_x_data, test_t_data = load_data(test_data_path)
-            test_one_dataset(params, file_name, test_x_data, test_t_data, best_epoch, save=True)
+            test_dataloader = get_dataloader(test_data_path, params.marker_type, params.batch_size)
+            test_one_dataset(params, file_name, test_dataloader, best_epoch, save=True)
     else:
         test_data_path = params.data_dir + "/" + params.data_name  +'_'+str(params.cv_idx)+"_test.pkl"
-        if params.marker_type == "categorical":
-            test_dataset = DSetCategorical(test_data_path)
-            test_dataloader = DLoaderCategorical(test_dataset)
-        else:
-            raise NotImplementedError
-        # test_x_data, test_t_data = load_data(test_data_path)
+        test_dataloader = get_dataloader(test_data_path, params.marker_type, params.batch_size)
         best_epoch = params.best_epoch
         file_name = ''
         for item_ in file_name_identifier:

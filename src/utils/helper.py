@@ -1,10 +1,17 @@
-from progress.bar import Bar
+# from progress.bar import Bar
+from progressbar import bar
 import numpy as np
 
-class ProgressBar(Bar):
-    message = 'Loading'
-    fill = '='
-    suffix = '%(percent).1f%% | Elapsed: %(elapsed)ds | ETA: %(eta)ds '
+# class ProgressBar(Bar):
+#     message = 'Loading'
+#     fill = '='
+#     suffix = '%(percent).1f%% | Elapsed: %(elapsed)ds | ETA: %(eta)ds '
+
+class ProgressBar(bar.ProgressBar):
+    def __init__(self, label, max):
+        super().__init__(max_value=max, prefix=label)
+        # Makes sure that the next() function works on the function
+        self._iterable = iter(range(max))
 
 
 def train_val_split(data, val_ratio=0.2):
