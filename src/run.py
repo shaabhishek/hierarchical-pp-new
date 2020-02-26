@@ -155,9 +155,9 @@ def test(net, params,  optimizer,  dataloader, label, dump_cluster = 0, preds_fi
         accuracy = marker_acc/marker_acc_count
         auc = None
         marker_rmse = None
-    total_loss /= total_sequence
-    marker_ll /= total_sequence
-    time_ll /= total_sequence
+    total_loss /= len(dataloader.dataset)
+    marker_ll /= len(dataloader.dataset)
+    time_ll /= len(dataloader.dataset)
     info = {'loss': total_loss, 'time_rmse':time_rmse, 'accuracy': accuracy, 'auc':auc,\
         'marker_rmse': marker_rmse, 'marker_ll':marker_ll, 'time_ll': time_ll}
 

@@ -161,6 +161,46 @@ class Encoder(nn.Module):
         sample_z = dist_z.rsample() #(T,BS,latent_dim)
         return (sample_y, dist_y), (sample_z, dist_z)
 
+class Decoder(nn.Module):
+    def __init__(self, shared_output_layers:list, marker_dim:int, decoder_in_dim:int, **kwargs):
+        super().__init__()
+        self.shared_output_layers = shared_output_layers
+        self.marker_dim = marker_dim
+        self.time_loss = kwargs['time_loss']
+        self.marker_type = kwargs['marker_type']
+        self.x_given_t = kwargs['x_given_t']
+        self.preprocessing_module_dims = [decoder_in_dim, *self.shared_output_layers]
+        self.preprocessing_module =  self.create_generative_nets()
+
+    def generate_marker(self, h, t):
+        mu, logvar = generate_marker(self, h, t)
+        if self.marker_type == 'real':
+            return Normal(mu, logvar.div(2).exp())
+        elif self.marker_type == 'categorical':
+            return Categorical(logits=mu)
+        else:
+            raise NotImplementedError
+
+    def create_generative_nets(self):
+        gen_pre_module = MLP(self.preprocessing_module_dims)
+        return gen_pre_module
+
+    def compute_time_log_prob(self, h, t):
+        return compute_point_log_likelihood(self, h, t)
+
+    def compute_marker_log_prob(self, x, dist_x_recon:torch.distributions.Distribution):
+        if dist_x_recon.__class__.__name__ == "Normal":
+            return dist_x_recon.log_prob(x)
+        elif dist_x_recon.__class__.__name__ == "Categorical":
+            return dist_x_recon.log_prob(x)
+        else:
+            raise NotImplementedError
+
+
+    def forward(self, concat_hzy):
+        out = self.preprocessing_module(concat_hzy)
+        return out
+
 
 class Model1(nn.Module):
     def __init__(self, latent_dim=20, marker_dim=31, marker_type='real', hidden_dim=128, time_dim=2, n_cluster=5, x_given_t=False, time_loss='normal', gamma=1., dropout=None, base_intensity=0, time_influence=0.1):
@@ -184,7 +224,7 @@ class Model1(nn.Module):
         self.emb_dim = self.x_embedding_layer[-1] + self.t_embedding_layer[-1]
         self.embed_x, self.embed_t = self.create_embedding_nets()
         self.shared_output_layers = [256]
-        self.inf_pre_module, self.gen_pre_module = self.create_preprocess_nets()
+        # self.inf_pre_module, self.gen_pre_module = self.create_preprocess_nets()
 
         # Forward RNN
         self.rnn = self.create_rnn()
@@ -199,18 +239,21 @@ class Model1(nn.Module):
         self.encoder = Encoder(rnn_dims=rnn_dims, y_dims=y_dims, z_dims=z_dims)
 
         # Generative network
-        create_output_nets(self, base_intensity, time_influence)
+        encoder_out_dim = self.rnn_hidden_dim+self.latent_dim+self.cluster_dim
+        decoder_kwargs = {'marker_dim': self.marker_dim, 'decoder_in_dim': encoder_out_dim, 'time_loss': self.time_loss, 'marker_type': self.marker_type, 'x_given_t': self.x_given_t}
+        self.decoder = Decoder(shared_output_layers=self.shared_output_layers, **decoder_kwargs)
+        create_output_nets(self.decoder, base_intensity, time_influence)
 
     def create_embedding_nets(self):
         # marker_dim is passed. timeseries_dim is 2
         if self.marker_type == 'categorical':
             x_module = nn.Embedding(self.marker_dim, self.x_embedding_layer[0])
         else:
-            raise NotImplementedError
             x_module = nn.Sequential(
                 nn.Linear(self.marker_dim, self.x_embedding_layer[0]),
                 nn.ReLU(),
         )
+            # raise NotImplementedError
 
         t_module = nn.Sequential(
             nn.Linear(self.time_dim, self.t_embedding_layer[0]),
@@ -218,21 +261,15 @@ class Model1(nn.Module):
         )
         return x_module, t_module
 
-    def create_preprocess_nets(self):
-        # Inference net preprocessing
-        hxty_input_dim = self.rnn_hidden_dim+self.x_embedding_layer[-1]+self.t_embedding_layer[-1]+self.cluster_dim
-        inf_pre_module = nn.Sequential(
-            # nn.Dropout(self.dropout),
-            nn.Linear(hxty_input_dim, hxty_input_dim),
-            nn.ReLU(),nn.Dropout(self.dropout))
-
+    # def create_preprocess_nets(self):
         # Generative net preprocessing
-        hzy_input_dim = self.rnn_hidden_dim+self.latent_dim+self.cluster_dim
-        gen_pre_module = nn.Sequential(
+        # hzy_input_dim = self.rnn_hidden_dim+self.latent_dim+self.cluster_dim
+        # gen_pre_module = MLP([hzy_input_dim, *self.shared_output_layers])
+        # gen_pre_module = nn.Sequential(
             # nn.Dropout(self.dropout),
-            nn.Linear(hzy_input_dim, self.shared_output_layers[-1]),
-            nn.ReLU(),nn.Dropout(self.dropout))
-        return inf_pre_module, gen_pre_module
+            # nn.Linear(hzy_input_dim, self.shared_output_layers[-1]),
+            # nn.ReLU(),nn.Dropout(self.dropout))
+        # return gen_pre_module
 
 
     def create_rnn(self):
@@ -265,6 +302,10 @@ class Model1(nn.Module):
         return t_module_mu, t_module_logvar, x_module_mu, x_module_logvar
 
     def forward(self, marker_seq, time_seq, anneal=1., mask=None, temp=0.5, preds_file=None):
+
+        #HACK: Because Model requires (T,BS,dim) but the input is (BS,T,dim)
+        marker_seq, time_seq, mask = [torch.transpose(_tensor, 0, 1)  for _tensor in (marker_seq,time_seq,mask)]
+
         time_log_likelihood, marker_log_likelihood, KL, metric_dict = self._forward(marker_seq, time_seq, temp, mask)
 
         marker_loss = (-1.* marker_log_likelihood *mask)[1:,:].sum()
@@ -277,6 +318,7 @@ class Model1(nn.Module):
         return loss, {**meta_info, **metric_dict}
 
     def _forward(self, x, t, temp, mask):
+
         # Transform markers and timesteps into the embedding spaces
         phi_x, phi_t = self.embed_x(x), self.embed_t(t)
         phi_xt = torch.cat([phi_x, phi_t], dim=-1) #(T,BS, emb_dim)
@@ -309,23 +351,20 @@ class Model1(nn.Module):
         hidden_seq = torch.cat([h_0, hidden_seq], dim=0)
 
         # Combine (z_t, h_t, y) form the input for the generative part
-        concat_hzy = torch.cat([hidden_seq[:-1], posterior_sample_z, posterior_sample_y], dim=-1)
-        phi_hzy = self.gen_pre_module(concat_hzy)
-        mu_marker, logvar_marker = generate_marker(self, phi_hzy, None)
-        time_log_likelihood, mu_time = compute_point_log_likelihood(self, phi_hzy, t)
-        marker_log_likelihood = compute_marker_log_likelihood(self, x, mu_marker, logvar_marker)
+        concat_hzy = torch.cat([hidden_seq[:-1], posterior_sample_z, posterior_sample_y], dim=-1) #(T,BS,h+z+y dims)
+        phi_hzy = self.decoder(concat_hzy) #(T,BS,shared_output_layers[-1])
+        
+        dist_marker_recon = self.decoder.generate_marker(phi_hzy, t)
+        time_log_likelihood, mu_time = self.decoder.compute_time_log_prob(phi_hzy, t) #(T,BS)
+        marker_log_likelihood = self.decoder.compute_marker_log_prob(x, dist_marker_recon) #(T,BS)
 
-        KL_cluster = kl_divergence(posterior_dist_y, prior_dist_y)
+        KL_cluster = kl_divergence(posterior_dist_y, prior_dist_y) #(1,BS)
         KL_z = kl_divergence(posterior_dist_z, prior_dist_z).sum(-1)*mask
         KL = KL_cluster.sum() + KL_z.sum()
-        # try:
-        #     assert (KL >= 0)
-        # except:
-        #     import pdb; pdb.set_trace()
-
-
-
-
+        try:
+            assert (KL >= 0)
+        except:
+            raise ValueError("KL should be non-negative")
 
         metric_dict = {"z_cluster":0}
         with torch.no_grad():
