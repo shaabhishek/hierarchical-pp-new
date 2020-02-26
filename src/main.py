@@ -166,7 +166,7 @@ if __name__ == '__main__':
     ###Validation Parameter###
     parser.add_argument('--max_iter', type=int, default=1, help='number of iterations')
     parser.add_argument('--anneal_iter', type=int, default=40, help='number of iteration over which anneal goes to 1')
-    parser.add_argument('--hidden_dim', type=int, default=256, help='rnn hidden dim')
+    parser.add_argument('--rnn_hidden_dim', type=int, default=256, help='rnn hidden dim')
     parser.add_argument('--maxgradnorm', type=float, default=10.0, help='maximum gradient norm')
     parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
     parser.add_argument('--gamma', type=float, default=1, help='tradeoff of time and marker in loss. marker loss + gamma * time loss')
@@ -196,6 +196,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_name', type=str, default='mimic2', help='data set name')
     params = parser.parse_args()
     params.cv_idx = 1
+
     ###Fixed parameter###
     if params.data_name == 'mimic2':
         params.marker_dim = 75
@@ -275,7 +276,7 @@ if __name__ == '__main__':
     torch.backends.cudnn.benchmark = False
     torch.manual_seed(seedNum)
     np.random.seed(seedNum)
-    file_name_identifier = [['_g', params.gamma], ['_do', params.dropout],['_b', params.batch_size],['_h',params.hidden_dim ] , ['_l2', params.l2], ['_l', params.latent_dim], ['_gn', params.maxgradnorm], ['_lr', params.lr], ['_c',params.n_cluster], ['_s',params.seed], ['_tl',params.time_loss], ['_ai', params.anneal_iter]]
+    file_name_identifier = [['_g', params.gamma], ['_do', params.dropout],['_b', params.batch_size],['_h',params.rnn_hidden_dim ] , ['_l2', params.l2], ['_l', params.latent_dim], ['_gn', params.maxgradnorm], ['_lr', params.lr], ['_c',params.n_cluster], ['_s',params.seed], ['_tl',params.time_loss], ['_ai', params.anneal_iter]]
 
     if not params.test:
         d = vars(params)

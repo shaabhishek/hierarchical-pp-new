@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from torch.distributions import kl_divergence, Normal, Categorical, Gumbel
 
 from base_model import compute_marker_log_likelihood, compute_point_log_likelihood, generate_marker,create_output_nets
+from base_model import MLP, MLPNormal, MLPCategorical, BaseEncoder, BaseModel
 from utils.metric import get_marker_metric, compute_time_expectation, get_time_metric
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -42,81 +43,14 @@ def create_mlp(dims:list):
 
     return nn.Sequential(*layers)
 
-class MLP(nn.Module):
-    def __init__(self, dims:list):
-        assert len(dims) >= 2 #should at least be [inputdim, outputdim]
-        super().__init__()
-        layers = list()
-        for i in range(len(dims) - 1):
-            n = dims[i]
-            m = dims[i+1]
-            L = nn.Linear(n, m, bias=True)
-            layers.append(L)
-            layers.append(nn.ReLU()) #NOTE: Always slaps a non-linearity in the end
-        self.net = nn.Sequential(*layers)
-
-    def forward(self, x):
-        return self.net(x)
-
-class MLPNormal(MLP):
-    def __init__(self, dims:list):
-        try:
-            assert len(dims) >= 3 #should at least be [inputdim, hiddendim1, outdim]
-        except AssertionError:
-            print(dims)
-            raise
-        
-        super().__init__(dims[:-1]) #initializes the core network
-        self.mu_module = nn.Linear(dims[-2], dims[-1], bias=False)
-        self.logvar_module = nn.Linear(dims[-2], dims[-1], bias=False)
-
-    def forward(self, x):
-        h = self.net(x)
-        mu, logvar = self.mu_module(h), self.logvar_module(h)
-        dist = Normal(mu, logvar.div(2).exp()) #std = exp(logvar/2)
-        return dist
-
-class MLPCategorical(MLP):
-    def __init__(self, dims:list):
-        try:
-            assert len(dims) >= 3 #should at least be [inputdim, hiddendim1, logitsdim] - otherwise it's just a matrix multiplication
-        except AssertionError:
-            print(dims)
-            raise
-        
-        super().__init__(dims[:-1]) #initializes the core network
-        self.logit_module = nn.Linear(dims[-2], dims[-1], bias=False)
-
-    def forward(self, x:torch.Tensor):
-        h = self.net(x)
-        logits = self.logit_module(h)
-        dist = Categorical(logits=logits)
-        return dist
-
-class Encoder(nn.Module):
-    def __init__(self, rnn_dims:list, y_dims:list, z_dims:list, ):#latent_dim:int, encoder_layer_dims:list,  cluster_dim:int,  z_input_dim:int):
-        super().__init__()
-        self.rnn_dims = rnn_dims
-        self.y_dims = y_dims
-        self.z_dims = z_dims
-        self.rnn_hidden_dim = rnn_dims[-1]
-        self.y_dim = y_dims[-1]
-        self.y_module, self.rnn_module, self.z_module = self.create_inference_nets()
-
-    def create_inference_nets(self):
-        y_module = MLPCategorical(self.y_dims)
-
-        rnn = nn.GRU(
-            input_size=self.rnn_dims[0],
-            hidden_size=self.rnn_dims[1],
-        )
-        z_module = MLPNormal(self.z_dims)
-        return y_module, rnn, z_module
+class Encoder(BaseEncoder):
+    def __init__(self, rnn_dims:list, y_dims:list, z_dims:list, ):
+        super().__init__(rnn_dims, y_dims, z_dims)
 
     def forward(self, xt, temp, mask):
         """
         Input:
-            xt: Tensor of shape T x BS x (self.x_embedding_layer[-1]+self.t_embedding_layer[-1])
+            xt: Tensor of shape T x BS x (self.x_embedding_dim[-1]+self.t_embedding_dim[-1])
             temp: scalar
             mask : Tensor TxBS
         Output:
@@ -142,7 +76,7 @@ class Encoder(nn.Module):
             print(final_state.shape)
             raise
         
-        dist_y = self.y_module(final_state)#[None, :, :] #shape(dist_y.logits) = (BS, y_dim)
+        dist_y = self.y_module(final_state) #shape(dist_y.logits) = (BS, y_dim)
         sample_y = sample_gumbel_softmax(dist_y.logits, temp) #(BS, y_dim)
         sample_y = sample_y.unsqueeze(0).expand(T,-1,-1) #(T,BS,y_dim)
         
@@ -162,14 +96,14 @@ class Encoder(nn.Module):
         return (sample_y, dist_y), (sample_z, dist_z)
 
 class Decoder(nn.Module):
-    def __init__(self, shared_output_layers:list, marker_dim:int, decoder_in_dim:int, **kwargs):
+    def __init__(self, shared_output_dims:list, marker_dim:int, decoder_in_dim:int, **kwargs):
         super().__init__()
-        self.shared_output_layers = shared_output_layers
+        self.shared_output_dims = shared_output_dims
         self.marker_dim = marker_dim
         self.time_loss = kwargs['time_loss']
         self.marker_type = kwargs['marker_type']
         self.x_given_t = kwargs['x_given_t']
-        self.preprocessing_module_dims = [decoder_in_dim, *self.shared_output_layers]
+        self.preprocessing_module_dims = [decoder_in_dim, *self.shared_output_dims]
         self.preprocessing_module =  self.create_generative_nets()
 
     def generate_marker(self, h, t):
@@ -201,86 +135,63 @@ class Decoder(nn.Module):
         out = self.preprocessing_module(concat_hzy)
         return out
 
+# class Model1(BaseModel):
+#     def __init__(self):
+#         super().__init__()
+#         pass
 
-class Model1(nn.Module):
-    def __init__(self, latent_dim=20, marker_dim=31, marker_type='real', hidden_dim=128, time_dim=2, n_cluster=5, x_given_t=False, time_loss='normal', gamma=1., dropout=None, base_intensity=0, time_influence=0.1):
-        super().__init__()
-        self.marker_type = marker_type
-        self.marker_dim = marker_dim
-        self.time_dim = time_dim
-        self.rnn_hidden_dim = hidden_dim
-        self.latent_dim = latent_dim
-        self.cluster_dim = n_cluster
-        self.x_given_t = x_given_t
-        self.time_loss = time_loss
+class Model1(BaseModel):
+    def __init__(self, **kwargs):
+    # def __init__(self, latent_dim=20, marker_dim=31, marker_type='real', hidden_dim=128, time_dim=2, n_cluster=5, x_given_t=False, time_loss='normal', gamma=1., dropout=None, base_intensity=0, time_influence=0.1):
+        super().__init__(**kwargs)
+        # self.marker_type = marker_type
+        # self.marker_dim = marker_dim
+        # self.time_dim = time_dim
+        # self.rnn_hidden_dim = hidden_dim
+        # self.latent_dim = latent_dim
+        # self.cluster_dim = n_cluster
+        # self.x_given_t = x_given_t
+        # self.time_loss = time_loss
         self.sigma_min = 1e-10
-        self.gamma = gamma
-        self.dropout = dropout
+        self.gamma = kwargs['gamma']
+        self.dropout = kwargs['dropout']
 
         # Preprocessing networks
         # Embedding network
-        self.x_embedding_layer = [128]
-        self.t_embedding_layer = [8]
-        self.emb_dim = self.x_embedding_layer[-1] + self.t_embedding_layer[-1]
-        self.embed_x, self.embed_t = self.create_embedding_nets()
-        self.shared_output_layers = [256]
+        # self.x_embedding_dim = [128]
+        # self.t_embedding_dim = [8]
+        # self.emb_dim = self.x_embedding_dim[-1] + self.t_embedding_dim[-1]
+        # self.embed_x, self.embed_t = self.create_embedding_nets()
+        # self.shared_output_dims = [256]
         # self.inf_pre_module, self.gen_pre_module = self.create_preprocess_nets()
 
         # Forward RNN
         self.rnn = self.create_rnn()
 
         # Inference network
-        self.encoder_rnn_hidden_dims = [64, 64]
-        self.encoder_y_hidden_dims = [64]
-        z_input_dim = self.rnn_hidden_dim + self.emb_dim + self.cluster_dim
-        rnn_dims = [self.emb_dim, self.rnn_hidden_dim]
-        y_dims = [self.rnn_hidden_dim, *self.encoder_y_hidden_dims, self.cluster_dim]
-        z_dims = [z_input_dim, *self.encoder_rnn_hidden_dims, self.latent_dim]
-        self.encoder = Encoder(rnn_dims=rnn_dims, y_dims=y_dims, z_dims=z_dims)
+        # self.encoder_z_hidden_dims = [64, 64]
+        # self.encoder_y_hidden_dims = [64]
+        # z_input_dim = self.rnn_hidden_dim + self.emb_dim + self.cluster_dim
+        # rnn_dims = [self.emb_dim, self.rnn_hidden_dim]
+        # y_dims = [self.rnn_hidden_dim, *self.encoder_y_hidden_dims, self.cluster_dim]
+        # z_dims = [z_input_dim, *self.encoder_z_hidden_dims, self.latent_dim]
+        self.encoder = Encoder(rnn_dims=self.rnn_dims, y_dims=self.y_dims, z_dims=self.z_dims)
 
         # Generative network
         encoder_out_dim = self.rnn_hidden_dim+self.latent_dim+self.cluster_dim
         decoder_kwargs = {'marker_dim': self.marker_dim, 'decoder_in_dim': encoder_out_dim, 'time_loss': self.time_loss, 'marker_type': self.marker_type, 'x_given_t': self.x_given_t}
-        self.decoder = Decoder(shared_output_layers=self.shared_output_layers, **decoder_kwargs)
-        create_output_nets(self.decoder, base_intensity, time_influence)
-
-    def create_embedding_nets(self):
-        # marker_dim is passed. timeseries_dim is 2
-        if self.marker_type == 'categorical':
-            x_module = nn.Embedding(self.marker_dim, self.x_embedding_layer[0])
-        else:
-            x_module = nn.Sequential(
-                nn.Linear(self.marker_dim, self.x_embedding_layer[0]),
-                nn.ReLU(),
-        )
-            # raise NotImplementedError
-
-        t_module = nn.Sequential(
-            nn.Linear(self.time_dim, self.t_embedding_layer[0]),
-            nn.ReLU()
-        )
-        return x_module, t_module
-
-    # def create_preprocess_nets(self):
-        # Generative net preprocessing
-        # hzy_input_dim = self.rnn_hidden_dim+self.latent_dim+self.cluster_dim
-        # gen_pre_module = MLP([hzy_input_dim, *self.shared_output_layers])
-        # gen_pre_module = nn.Sequential(
-            # nn.Dropout(self.dropout),
-            # nn.Linear(hzy_input_dim, self.shared_output_layers[-1]),
-            # nn.ReLU(),nn.Dropout(self.dropout))
-        # return gen_pre_module
-
+        self.decoder = Decoder(shared_output_dims=self.shared_output_dims, **decoder_kwargs)
+        create_output_nets(self.decoder, self.base_intensity, self.time_influence)
 
     def create_rnn(self):
         rnn = nn.GRU(
-            input_size=self.x_embedding_layer[-1]+self.t_embedding_layer[-1],
+            input_size=self.x_embedding_dim[-1]+self.t_embedding_dim[-1],
             hidden_size=self.rnn_hidden_dim,
         )
         return rnn
 
     def create_output_nets(self):
-        l = self.shared_output_layers[-1]
+        l = self.shared_output_dims[-1]
         t_module_mu = nn.Linear(l, 1)
         t_module_logvar = nn.Linear(l, 1)
 
@@ -318,7 +229,6 @@ class Model1(nn.Module):
         return loss, {**meta_info, **metric_dict}
 
     def _forward(self, x, t, temp, mask):
-
         # Transform markers and timesteps into the embedding spaces
         phi_x, phi_t = self.embed_x(x), self.embed_t(t)
         phi_xt = torch.cat([phi_x, phi_t], dim=-1) #(T,BS, emb_dim)
@@ -352,7 +262,7 @@ class Model1(nn.Module):
 
         # Combine (z_t, h_t, y) form the input for the generative part
         concat_hzy = torch.cat([hidden_seq[:-1], posterior_sample_z, posterior_sample_y], dim=-1) #(T,BS,h+z+y dims)
-        phi_hzy = self.decoder(concat_hzy) #(T,BS,shared_output_layers[-1])
+        phi_hzy = self.decoder(concat_hzy) #(T,BS,shared_output_dims[-1])
         
         dist_marker_recon = self.decoder.generate_marker(phi_hzy, t)
         time_log_likelihood, mu_time = self.decoder.compute_time_log_prob(phi_hzy, t) #(T,BS)

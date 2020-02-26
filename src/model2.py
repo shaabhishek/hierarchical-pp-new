@@ -6,6 +6,7 @@ from torch.distributions import kl_divergence, Normal, Categorical
 import math
 
 from base_model import compute_marker_log_likelihood, compute_point_log_likelihood, generate_marker,create_output_nets
+from base_model import MLP, MLPNormal, MLPCategorical, BaseEncoder
 from utils.metric import get_marker_metric, compute_time_expectation, get_time_metric
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -36,14 +37,20 @@ def reparameterize(mu, logvar):
         sigma = torch.exp(0.5 * logvar)
         return mu + epsilon.mul(sigma)
     
+class Encoder(BaseEncoder):
+    def __init__(self, rnn_dims:list, y_dims:list, z_dims:list, ):
+        super().__init__(rnn_dims, y_dims, z_dims)
+
+    def forward(self, ):
+        pass
     
 class Model2(nn.Module):
-    def __init__(self, latent_dim=20, marker_dim=31, marker_type='real', hidden_dim=128, time_dim=2, n_cluster=5, x_given_t=False, time_loss='normal', gamma=1., dropout=None, base_intensity=0, time_influence=0.1):
+    def __init__(self, latent_dim=20, marker_dim=31, marker_type='real', rnn_hidden_dim=128, time_dim=2, n_cluster=5, x_given_t=False, time_loss='normal', gamma=1., dropout=None, base_intensity=0, time_influence=0.1):
         super().__init__()
         self.marker_type = marker_type
         self.marker_dim = marker_dim
         self.time_dim = time_dim
-        self.hidden_dim = hidden_dim
+        self.rnn_hidden_dim = rnn_hidden_dim
         self.latent_dim = latent_dim
         self.cluster_dim = n_cluster
         self.x_given_t = x_given_t
@@ -56,10 +63,11 @@ class Model2(nn.Module):
         
         # Preprocessing networks
         # Embedding network
-        self.x_embedding_layer = [128]
-        self.t_embedding_layer = [8]
-        self.embed_x, self.embed_t = self.create_embedding_nets()
-        self.shared_output_layers = [256]
+        # self.x_embedding_dim = [128]
+        # self.t_embedding_dim = [8]
+        # self.emb_dim = 
+        # self.embed_x, self.embed_t = self.create_embedding_nets()
+        self.shared_output_dims = [256]
         self.inf_pre_module, self.gen_pre_module = self.create_preprocess_nets()
         
         # Forward RNN
@@ -67,11 +75,13 @@ class Model2(nn.Module):
 
 
         # Backward RNN Cell
-        self.reverse_cell = nn.GRUCell(input_size=self.x_embedding_layer[-1] + self.t_embedding_layer[-1]+ self.hidden_dim, hidden_size=self.hidden_dim)
+        self.reverse_cell = nn.GRUCell(input_size=self.x_embedding_dim[-1] + self.t_embedding_dim[-1]+ self.rnn_hidden_dim, hidden_size=self.rnn_hidden_dim)
 
         
         # Inference network
-        self.encoder_layers = [64, 64]
+        # z_input_dim = 
+        self.encoder_z_hidden_dims = [64, 64]
+        rnn_dims = [self.emb_dim]
         self.y_encoder, self.encoder_rnn, self.z_intmd_module, self.z_mu_module, self.z_logvar_module = self.create_inference_nets()
         
         # Generative network
@@ -79,75 +89,75 @@ class Model2(nn.Module):
 
         #Prior on z
         self.prior_net = nn.Sequential(
-            nn.Linear(self.latent_dim, self.hidden_dim),
+            nn.Linear(self.latent_dim, self.rnn_hidden_dim),
             nn.ReLU()
         )
-        self.prior_mu = nn.Linear(self.hidden_dim, self.latent_dim)
-        self.prior_logvar = nn.Linear(self.hidden_dim, self.latent_dim)
+        self.prior_mu = nn.Linear(self.rnn_hidden_dim, self.latent_dim)
+        self.prior_logvar = nn.Linear(self.rnn_hidden_dim, self.latent_dim)
     
     def create_embedding_nets(self):
         # marker_dim is passed. timeseries_dim is 2
         if self.marker_type == 'categorical':
-            x_module = nn.Embedding(self.marker_dim, self.x_embedding_layer[0])
+            x_module = nn.Embedding(self.marker_dim, self.x_embedding_dim[0])
         else:
             x_module = nn.Sequential(
-                nn.Linear(self.marker_dim, self.x_embedding_layer[0]),
+                nn.Linear(self.marker_dim, self.x_embedding_dim[0]),
                 nn.ReLU(),
         )
         
         t_module = nn.Sequential(
-            nn.Linear(self.time_dim, self.t_embedding_layer[0]),
+            nn.Linear(self.time_dim, self.t_embedding_dim[0]),
             nn.ReLU()
         )
         return x_module, t_module
     
     def create_preprocess_nets(self):
         # Inference net preprocessing
-        hxty_input_dim = self.hidden_dim+self.latent_dim+self.cluster_dim
+        hxty_input_dim = self.rnn_hidden_dim+self.latent_dim+self.cluster_dim
         inf_pre_module = nn.Sequential(
             # nn.ReLU(),nn.Dropout(self.dropout),
             nn.Linear(hxty_input_dim, hxty_input_dim),
             nn.ReLU(),nn.Dropout(self.dropout))
         
         # Generative net preprocessing
-        hzy_input_dim = self.hidden_dim+self.latent_dim+self.cluster_dim
+        hzy_input_dim = self.rnn_hidden_dim+self.latent_dim+self.cluster_dim
         gen_pre_module = nn.Sequential(
             # nn.ReLU(),nn.Dropout(self.dropout),
-            nn.Linear(hzy_input_dim, self.shared_output_layers[-1]),
+            nn.Linear(hzy_input_dim, self.shared_output_dims[-1]),
             nn.ReLU(),nn.Dropout(self.dropout))
         return inf_pre_module, gen_pre_module
         
     
     def create_rnn(self):
         rnn = nn.GRU(
-            input_size=self.x_embedding_layer[-1]+self.t_embedding_layer[-1],
-            hidden_size=self.hidden_dim,
+            input_size=self.x_embedding_dim[-1]+self.t_embedding_dim[-1],
+            hidden_size=self.rnn_hidden_dim,
         )
         return rnn
     
-    def create_inference_nets(self):
-        y_module = nn.Sequential(
-            nn.Linear(self.hidden_dim, self.cluster_dim)
-        )
+    # def create_inference_nets(self):
+    #     y_module = nn.Sequential(
+    #         nn.Linear(self.rnn_hidden_dim, self.cluster_dim)
+    #     )
         
-        encoder_rnn = nn.GRU(
-            input_size=self.x_embedding_layer[-1]+self.t_embedding_layer[-1],
-            hidden_size=self.hidden_dim,
-        )
+    #     encoder_rnn = nn.GRU(
+    #         input_size=self.x_embedding_dim[-1]+self.t_embedding_dim[-1],
+    #         hidden_size=self.rnn_hidden_dim,
+    #     )
         
-        z_input_dim = self.hidden_dim+self.latent_dim+self.cluster_dim
-        z_intmd_module = nn.Sequential(
-            nn.Linear(z_input_dim, self.encoder_layers[0]),
-            nn.ReLU(),
-            nn.Linear(self.encoder_layers[0], self.encoder_layers[1]),
-            nn.ReLU(),
-        )
-        z_mu_module = nn.Linear(self.encoder_layers[1], self.latent_dim)
-        z_logvar_module = nn.Linear(self.encoder_layers[1], self.latent_dim)
-        return y_module, encoder_rnn, z_intmd_module, z_mu_module, z_logvar_module
+    #     z_input_dim = self.rnn_hidden_dim+self.latent_dim+self.cluster_dim
+    #     z_intmd_module = nn.Sequential(
+    #         nn.Linear(z_input_dim, self.encoder_layers[0]),
+    #         nn.ReLU(),
+    #         nn.Linear(self.encoder_layers[0], self.encoder_layers[1]),
+    #         nn.ReLU(),
+    #     )
+    #     z_mu_module = nn.Linear(self.encoder_layers[1], self.latent_dim)
+    #     z_logvar_module = nn.Linear(self.encoder_layers[1], self.latent_dim)
+    #     return y_module, encoder_rnn, z_intmd_module, z_mu_module, z_logvar_module
 
     def create_output_nets(self):
-        l = self.shared_output_layers[-1]
+        l = self.shared_output_dims[-1]
         t_module_mu = nn.Linear(l, 1)
         t_module_logvar = nn.Linear(l, 1)
         
@@ -172,7 +182,7 @@ class Model2(nn.Module):
     def encoder(self, phi_xt, h_t, temp, mask):
         """
         Input:
-            phi_xt: Tensor of shape T x BS x (self.x_embedding_layer[-1]+self.t_embedding_layer[-1])
+            phi_xt: Tensor of shape T x BS x (self.x_embedding_dim[-1]+self.t_embedding_dim[-1])
             h_t : T x BS x hidden_dim
             temp: scalar
             mask : Tensor TxBS
@@ -186,7 +196,7 @@ class Model2(nn.Module):
         T,BS,_ = phi_xt.shape
 
         # Compute encoder RNN hidden states for y
-        h_0 = torch.zeros(1, BS, self.hidden_dim).to(device)
+        h_0 = torch.zeros(1, BS, self.rnn_hidden_dim).to(device)
         hidden_seq, _ = self.encoder_rnn(phi_xt, h_0)
         #hidden_seq = torch.cat([h_0, hidden_seq], dim=0)
         # Encoder for y.  Need the last one based on mask
@@ -199,7 +209,7 @@ class Model2(nn.Module):
         sample_y = sample_y.expand(*repeat_vals) #T x BS x k
         
         # Encoder for z Reverse RNN
-        rh_ = torch.zeros(BS, self.hidden_dim).to(device)
+        rh_ = torch.zeros(BS, self.rnn_hidden_dim).to(device)
         concat_hx = torch.cat([phi_xt, h_t], dim = -1) #T x BS x hidden_dim + embedding_dim
         outs = []
         for seq in range(T):
@@ -261,7 +271,7 @@ class Model2(nn.Module):
 
         ##Compute h_t Shape T+1, BS, dim
         # Run RNN over the concatenated embedded sequence
-        h_0 = torch.zeros(1, BS, self.hidden_dim).to(device)
+        h_0 = torch.zeros(1, BS, self.rnn_hidden_dim).to(device)
         # Run RNN
         hidden_seq, _ = self.rnn(phi_xt, h_0)
         # Append h_0 to h_1 .. h_T

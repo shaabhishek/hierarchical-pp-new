@@ -6,12 +6,142 @@ import time
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.utils.rnn as rnnutils
-from torch.distributions.normal import Normal
-from torch.distributions.kl import kl_divergence
+from torch.distributions import Normal, Categorical
+from torch.distributions import kl_divergence
 from torch.optim import Adam
 import matplotlib.pyplot as plt
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+class MLP(nn.Module):
+    def __init__(self, dims:list):
+        assert len(dims) >= 2 #should at least be [inputdim, outputdim]
+        super().__init__()
+        layers = list()
+        for i in range(len(dims) - 1):
+            n = dims[i]
+            m = dims[i+1]
+            L = nn.Linear(n, m, bias=True)
+            layers.append(L)
+            layers.append(nn.ReLU()) #NOTE: Always slaps a non-linearity in the end
+        self.net = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.net(x)
+
+class MLPNormal(MLP):
+    def __init__(self, dims:list):
+        try:
+            assert len(dims) >= 3 #should at least be [inputdim, hiddendim1, outdim]
+        except AssertionError:
+            print(dims)
+            raise
+        
+        super().__init__(dims[:-1]) #initializes the core network
+        self.mu_module = nn.Linear(dims[-2], dims[-1], bias=False)
+        self.logvar_module = nn.Linear(dims[-2], dims[-1], bias=False)
+
+    def forward(self, x):
+        h = self.net(x)
+        mu, logvar = self.mu_module(h), self.logvar_module(h)
+        dist = Normal(mu, logvar.div(2).exp()) #std = exp(logvar/2)
+        return dist
+
+class MLPCategorical(MLP):
+    def __init__(self, dims:list):
+        try:
+            assert len(dims) >= 3 #should at least be [inputdim, hiddendim1, logitsdim] - otherwise it's just a matrix multiplication
+        except AssertionError:
+            print(dims)
+            raise
+        
+        super().__init__(dims[:-1]) #initializes the core network
+        self.logit_module = nn.Linear(dims[-2], dims[-1], bias=False)
+
+    def forward(self, x:torch.Tensor):
+        h = self.net(x)
+        logits = self.logit_module(h)
+        dist = Categorical(logits=logits)
+        return dist
+
+class BaseEncoder(nn.Module):
+    def __init__(self, rnn_dims:list, y_dims:list, z_dims:list):
+        super().__init__()
+        self.rnn_dims = rnn_dims
+        self.y_dims = y_dims
+        self.z_dims = z_dims
+        self.rnn_hidden_dim = rnn_dims[-1]
+        self.y_dim = y_dims[-1]
+        self.y_module, self.rnn_module, self.z_module = self.create_inference_nets()
+
+    def create_inference_nets(self):
+        y_module = MLPCategorical(self.y_dims)
+
+        rnn = nn.GRU(
+            input_size=self.rnn_dims[0],
+            hidden_size=self.rnn_dims[1],
+        )
+        z_module = MLPNormal(self.z_dims)
+        return y_module, rnn, z_module
+
+    def forward(self, xt, temp, mask):
+        raise NotImplementedError
+
+
+class BaseModel(nn.Module):
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.marker_type = kwargs['marker_type']
+        self.marker_dim = kwargs['marker_dim']
+        self.time_dim = kwargs['time_dim']
+        self.rnn_hidden_dim = kwargs['rnn_hidden_dim']
+        self.latent_dim = kwargs['latent_dim']
+        self.cluster_dim = kwargs['n_cluster']
+        self.x_given_t = kwargs['x_given_t']
+        self.time_loss = kwargs['time_loss']
+        self.base_intensity = kwargs['base_intensity']
+        self.time_influence = kwargs['time_influence']
+
+        ## Preprocessing networks
+        # Embedding network
+        self.x_embedding_dim = [128]
+        self.t_embedding_dim = [8]
+        self.emb_dim = self.x_embedding_dim[-1] + self.t_embedding_dim[-1]
+        self.embed_x, self.embed_t = self.create_embedding_nets()
+        self.shared_output_dims = [256]
+
+
+        # Inference network
+        self.encoder_z_hidden_dims = [64, 64]
+        self.encoder_y_hidden_dims = [64]
+        z_input_dim = self.rnn_hidden_dim + self.emb_dim + self.cluster_dim
+        self.rnn_dims = [self.emb_dim, self.rnn_hidden_dim]
+        self.y_dims = [self.rnn_hidden_dim, *self.encoder_y_hidden_dims, self.cluster_dim]
+        self.z_dims = [z_input_dim, *self.encoder_z_hidden_dims, self.latent_dim]
+        # self.encoder = Encoder(rnn_dims=rnn_dims, y_dims=y_dims, z_dims=z_dims)
+
+
+        #Generative network
+
+    def create_embedding_nets(self):
+        # marker_dim is passed. timeseries_dim is 2
+        if self.marker_type == 'categorical':
+            x_module = nn.Embedding(self.marker_dim, self.x_embedding_dim[0])
+        else:
+            x_module = nn.Sequential(
+                nn.Linear(self.marker_dim, self.x_embedding_dim[0]),
+                nn.ReLU(),
+        )
+            # raise NotImplementedError
+
+        t_module = nn.Sequential(
+            nn.Linear(self.time_dim, self.t_embedding_dim[0]),
+            nn.ReLU()
+        )
+        return x_module, t_module
+
+    def forward(self):
+        raise NotImplementedError
 
 
 def one_hot_encoding(y, n_dims=None):
@@ -32,21 +162,21 @@ def assert_input(self):
 
 def create_input_embedding_layer(model):
     if model.marker_type == 'categorical':
-        x_module = nn.Embedding(model.marker_dim, model.x_embedding_layer[0])
+        x_module = nn.Embedding(model.marker_dim, model.x_embedding_dim[0])
     else:
         x_module = nn.Sequential(
-            nn.Linear(model.marker_dim, model.x_embedding_layer[0])#, nn.ReLU(),
+            nn.Linear(model.marker_dim, model.x_embedding_dim[0])#, nn.ReLU(),
             # Not sure whether to put Relu at the end of embedding layer
-            #nn.Linear(self.x_embedding_layer[0],
-            #          self.x_embedding_layer[1]), nn.ReLU()
+            #nn.Linear(self.x_embedding_dim[0],
+            #          self.x_embedding_dim[1]), nn.ReLU()
         )
 
-    #t_module = nn.Linear(self.time_dim, self.t_embedding_layer[0])
+    #t_module = nn.Linear(self.time_dim, self.t_embedding_dim[0])
     t_module = nn.Sequential(
-        nn.Linear(model.time_dim, model.t_embedding_layer[0])#,
+        nn.Linear(model.time_dim, model.t_embedding_dim[0])#,
         #nn.ReLU(),
         #nn.Dropout(p=0.5),
-        #nn.Linear(model.t_embedding_layer[0], model.t_embedding_layer[0])
+        #nn.Linear(model.t_embedding_dim[0], model.t_embedding_dim[0])
     )
     return x_module, t_module
 
@@ -54,14 +184,14 @@ def create_input_embedding_layer(model):
 def create_output_marker_layer(model):
     embed_module = nn.Sequential(
         nn.ReLU(),nn.Dropout(model.dropout),
-        nn.Linear(model.hidden_embed_input_dim,model.shared_output_layers[0]),
+        nn.Linear(model.hidden_embed_input_dim,model.shared_output_dims[0]),
         nn.ReLU(),nn.Dropout(model.dropout)
         #nn.Linear(
-        #    self.shared_output_layers[0], self.shared_output_layers[1]), nn.ReLU()
+        #    self.shared_output_dims[0], self.shared_output_dims[1]), nn.ReLU()
     )
 
     x_module_logvar = None
-    l = model.shared_output_layers[-1]
+    l = model.shared_output_dims[-1]
     if model.x_given_t:
         l += 1
     if model.marker_type == 'real':
@@ -80,7 +210,7 @@ def create_output_marker_layer(model):
     return embed_module, x_module_mu, x_module_logvar    
 
 def create_output_time_layer(model, b, ti):
-    l =model.shared_output_layers[-1]
+    l =model.shared_output_dims[-1]
     if model.time_loss == 'intensity':
         h_influence =  nn.Linear(l, 1, bias=False)
         time_influence = nn.Parameter(ti*torch.ones(1, 1, 1))#0.005*
@@ -97,7 +227,7 @@ def create_output_nets(model, b, ti):
     ti: (float) time influence #TODO
     """
     
-    l = model.shared_output_layers[-1]
+    l = model.shared_output_dims[-1]
     
     # Output net for time
     if model.time_loss == 'intensity':
@@ -159,14 +289,14 @@ def compute_marker_log_likelihood(model, x, mu, logvar):
 def compute_point_log_likelihood(model, h, t):
     """
         Input:
-            h : Tensor of shape (T)xBSxself.shared_output_layers[-1]
+            h : Tensor of shape (T)xBSxself.shared_output_dims[-1]
             t : Tensor of shape TxBSxtime_dim [i,:,0] represents actual time at timestep i ,\
                 [i,:,1] represents time gap d_i = t_i- t_{i-1}
         Output:
             log_f_t : tensor of shape TxBS
 
     """
-    h_trimmed = h # TxBSxself.shared_output_layers[-1]
+    h_trimmed = h # TxBSxself.shared_output_dims[-1]
     d_js = t[:, :, 0][:, :, None]  # Shape TxBSx1 Time differences
 
     if model.time_loss == 'intensity':
@@ -206,9 +336,9 @@ def preprocess_input(model, x, t):
                 [i,:,1] represents time gap d_i = t_i- t_{i-1}
 
         Output:
-            phi_x : Tensor of shape TxBSx self.x_embedding_layer[-1]
-            phi_t : Tensor of shape TxBSx self.t_embedding_layer[-1]
-            phi   : Tensor of shape TxBS x (self.x_embedding_layer[-1] + self.t_embedding_layer[-1])
+            phi_x : Tensor of shape TxBSx self.x_embedding_dim[-1]
+            phi_t : Tensor of shape TxBSx self.t_embedding_dim[-1]
+            phi   : Tensor of shape TxBS x (self.x_embedding_dim[-1] + self.t_embedding_dim[-1])
     """
     # if model.marker_type == 'categorical':
     #     # Shape TxBSxmarker_dim
@@ -223,7 +353,7 @@ def preprocess_input(model, x, t):
 def generate_marker(model, h, t):
     """
         Input:
-            h : Tensor of shape TxBSxself.shared_output_layers[-1]
+            h : Tensor of shape TxBSxself.shared_output_dims[-1]
             t : Tensor of shape TxBSxtime_dim [i,:,0] represents actual time at timestep i ,\
                 [i,:,1] represents time gap d_i = t_i- t_{i-1}
         Output:
