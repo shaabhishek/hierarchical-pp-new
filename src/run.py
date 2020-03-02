@@ -82,9 +82,9 @@ def train(net, params, optimizer, dataloader, label):
     if params.show: bar.finish()
 
     time_rmse = (time_mse/time_mse_count)** 0.5
-    total_loss /= total_sequence
-    marker_ll /= total_sequence
-    time_ll /= total_sequence
+    total_loss /= len(dataloader.dataset)
+    marker_ll /= len(dataloader.dataset)
+    time_ll /= len(dataloader.dataset)
 
     if params.marker_type == 'real':
         marker_rmse = (marker_mse/marker_mse_count)** 0.5
@@ -115,7 +115,7 @@ def test(net, params,  optimizer,  dataloader, label, dump_cluster = 0, preds_fi
     marker_mse, marker_mse_count = 0., 0.
     marker_acc, marker_acc_count = 0., 0.
     total_loss, marker_ll, time_ll = 0., 0, 0.
-    total_sequence =0
+    # total_sequence =0
     if dump_cluster == 1:
         zs = []
 

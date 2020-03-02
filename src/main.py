@@ -35,8 +35,8 @@ def train_one_dataset(params, file_name, train_dataloader, valid_dataloader):
         optimizer = torch.optim.Adam(model.parameters(), lr = params.lr)
 
     print(model)
-    for parameters in model.parameters():
-        print(parameters.size())
+    for pname, pdata in model.named_parameters():
+        print(f"{pname}: {pdata.size()}")
     print("\n")
 
     ### ================================== start training ==================================

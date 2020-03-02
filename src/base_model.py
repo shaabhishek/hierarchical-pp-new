@@ -72,6 +72,7 @@ class BaseEncoder(nn.Module):
         self.z_dims = z_dims
         self.rnn_hidden_dim = rnn_dims[-1]
         self.y_dim = y_dims[-1]
+        self.latent_dim = z_dims[-1]
         self.y_module, self.rnn_module, self.z_module = self.create_inference_nets()
 
     def create_inference_nets(self):
@@ -85,6 +86,44 @@ class BaseEncoder(nn.Module):
         return y_module, rnn, z_module
 
     def forward(self, xt, temp, mask):
+        raise NotImplementedError
+
+class BaseDecoder(nn.Module):
+    def __init__(self, shared_output_dims:list, marker_dim:int, decoder_in_dim:int, **kwargs):
+        super().__init__()
+        self.shared_output_dims = shared_output_dims
+        self.marker_dim = marker_dim
+        self.time_loss = kwargs['time_loss']
+        self.marker_type = kwargs['marker_type']
+        self.x_given_t = kwargs['x_given_t']
+        self.preprocessing_module_dims = [decoder_in_dim, *self.shared_output_dims]
+        self.preprocessing_module =  self.create_generative_nets()
+
+    def generate_marker(self, h, t):
+        mu, logvar = generate_marker(self, h, t)
+        if self.marker_type == 'real':
+            return Normal(mu, logvar.div(2).exp())
+        elif self.marker_type == 'categorical':
+            return Categorical(logits=mu)
+        else:
+            raise NotImplementedError
+
+    def create_generative_nets(self):
+        gen_pre_module = MLP(self.preprocessing_module_dims)
+        return gen_pre_module
+
+    def compute_time_log_prob(self, h, t):
+        return compute_point_log_likelihood(self, h, t)
+
+    def compute_marker_log_prob(self, x, dist_x_recon:torch.distributions.Distribution):
+        if dist_x_recon.__class__.__name__ == "Normal":
+            return dist_x_recon.log_prob(x)
+        elif dist_x_recon.__class__.__name__ == "Categorical":
+            return dist_x_recon.log_prob(x)
+        else:
+            raise NotImplementedError
+
+    def forward(self, concat_hzy):
         raise NotImplementedError
 
 

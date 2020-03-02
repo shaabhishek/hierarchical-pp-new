@@ -6,7 +6,7 @@ from torch.distributions import kl_divergence, Normal, Categorical
 import math
 
 from base_model import compute_marker_log_likelihood, compute_point_log_likelihood, generate_marker,create_output_nets
-from base_model import MLP, MLPNormal, MLPCategorical, BaseEncoder
+from base_model import MLP, MLPNormal, MLPCategorical, BaseEncoder, BaseDecoder, BaseModel
 from utils.metric import get_marker_metric, compute_time_expectation, get_time_metric
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -38,54 +38,106 @@ def reparameterize(mu, logvar):
         return mu + epsilon.mul(sigma)
     
 class Encoder(BaseEncoder):
-    def __init__(self, rnn_dims:list, y_dims:list, z_dims:list, ):
+    def __init__(self, rnn_dims:list, y_dims:list, z_dims:list, reverse_rnn_dims:list):
         super().__init__(rnn_dims, y_dims, z_dims)
+        self.reverse_rnn_dims = reverse_rnn_dims
+        self.reverse_cell = nn.GRUCell(input_size=self.reverse_rnn_dims[0], hidden_size=self.reverse_rnn_dims[1])
 
-    def forward(self, ):
-        pass
+    def forward(self, xt, h, temp, mask):
+        T,BS,_ = xt.shape
+
+        # Compute encoder RNN hidden states for y
+        h_0 = torch.zeros(1, BS, self.rnn_hidden_dim).to(device)
+        hidden_seq, _ = self.rnn_module(xt, h_0)
+        
+        # Encoder for y.  Need the last one based on mask
+        last_seq = torch.argmax(mask, dim=0)#Time dimension
+        final_state = torch.cat([hidden_seq[last_seq[i],i][None, :] for i in range(BS)], dim = 0) #(BS,rnn_hidden_dim)
+        
+        try:
+            assert final_state.shape == (BS, self.rnn_hidden_dim)
+        except AssertionError:
+            print(final_state.shape)
+            raise
+
+        dist_y = self.y_module(final_state) #shape(dist_y.logits) = (BS, y_dim)
+        sample_y = sample_gumbel_softmax(dist_y.logits, temp) #(BS, y_dim)
+        sample_y = sample_y.unsqueeze(0).expand(T,-1,-1) #(T,BS,y_dim)
+        
+        try:
+            assert sample_y.shape == (T, BS, self.y_dim)
+        except AssertionError:
+            print(sample_y.shape)
+            # import pdb; pdb.set_trace()
+            raise
+
+        # Encoder for z Reverse RNN
+        rh_ = torch.zeros(BS, self.rnn_hidden_dim).to(device)
+        concat_hx = torch.cat([xt, h], dim = -1) #T x BS x hidden_dim + embedding_dim
+        outs = []
+        for seq in range(T):
+            rh_ = self.reverse_cell(concat_hx[T-1-seq,:,:], rh_)
+            #rh_ shape BSxdim. Multiply with mask
+            rh_ = rh_ * mask[T-1-seq,:][:,None]
+            outs.append(rh_[None,:,:]) #1, BS, dim
+        rh = torch.cat(outs, dim = 0)
+        #rh = torch.flip(rh , dims = [0])#T, BS, dim
+
+        dist_z, sample_z  = [], []
+        z = torch.zeros(1, BS, self.latent_dim).to(device)
+        for seq in range(T):
+            concat_ayz = torch.cat([rh[T-1-seq,:,:][None,:,:], z, sample_y[seq,:,:][None,:,:] ], dim = -1)#1, BS, latent+cluster+hidden_dim
+            dist_z_ = self.z_module(concat_ayz)
+            sample_z_ = dist_z_.rsample()
+            dist_z.append(dist_z_)
+            sample_z.append(sample_z_)
+            z = sample_z_
+        
+        mu_z = torch.cat([dist.mean for dist in dist_z], dim =0)
+        stddev_z = torch.cat([dist.stddev for dist in dist_z], dim =0)
+        dist_z = Normal(loc=mu_z, scale=stddev_z)
+        sample_z = torch.cat(sample_z, dim = 0)
+
+        try:
+            assert sample_z.shape == (T, BS, self.latent_dim)
+        except AssertionError:
+            print(sample_z.shape)
+            # import pdb; pdb.set_trace()
+            raise
+        return (sample_y, dist_y), (sample_z, dist_z)
     
-class Model2(nn.Module):
-    def __init__(self, latent_dim=20, marker_dim=31, marker_type='real', rnn_hidden_dim=128, time_dim=2, n_cluster=5, x_given_t=False, time_loss='normal', gamma=1., dropout=None, base_intensity=0, time_influence=0.1):
-        super().__init__()
-        self.marker_type = marker_type
-        self.marker_dim = marker_dim
-        self.time_dim = time_dim
-        self.rnn_hidden_dim = rnn_hidden_dim
-        self.latent_dim = latent_dim
-        self.cluster_dim = n_cluster
-        self.x_given_t = x_given_t
-        self.time_loss = time_loss
+class Decoder(BaseDecoder):
+    def __init__(self, shared_output_dims:list, marker_dim:int, decoder_in_dim:int, **kwargs):
+        super().__init__(shared_output_dims, marker_dim, decoder_in_dim, **kwargs)
+
+    def forward(self, concat_hzy):
+        out = self.preprocessing_module(concat_hzy)
+        return out
+
+class Model2(BaseModel):
+    def __init__(self, **kwargs):
+    # def __init__(self, latent_dim=20, marker_dim=31, marker_type='real', rnn_hidden_dim=128, time_dim=2, n_cluster=5, x_given_t=False, time_loss='normal', gamma=1., dropout=None, base_intensity=0, time_influence=0.1):
+        super().__init__(**kwargs)
         self.logvar_min = math.log(1e-20)
         self.sigma_min = 1e-10
-        self.gamma = gamma
-        self.dropout = dropout
-        
-        
-        # Preprocessing networks
-        # Embedding network
-        # self.x_embedding_dim = [128]
-        # self.t_embedding_dim = [8]
-        # self.emb_dim = 
-        # self.embed_x, self.embed_t = self.create_embedding_nets()
-        self.shared_output_dims = [256]
-        self.inf_pre_module, self.gen_pre_module = self.create_preprocess_nets()
+        self.gamma = kwargs['gamma']
+        self.dropout = kwargs['dropout']
         
         # Forward RNN
         self.rnn = self.create_rnn()
 
-
-        # Backward RNN Cell
-        self.reverse_cell = nn.GRUCell(input_size=self.x_embedding_dim[-1] + self.t_embedding_dim[-1]+ self.rnn_hidden_dim, hidden_size=self.rnn_hidden_dim)
-
-        
         # Inference network
-        # z_input_dim = 
-        self.encoder_z_hidden_dims = [64, 64]
-        rnn_dims = [self.emb_dim]
-        self.y_encoder, self.encoder_rnn, self.z_intmd_module, self.z_mu_module, self.z_logvar_module = self.create_inference_nets()
-        
+        # Override the values provided to z_module by base model
+        self.reverse_rnn_dims = [self.emb_dim+self.rnn_hidden_dim, self.rnn_hidden_dim] #phi_xt+h -> h
+        z_input_dim = self.reverse_rnn_dims[-1] + self.cluster_dim + self.latent_dim #h+y+z
+        self.z_dims[0] = z_input_dim
+        self.encoder = Encoder(rnn_dims=self.rnn_dims, y_dims=self.y_dims, z_dims=self.z_dims, reverse_rnn_dims=self.reverse_rnn_dims)
+
         # Generative network
-        create_output_nets(self, base_intensity, time_influence)
+        encoder_out_dim = self.rnn_hidden_dim+self.latent_dim+self.cluster_dim
+        decoder_kwargs = {'marker_dim': self.marker_dim, 'decoder_in_dim': encoder_out_dim, 'time_loss': self.time_loss, 'marker_type': self.marker_type, 'x_given_t': self.x_given_t}
+        self.decoder = Decoder(shared_output_dims=self.shared_output_dims, **decoder_kwargs)
+        create_output_nets(self.decoder, self.base_intensity, self.time_influence)
 
         #Prior on z
         self.prior_net = nn.Sequential(
@@ -94,67 +146,13 @@ class Model2(nn.Module):
         )
         self.prior_mu = nn.Linear(self.rnn_hidden_dim, self.latent_dim)
         self.prior_logvar = nn.Linear(self.rnn_hidden_dim, self.latent_dim)
-    
-    def create_embedding_nets(self):
-        # marker_dim is passed. timeseries_dim is 2
-        if self.marker_type == 'categorical':
-            x_module = nn.Embedding(self.marker_dim, self.x_embedding_dim[0])
-        else:
-            x_module = nn.Sequential(
-                nn.Linear(self.marker_dim, self.x_embedding_dim[0]),
-                nn.ReLU(),
-        )
-        
-        t_module = nn.Sequential(
-            nn.Linear(self.time_dim, self.t_embedding_dim[0]),
-            nn.ReLU()
-        )
-        return x_module, t_module
-    
-    def create_preprocess_nets(self):
-        # Inference net preprocessing
-        hxty_input_dim = self.rnn_hidden_dim+self.latent_dim+self.cluster_dim
-        inf_pre_module = nn.Sequential(
-            # nn.ReLU(),nn.Dropout(self.dropout),
-            nn.Linear(hxty_input_dim, hxty_input_dim),
-            nn.ReLU(),nn.Dropout(self.dropout))
-        
-        # Generative net preprocessing
-        hzy_input_dim = self.rnn_hidden_dim+self.latent_dim+self.cluster_dim
-        gen_pre_module = nn.Sequential(
-            # nn.ReLU(),nn.Dropout(self.dropout),
-            nn.Linear(hzy_input_dim, self.shared_output_dims[-1]),
-            nn.ReLU(),nn.Dropout(self.dropout))
-        return inf_pre_module, gen_pre_module
-        
-    
+
     def create_rnn(self):
         rnn = nn.GRU(
             input_size=self.x_embedding_dim[-1]+self.t_embedding_dim[-1],
             hidden_size=self.rnn_hidden_dim,
         )
         return rnn
-    
-    # def create_inference_nets(self):
-    #     y_module = nn.Sequential(
-    #         nn.Linear(self.rnn_hidden_dim, self.cluster_dim)
-    #     )
-        
-    #     encoder_rnn = nn.GRU(
-    #         input_size=self.x_embedding_dim[-1]+self.t_embedding_dim[-1],
-    #         hidden_size=self.rnn_hidden_dim,
-    #     )
-        
-    #     z_input_dim = self.rnn_hidden_dim+self.latent_dim+self.cluster_dim
-    #     z_intmd_module = nn.Sequential(
-    #         nn.Linear(z_input_dim, self.encoder_layers[0]),
-    #         nn.ReLU(),
-    #         nn.Linear(self.encoder_layers[0], self.encoder_layers[1]),
-    #         nn.ReLU(),
-    #     )
-    #     z_mu_module = nn.Linear(self.encoder_layers[1], self.latent_dim)
-    #     z_logvar_module = nn.Linear(self.encoder_layers[1], self.latent_dim)
-    #     return y_module, encoder_rnn, z_intmd_module, z_mu_module, z_logvar_module
 
     def create_output_nets(self):
         l = self.shared_output_dims[-1]
@@ -178,68 +176,7 @@ class Model2(nn.Module):
             )
         return t_module_mu, t_module_logvar, x_module_mu, x_module_logvar
     
-    ### ENCODER ###
-    def encoder(self, phi_xt, h_t, temp, mask):
-        """
-        Input:
-            phi_xt: Tensor of shape T x BS x (self.x_embedding_dim[-1]+self.t_embedding_dim[-1])
-            h_t : T x BS x hidden_dim
-            temp: scalar
-            mask : Tensor TxBS
-        Output:
-            sample_y: Tensor of shape T x BS x cluster_dim
-            sample_z: Tensor of shape T x BS x latent_dim
-            logits_y: Tensor of shape 1 x BS x cluster_dim
-            mu_z: Tensor of shape T x BS x latent_dim
-            logvar_z: Tensor of shape T x BS x latent_dim
-        """
-        T,BS,_ = phi_xt.shape
-
-        # Compute encoder RNN hidden states for y
-        h_0 = torch.zeros(1, BS, self.rnn_hidden_dim).to(device)
-        hidden_seq, _ = self.encoder_rnn(phi_xt, h_0)
-        #hidden_seq = torch.cat([h_0, hidden_seq], dim=0)
-        # Encoder for y.  Need the last one based on mask
-        last_seq = torch.argmax(mask , dim =0)#Time dimension
-        final_state = torch.cat([hidden_seq[last_seq[i],i,:][None, :] for i in range(BS)], dim = 0)
-        logits_y = self.y_encoder(final_state)[None, :, :] #shape(logits_y) = 1 x BS x k
-        #shape(sample_y) = 1 x BS x k. Should tend to one-hot in the last dimension
-        sample_y = sample_gumbel_softmax(logits_y, temp)
-        repeat_vals = (T, -1,-1)
-        sample_y = sample_y.expand(*repeat_vals) #T x BS x k
-        
-        # Encoder for z Reverse RNN
-        rh_ = torch.zeros(BS, self.rnn_hidden_dim).to(device)
-        concat_hx = torch.cat([phi_xt, h_t], dim = -1) #T x BS x hidden_dim + embedding_dim
-        outs = []
-        for seq in range(T):
-            rh_ = self.reverse_cell(concat_hx[T-1-seq,:,:], rh_)
-            #rh_ shape BSxdim. Multiply with mask
-            rh_ = rh_ * mask[T-1-seq,:][:,None]
-            outs.append(rh_[None,:,:]) #1, BS, dim
-        rh = torch.cat(outs, dim = 0)
-        #rh = torch.flip(rh , dims = [0])#T, BS, dim
-
-        mu_z, logvar_z, sample_z  = [], [], []
-        z = torch.zeros(1, BS, self.latent_dim).to(device)
-        for seq in range(T):
-            concat_ayz = torch.cat([rh[T-1-seq,:,:][None,:,:], z,sample_y[seq,:,:][None,:,:] ], dim = -1)#1, BS, latent+cluster+hidden_dim
-            phi_ayz = self.inf_pre_module(concat_ayz)#1, BS, ...
-            z_intmd = self.z_intmd_module(phi_ayz)
-            mu_z_ = self.z_mu_module(z_intmd)
-            logvar_z_ = self.z_logvar_module(z_intmd)
-            sample_z_ = reparameterize(mu_z_, logvar_z_)
-            mu_z.append(mu_z_)
-            logvar_z.append(logvar_z_)
-            sample_z.append(sample_z_)
-            z = sample_z_
-        
-        mu_z = torch.cat(mu_z, dim =0)
-        logvar_z = torch.cat(logvar_z, dim =0)
-        sample_z = torch.cat(sample_z, dim = 0)
-        return sample_y, sample_z, logits_y, (mu_z, logvar_z)
-    
-    def forward(self, marker_seq, time_seq, anneal=1., mask=None, temp=0.5):
+    def forward(self, marker_seq, time_seq, anneal=1., mask=None, temp=0.5, preds_file=None):
         time_log_likelihood, marker_log_likelihood, KL, metric_dict = self._forward(marker_seq, time_seq, temp, mask)
 
         marker_loss = (-1.* marker_log_likelihood *mask)[1:,:].sum()
@@ -280,12 +217,13 @@ class Model2(nn.Module):
         ## Inference a_t= q([x_t, h_t], a_{t+1})
         # Get the sampled value and (mean + var) latent variable
         # using the hidden state sequence
-        posterior_sample_y, posterior_sample_z, posterior_logits_y, (posterior_mu_z, posterior_logvar_z) = self.encoder(phi_xt, hidden_seq[:-1, :,:], temp, mask)
+        # posterior_sample_y, posterior_sample_z, posterior_logits_y, (posterior_mu_z, posterior_logvar_z) = self.encoder(phi_xt, hidden_seq[:-1, :,:], temp, mask)
+        (posterior_sample_y, posterior_dist_y), (posterior_sample_z, posterior_dist_z) = self.encoder(phi_xt, hidden_seq[:-1, :,:], temp, mask)
 
     
         # Create distributions for Posterior random vars
-        posterior_dist_z = Normal(posterior_mu_z, torch.exp(posterior_logvar_z*0.5))
-        posterior_dist_y = Categorical(logits=posterior_logits_y)
+        # posterior_dist_z = Normal(posterior_mu_z, torch.exp(posterior_logvar_z*0.5))
+        # posterior_dist_y = Categorical(logits=posterior_logits_y)
         
         # Prior is just a Normal(0,1) dist for z and Uniform Categorical for y
         #prior dist z is TxBSx latent_dim. T=0=> Normal(0,1)
@@ -300,23 +238,27 @@ class Model2(nn.Module):
         
         # Use the embedded markers and times to create another set of 
         # hidden vectors. Can reuse the h_0 and time_marker combined computed above
-
-
         
         # Combine (z_t, h_t, y) form the input for the generative part
         concat_hzy = torch.cat([hidden_seq[:-1], posterior_sample_z, posterior_sample_y], dim=-1)
-        phi_hzy = self.gen_pre_module(concat_hzy)
-        mu_marker, logvar_marker = generate_marker(self, phi_hzy, None)
-        time_log_likelihood, mu_time = compute_point_log_likelihood(self, phi_hzy, t)
-        marker_log_likelihood = compute_marker_log_likelihood(self, x, mu_marker, logvar_marker)
+        # phi_hzy = self.gen_pre_module(concat_hzy)
+        # mu_marker, logvar_marker = generate_marker(self, phi_hzy, None)
+        # time_log_likelihood, mu_time = compute_point_log_likelihood(self, phi_hzy, t)
+        # marker_log_likelihood = compute_marker_log_likelihood(self, x, mu_marker, logvar_marker)
         
+        phi_hzy = self.decoder(concat_hzy)
+
+        dist_marker_recon = self.decoder.generate_marker(phi_hzy, t)
+        time_log_likelihood, mu_time = self.decoder.compute_time_log_prob(phi_hzy, t) #(T,BS)
+        marker_log_likelihood = self.decoder.compute_marker_log_prob(x, dist_marker_recon) #(T,BS)
+
         KL_cluster = kl_divergence(posterior_dist_y, prior_dist_y)
         KL_z = kl_divergence(posterior_dist_z, prior_dist_z).sum(-1)*mask
         KL = KL_cluster.sum() + KL_z.sum()
-        # try:
-        #     assert (KL >= 0)
-        # except:
-        #     import pdb; pdb.set_trace()
+        try:
+            assert (KL >= 0)
+        except:
+            raise ValueError("KL should be non-negative")
         
 
         metric_dict = {"z_cluster":0}
