@@ -50,7 +50,8 @@ def collate_fn_categorical_marker(xt_tuples):
         mask_tensor[idx, :seq_len[idx]] = 1.
         
     x_tensor, t_tensor, mask_tensor = torch.tensor(x_tensor).long().to(device), torch.tensor(t_tensor).float().to(device), torch.tensor(mask_tensor).float().to(device)
-    return (x_tensor, t_tensor, mask_tensor)
+    x_tensor, t_tensor, mask_tensor = [torch.transpose(_tensor, 0,1) for _tensor in (x_tensor, t_tensor, mask_tensor)]
+    return (x_tensor.contiguous(), t_tensor.contiguous(), mask_tensor.contiguous())
 
 
 def collate_fn_real_marker(xt_tuples):
@@ -109,5 +110,7 @@ class DLoaderCategorical(DataLoader):
 
 
 if __name__ == "__main__":
-    pass
-    # load_model()
+    loader = get_dataloader(data_path='../data/mimic2_1_train.pkl', marker_type='categorical', batch_size=16)
+    import pdb; pdb.set_trace()
+    for b_idx, (input_x, input_t, input_mask) in enumerate(loader):
+        pass

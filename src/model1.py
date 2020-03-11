@@ -2,35 +2,13 @@ import torch
 import torch.nn as nn
 from torch.optim import Adam
 import torch.nn.functional as F
-from torch.distributions import kl_divergence, Normal, Categorical, Gumbel
+from torch.distributions import kl_divergence, Normal, Categorical
 
-from base_model import compute_marker_log_likelihood, compute_point_log_likelihood, generate_marker,create_output_nets
+from base_model import compute_marker_log_likelihood, compute_point_log_likelihood, generate_marker, create_output_nets, sample_gumbel_softmax
 from base_model import MLP, MLPNormal, MLPCategorical, BaseEncoder, BaseDecoder, BaseModel
 from utils.metric import get_marker_metric, compute_time_expectation, get_time_metric
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-def sample_gumbel_softmax(logits, temperature):
-    """
-        Input:
-        logits: Tensor of log probs, shape = BS x k
-        temperature = scalar
-
-        Output: Tensor of values sampled from Gumbel softmax.
-                These will tend towards a one-hot representation in the limit of temp -> 0
-                shape = BS x k
-    """
-    g = Gumbel(torch.zeros(*logits.shape),torch.ones(*logits.shape)).sample()
-    # g = sample_gumbel(logits.shape)
-    # assert g.shape == logits.shape
-    h = (g + logits)/temperature
-    y = F.softmax(h, dim=-1)
-    return y
-
-def reparameterize(mu, logvar):
-        epsilon = torch.randn_like(mu).to(device)
-        sigma = torch.exp(0.5 * logvar)
-        return mu + epsilon.mul(sigma)
 
 def create_mlp(dims:list):
     layers = list()
@@ -152,9 +130,6 @@ class Model1(BaseModel):
         return t_module_mu, t_module_logvar, x_module_mu, x_module_logvar
 
     def forward(self, marker_seq, time_seq, anneal=1., mask=None, temp=0.5, preds_file=None):
-
-        #HACK: Because Model requires (T,BS,dim) but the input is (BS,T,dim)
-        marker_seq, time_seq, mask = [torch.transpose(_tensor, 0, 1)  for _tensor in (marker_seq,time_seq,mask)]
 
         time_log_likelihood, marker_log_likelihood, KL, metric_dict = self._forward(marker_seq, time_seq, temp, mask)
 

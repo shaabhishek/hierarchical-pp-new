@@ -1,19 +1,19 @@
 import torch
 import torch.nn as nn
-from torch.optim import Adam
-import torch.nn.functional as F
-from torch.distributions import kl_divergence, Normal, Categorical
+from torch.distributions import Normal, Categorical
+from torch.distributions import kl_divergence
 import math
 
-from base_model import compute_marker_log_likelihood, compute_point_log_likelihood, generate_marker, create_output_nets, sample_gumbel_softmax
-from base_model import MLP, MLPNormal, MLPCategorical, BaseEncoder, BaseDecoder, BaseModel
-from utils.metric import get_marker_metric, compute_time_expectation, get_time_metric
+
+from base_model import BaseEncoder, BaseDecoder, BaseModel
+from base_model import sample_gumbel_softmax, create_output_nets
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class Encoder(BaseEncoder):
     def __init__(self, rnn_dims:list, y_dims:list, z_dims:list, reverse_rnn_dims:list):
         super().__init__(rnn_dims, y_dims, z_dims)
+        # self.birnn = 
         self.reverse_rnn_dims = reverse_rnn_dims
         self.reverse_cell = nn.GRUCell(input_size=self.reverse_rnn_dims[0], hidden_size=self.reverse_rnn_dims[1])
 
@@ -21,12 +21,12 @@ class Encoder(BaseEncoder):
         T,BS,_ = xt.shape
 
         # Compute encoder RNN hidden states for y
-        h_0 = torch.zeros(1, BS, self.rnn_hidden_dim).to(device)
-        hidden_seq, _ = self.rnn_module(xt, h_0)
+        # h_0 = torch.zeros(1, BS, self.rnn_hidden_dim).to(device)
+        # hidden_seq, _ = self.rnn_module(xt, h_0)
         
         # Encoder for y.  Need the last one based on mask
         last_seq = torch.argmax(mask, dim=0)#Time dimension
-        final_state = torch.cat([hidden_seq[last_seq[i],i][None, :] for i in range(BS)], dim = 0) #(BS,rnn_hidden_dim)
+        final_state = torch.cat([h[last_seq[i],i][None, :] for i in range(BS)], dim = 0) #(BS,rnn_hidden_dim)
         
         try:
             assert final_state.shape == (BS, self.rnn_hidden_dim)
@@ -80,7 +80,7 @@ class Encoder(BaseEncoder):
             # import pdb; pdb.set_trace()
             raise
         return (sample_y, dist_y), (sample_z, dist_z)
-    
+
 class Decoder(BaseDecoder):
     def __init__(self, shared_output_dims:list, marker_dim:int, decoder_in_dim:int, **kwargs):
         super().__init__(shared_output_dims, marker_dim, decoder_in_dim, **kwargs)
@@ -89,7 +89,8 @@ class Decoder(BaseDecoder):
         out = self.preprocessing_module(concat_hzy)
         return out
 
-class Model2(BaseModel):
+
+class Model2New(BaseModel):
     def __init__(self, **kwargs):
     # def __init__(self, latent_dim=20, marker_dim=31, marker_type='real', rnn_hidden_dim=128, time_dim=2, n_cluster=5, x_given_t=False, time_loss='normal', gamma=1., dropout=None, base_intensity=0, time_influence=0.1):
         super().__init__(**kwargs)
@@ -190,23 +191,14 @@ class Model2(BaseModel):
         hidden_seq = torch.cat([h_0, hidden_seq], dim=0)
                 
         ## Inference a_t= q([x_t, h_t], a_{t+1})
-        # Get the sampled value and (mean + var) latent variable
+        # Get the sampled value and distribution of latent variables
         # using the hidden state sequence
-        # posterior_sample_y, posterior_sample_z, posterior_logits_y, (posterior_mu_z, posterior_logvar_z) = self.encoder(phi_xt, hidden_seq[:-1, :,:], temp, mask)
         (posterior_sample_y, posterior_dist_y), (posterior_sample_z, posterior_dist_z) = self.encoder(phi_xt, hidden_seq[:-1, :,:], temp, mask)
 
-    
-        # Create distributions for Posterior random vars
-        # posterior_dist_z = Normal(posterior_mu_z, torch.exp(posterior_logvar_z*0.5))
-        # posterior_dist_y = Categorical(logits=posterior_logits_y)
-        
         # Prior is just a Normal(0,1) dist for z and Uniform Categorical for y
         #prior dist z is TxBSx latent_dim. T=0=> Normal(0,1)
         prior_mu, prior_logvar = self.prior(posterior_sample_z)##Normal(0, 1)
         prior_dist_z  = Normal(prior_mu, (prior_logvar*0.5).exp())
-
-
-        
         prior_dist_y = Categorical(probs=1./self.cluster_dim* torch.ones(1,BS, self.cluster_dim).to(device))
 
         ## Generative Part

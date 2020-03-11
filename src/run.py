@@ -47,10 +47,7 @@ def train(net, params, optimizer, dataloader, label):
         bar = ProgressBar(label, max=N_batches)
 
     for b_idx, (input_x, input_t, input_mask) in enumerate(dataloader):
-        try:
-            if params.show: bar.update(b_idx)
-        except:
-            import pdb; pdb.set_trace()
+        if params.show: bar.update(b_idx)
 
         optimizer.zero_grad()
 

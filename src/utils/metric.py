@@ -49,10 +49,7 @@ def get_marker_metric(marker_type, marker_out_mu, x, mask, metric_dict):
             metric_dict['marker_acc'] = acc.sum().detach().cpu().numpy()
             # metric_dict['marker_acc_count'] = (true_out * (mask[:,:,None] ==1.)).sum().detach().cpu().numpy()
             metric_dict['marker_acc_count'] = (mask[1:,:]).sum().cpu().numpy()
-
-
-        
-        
+  
 
 def compute_point_log_likelihood(model, h, d_js):
         """

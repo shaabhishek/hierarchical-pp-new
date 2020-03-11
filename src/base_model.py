@@ -6,12 +6,30 @@ import time
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.utils.rnn as rnnutils
-from torch.distributions import Normal, Categorical
+from torch.distributions import Normal, Categorical, Gumbel
 from torch.distributions import kl_divergence
 from torch.optim import Adam
 import matplotlib.pyplot as plt
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def sample_gumbel_softmax(logits, temperature):
+    """
+        Input:
+        logits: Tensor of log probs, shape = BS x k
+        temperature = scalar
+
+        Output: Tensor of values sampled from Gumbel softmax.
+                These will tend towards a one-hot representation in the limit of temp -> 0
+                shape = BS x k
+    """
+    g = Gumbel(torch.zeros(*logits.shape),torch.ones(*logits.shape)).sample().to(device)
+    # g = sample_gumbel(logits.shape)
+    # assert g.shape == logits.shape
+    h = (g + logits)/temperature
+    y = F.softmax(h, dim=-1)
+    return y
 
 class MLP(nn.Module):
     def __init__(self, dims:list):
@@ -151,12 +169,13 @@ class BaseModel(nn.Module):
 
 
         # Inference network
-        self.encoder_z_hidden_dims = [64, 64]
-        self.encoder_y_hidden_dims = [64]
-        z_input_dim = self.rnn_hidden_dim + self.emb_dim + self.cluster_dim
-        self.rnn_dims = [self.emb_dim, self.rnn_hidden_dim]
-        self.y_dims = [self.rnn_hidden_dim, *self.encoder_y_hidden_dims, self.cluster_dim]
-        self.z_dims = [z_input_dim, *self.encoder_z_hidden_dims, self.latent_dim]
+        if self.latent_dim is not None:
+            self.encoder_z_hidden_dims = [64, 64]
+            self.encoder_y_hidden_dims = [64]
+            z_input_dim = self.rnn_hidden_dim + self.emb_dim + self.cluster_dim
+            self.rnn_dims = [self.emb_dim, self.rnn_hidden_dim]
+            self.y_dims = [self.rnn_hidden_dim, *self.encoder_y_hidden_dims, self.cluster_dim]
+            self.z_dims = [z_input_dim, *self.encoder_z_hidden_dims, self.latent_dim]
         # self.encoder = Encoder(rnn_dims=rnn_dims, y_dims=y_dims, z_dims=z_dims)
 
 
@@ -178,6 +197,37 @@ class BaseModel(nn.Module):
             nn.ReLU()
         )
         return x_module, t_module
+
+    def compute_metrics(self, marker_logits, predicted_times, marker, event_times, mask):
+        """
+        Input:
+            marker_logits : Tensor of shape T x BS x marker_dim; t_j : actual time of event j
+            predicted_times : Tensor of shape T x BS x 1 ; pt_j : predicted time of event j
+            marker : Tensor of shape T x BS
+            event_times : Tensor of shape T x BS x 1
+            mask: Tensor of shape T x BS
+        Output:
+            metric_dict: dict
+        """
+        metric_dict = {}
+        with torch.no_grad():
+            # note: both t[0] and pt[0] are 0 by convention
+            time_mse = torch.pow( (predicted_times - event_times) * mask.unsqueeze(-1), 2.) #(T, BS, 1) 
+            metric_dict['time_mse'] = time_mse.sum().detach().cpu().numpy()
+            # note: because 0th timesteps are zero always, reducing count to ensure accuracy stays unbiased
+            metric_dict['time_mse_count'] = mask[1:,:].sum().detach().cpu().numpy()
+
+            if self.marker_type == "categorical":
+                predicted = torch.argmax(marker_logits, dim =-1) #(T, BS)
+                correct_predictions = (predicted == marker)*mask #(T, BS)
+                correct_predictions = correct_predictions[1:] #Keep only the predictions from 2nd timestep
+                
+                metric_dict['marker_acc'] = correct_predictions.sum().detach().cpu().numpy() #count how many correct predictions we made
+                metric_dict['marker_acc_count'] = (mask[1:,:]).sum().cpu().numpy() #count how many predictions we made
+            else:
+                raise NotImplementedError
+
+        return metric_dict
 
     def forward(self):
         raise NotImplementedError
@@ -248,17 +298,17 @@ def create_output_marker_layer(model):
 
     return embed_module, x_module_mu, x_module_logvar    
 
-def create_output_time_layer(model, b, ti):
-    l =model.shared_output_dims[-1]
-    if model.time_loss == 'intensity':
-        h_influence =  nn.Linear(l, 1, bias=False)
-        time_influence = nn.Parameter(ti*torch.ones(1, 1, 1))#0.005*
-        base_intensity =  nn.Parameter(torch.zeros(1, 1, 1)-b)#-8
-        model.h_influence, model.time_influence, model.base_intensity =  h_influence, time_influence, base_intensity
-    else:
-        model.time_mu =   nn.Linear(l, 1)
-        model.time_logvar =   nn.Linear(l, 1)
-    return
+# def create_output_time_layer(model, b, ti):
+#     l =model.shared_output_dims[-1]
+#     if model.time_loss == 'intensity':
+#         h_influence =  nn.Linear(l, 1, bias=False)
+#         time_influence = nn.Parameter(ti*torch.ones(1, 1, 1))#0.005*
+#         base_intensity =  nn.Parameter(torch.zeros(1, 1, 1)-b)#-8
+#         model.h_influence, model.time_influence, model.base_intensity =  h_influence, time_influence, base_intensity
+#     else:
+#         model.time_mu =   nn.Linear(l, 1)
+#         model.time_logvar =   nn.Linear(l, 1)
+#     return
 
 def create_output_nets(model, b, ti):
     """
@@ -324,6 +374,137 @@ def compute_marker_log_likelihood(model, x, mu, logvar):
             loss = F.binary_cross_entropy(mu, x, reduction= 'none').sum(dim =-1)#TxBS
         return -loss    
 
+
+class MarkedPointProcessRMTPPModel(nn.Module):
+    def __init__(self, input_dim:int, marker_dim:int, marker_type:str, init_base_intensity:float, init_time_influence:float, x_given_t:bool=False):
+        super().__init__()
+
+        self.input_dim = input_dim
+        self.marker_dim = marker_dim
+        self.x_given_t = x_given_t
+        self.marker_type = marker_type
+
+        if self.x_given_t:
+            self.marker_input_dim = self.input_dim + 1
+        else:
+            self.marker_input_dim = self.input_dim
+
+        self.create_point_net(init_base_intensity, init_time_influence)
+        self.create_marker_net()
+
+    def create_point_net(self, init_base_intensity:float, init_time_influence:float):
+        self.h_influence = nn.Linear(self.input_dim, 1, bias = False) # vector of size `input_dim`
+        self.time_influence = nn.Parameter(init_time_influence * torch.ones(1))  # scalar
+        self.base_intensity = nn.Parameter(torch.zeros(1) - init_base_intensity)  # scalar
+
+    def create_marker_net(self):
+        if self.marker_type == 'categorical':
+            self.marker_net = nn.Linear(self.marker_input_dim, self.marker_dim)
+        else:
+            raise NotImplementedError
+
+        # if model.marker_type == 'real':
+            # x_module_mu = nn.Linear(l, model.marker_dim)
+            # x_module_logvar = nn.Linear(l, model.marker_dim)
+        # elif model.marker_type == 'binary':  # Fix binary
+            # x_module_mu = nn.Sequential(
+                # nn.Linear(l, model.marker_dim),
+                # nn.Sigmoid())
+        # elif model.marker_type == 'categorical':
+            # x_module_mu = nn.Sequential(
+                # nn.Linear(l, model.marker_dim)  # ,
+        # )
+
+    def get_marker_log_prob(self, marker, pred_marker_dist):
+        """
+        Input:
+            marker : Tensor of shape T x BS (if categorical); ground truth
+            pred_marker_dist : Distribution object containing information about the predicted logits
+        Output:
+            log_prob : tensor of shape T x BS - this is the same as 
+        """
+        T, BS = marker.shape[:2]
+        if self.marker_type == "categorical":
+            return pred_marker_dist.log_prob(marker) #(T,BS)
+        else:
+            raise NotImplementedError
+
+
+    def get_log_intensity(self, h, time_interval):
+        """
+        Input:
+            same as for get_point_log_density function
+        Output:
+            log_intensity : tensor of shape TxBS - computed as per eqn 11 in the paper
+        """
+        past_influence = self.h_influence(h)
+        current_influence = self.time_influence * time_interval
+        log_intensity = past_influence + current_influence + self.base_intensity
+        return log_intensity
+
+    def get_point_log_density(self, h, time_intervals):
+        """
+        Input:
+            h : Tensor of shape * x T x BS x self.shared_output_dims[-1] where '*' could possibly have more dimensions
+            h_j is the first hidden state that has information about t_j
+            time_intervals : Tensor of shape * x T x BS x 1  where '*' could possibly have more dimensions
+        Output:
+            log_prob : tensor of shape * x T x BS - computed as per eqn 12 in the paper
+        """
+
+        past_influence = self.h_influence(h) #(*, T, BS, 1)
+        current_influence = self.time_influence * time_intervals #(*, T, BS, 1)
+
+        log_intensity = past_influence + current_influence + self.base_intensity #(*, T, BS, 1)
+        term_2 = (past_influence + self.base_intensity).exp() #(*, T, BS, 1)
+        
+        log_prob = log_intensity + (term_2 - log_intensity.exp()) / self.time_influence
+
+        return log_prob.squeeze(-1)
+
+    def _mc_transformation(self, y, h, tj):
+        """
+        Input:
+            y : N x T x BS x 1
+            h : T x BS x h_dim
+            tj : T x BS x 1 
+        Output:
+            h(y): N x T x BS x 1
+        """
+        tj = tj.unsqueeze(0) # (1, T, BS, 1)
+        query_times = tj - 1 + 1/y # (N, T, BS, 1)
+        time_intervals = query_times - tj # (N, T, BS, 1)
+        log_density = self.get_point_log_density(h, time_intervals).unsqueeze(-1) # (N, T, BS, 1)
+        h = (query_times * log_density.exp()) / y**2 # (N, T, BS, 1)
+        return h
+    
+    def get_next_time(self, h, event_times, num_samples=5):
+        """
+        Input:
+            h : Tensor of shape T x BS x self.shared_output_dims[-1]
+            h_j is the first hidden state that has information about t_j
+            event_times : Tensor of shape T x BS x 1 
+        Output:
+            mu_times_next: Tensor of shape T x BS x 1
+        """
+        y = torch.rand(num_samples, *event_times.shape).to(device) # (N, T, BS, 1) where N = number of samples for monte carlo approx
+        expected_t_next = self._mc_transformation(y, h, event_times).mean(0) # (T, BS, 1)
+        
+        return expected_t_next
+
+    def get_next_event(self, h):
+        """
+        Input:
+            h : Tensor of shape (T+1) x BS x self.shared_output_dims[-1]
+            x_j = f(h_j), where j = 0, 1, ..., T; Also: h_j = f(t_{j-1})
+        Output:
+            x_logits: Tensor of shape (T+1) x BS x 1
+        """
+        x_logits = self.marker_net(h)
+        return x_logits
+        
+    def forward(self):
+        raise NotImplementedError
 
 def compute_point_log_likelihood(model, h, t):
     """
