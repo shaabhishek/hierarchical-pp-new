@@ -43,8 +43,8 @@ class RMTPP(BaseModel):
     def forward(self, marker_seq, time_seq, mask=None, preds_file=None, **kwargs):
         time_log_likelihood, marker_log_likelihood, metric_dict = self._forward(marker_seq, time_seq, mask)
 
-        marker_loss = (-1.* marker_log_likelihood * mask)[1:,:].sum()
-        time_loss = (-1. *time_log_likelihood * mask)[1:,:].sum()
+        marker_loss = (-1. * marker_log_likelihood * mask)[1:,:].sum()
+        time_loss = (-1. * time_log_likelihood * mask)[1:,:].sum()
 
         loss = time_loss + marker_loss
 
@@ -80,12 +80,17 @@ class RMTPP(BaseModel):
         predicted_marker_dist = torch.distributions.Categorical(logits=predicted_marker_logits)
 
         # Compute Log Likelihoods
-        time_log_likelihood = self.marked_point_process_net.get_point_log_density(hidden_seq[1:], time_intervals)
+        # logf*(t0) = f(h0, t0-0), logf*(t1) = f(h1, t1-t0), ..., logf*(t_T) = f(hT, t_T - t_{T-1})
+        # logf*(t0) = f(h0, i0=0), logf*(t1) = f(h1, i1), ..., logf*(t_{T-1}) = f(h_{T-1}, i_{T-1})
+        # boundary conditions:
+        # logf*(t0) is the likelihood of the first event but it's not based on past information, so we don't use it in likelihood computation (forward function)
+        # logf*(t_T) is the likelihood of the next event after last observed event, so we don't use it either (we don't have its corresponding timestamp)
+        time_log_likelihood = self.marked_point_process_net.get_point_log_density(hidden_seq[:-1], time_intervals)
         marker_log_likelihood = self.marked_point_process_net.get_marker_log_prob(x, predicted_marker_dist)
 
         with torch.no_grad():
-            next_event_times = self.marked_point_process_net.get_next_time(hidden_seq[1:], event_times, num_samples=5) # (T, BS, 1)
-            predicted_times = torch.cat([torch.zeros(1, BS, 1).to(device), next_event_times], dim=0)[:-1] #(T+1, BS, 1)
+            next_event_times = self.marked_point_process_net.get_next_time(hidden_seq[1:], event_times, num_samples=10) # (T, BS, 1)
+            predicted_times = torch.cat([torch.zeros(1, BS, 1).to(device), next_event_times], dim=0)[:-1] # don't need the next-of-last time (T, BS, 1)
 
         metric_dict = self.compute_metrics(predicted_marker_logits, predicted_times, x, event_times, mask)
 
