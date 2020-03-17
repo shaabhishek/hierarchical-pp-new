@@ -248,6 +248,14 @@ if __name__ == '__main__':
         params.time_influence = 0.01
         params.marker_type = 'categorical'
         params.batch_size = 32
+    
+    elif params.data_name == 'simulated_hawkes':
+        params.marker_dim = 3150
+        params.time_dim = 2
+        params.base_intensity = 0.
+        params.time_influence = 0.01
+        params.marker_type = 'categorical'
+        params.batch_size = 32
 
     elif 'syntheticdata' in params.data_name:
         params.marker_dim = 2
@@ -267,7 +275,7 @@ if __name__ == '__main__':
         params.n_sample = 5
 
     params.load = params.data_name
-    params.save = params.data_name    
+    params.save = params.data_name
     # Read data
     
     #Set Seed for reproducibility
