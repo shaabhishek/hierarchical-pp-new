@@ -11,12 +11,23 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 from run import train, test
 from utils.data_loader import load_data, get_dataloader
 from utils.model_loader import load_model
+from utils.logger import Logger
 
 def makedir(name):
     try:
         os.makedirs(name)
     except OSError:
         pass
+
+def checkpoint_model(model, optimizer, epoch_num, loss, params, file_name):
+    state = {
+        'epoch': epoch_num,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'loss': loss,
+    } 
+    path = os.path.join('model', params.save, params.model, file_name)+'_'+ str(epoch_num+1)
+    torch.save(state, path)
 
 def train_one_dataset(params, file_name, train_dataloader, valid_dataloader):
     """
@@ -28,6 +39,7 @@ def train_one_dataset(params, file_name, train_dataloader, valid_dataloader):
     """
     ### ================================== model initialization ==================================
     model = load_model(params).to(device)
+    logger = Logger(params.marker_type)
 
     if params.l2 >0.:
         optimizer = torch.optim.Adam(model.parameters(), lr = params.lr, weight_decay= params.l2)
@@ -40,38 +52,44 @@ def train_one_dataset(params, file_name, train_dataloader, valid_dataloader):
     print("\n")
 
     ### ================================== start training ==================================
-    fields = ['loss', 'marker_ll', 'time_ll', 'accuracy',  'time_rmse']
-    fs_map = {'loss':'small', 'marker_ll':'large', 'time_ll':'large', 'auc':'large','accuracy':'large', 'marker_rmse':'small', 'time_rmse':'small'}
+    # metrics = ['loss', 'marker_ll', 'time_ll', 'accuracy',  'time_rmse']
+    # fs_map = {'loss':'small', 'marker_ll':'large', 'time_ll':'large', 'auc':'large','accuracy':'large', 'marker_rmse':'small', 'time_rmse':'small'}
 
-
-    datas = ['train', 'valid']
-    all_data = {}
-    for ds in datas:
-        all_data[ds] = {}
-        for fs in fields:
-            all_data[ds][fs] = {}
+    # datas = ['train', 'valid']
+    # all_data = {}
+    # for ds in datas:
+    #     all_data[ds] = {}
+    #     for fs in metrics:
+    #         all_data[ds][fs] = {}
             
-    best_valid_loss = {}
-    best_epoch = {}
-    for fs in fields:
-        best_epoch[fs] =  1
-        best_valid_loss[fs] = None
+    # best_valid_loss = {}
+    # best_epoch = {}
+    # for fs in metrics:
+    #     best_epoch[fs] =  1
+    #     best_valid_loss[fs] = None
 
     for idx in range(params.max_iter):
         params.iter = idx +1
-        #### Loss is the ELBO, accuracy is for categorical/binary marker, AUC is for binary/categorical marker.  Time RMSE is w.r.t expectation. marker rmse for real marker####
+        # Loss is the ELBO
+        # Accuracy is for categorical/binary marker,
+        # AUC is for binary/categorical marker.
+        # Time RMSE is w.r.t expectation.
+        # Marker rmse for real marker####
         train_info = train(model, params, optimizer, train_dataloader,  label='Train')
         valid_info = test(model,  params, optimizer, valid_dataloader, label='Valid')
-        print('epoch', idx + 1)
-        if params.marker_type != 'real':
-            print("valid_auc\t", valid_info['auc'], "\ttrain_auc\t", train_info['auc'])
-            print("valid_accuracy\t", valid_info['accuracy'], "\ttrain_accuracy\t", train_info['accuracy'])
-        else:
-            print("valid_marker_rmse\t", valid_info['marker_rmse'], "\ttrain_marker_rmse\t", train_info['marker_rmse'])
-        print("valid_time_mse\t", valid_info['time_rmse'], "\ttrain_time_msee\t", train_info['time_rmse'])
-        print("valid_loss\t", valid_info['loss'], "\ttrain_loss\t", train_info['loss'])
-        print("valid marker likelihood\t", valid_info['marker_ll'], "\t train marker likelihood\t", train_info['marker_ll'])
-        print("valid time likelihood\t", valid_info['time_ll'], "\t train time likelihood\t", train_info['time_ll'])
+               
+        logger.print_train_epoch(idx+1, train_info, valid_info)
+
+        # print('epoch', idx + 1)
+        # if params.marker_type != 'real':
+        #     print("valid_auc\t", valid_info['auc'], "\ttrain_auc\t", train_info['auc'])
+        #     print("valid_accuracy\t", valid_info['accuracy'], "\ttrain_accuracy\t", train_info['accuracy'])
+        # else:
+        #     print("valid_marker_rmse\t", valid_info['marker_rmse'], "\ttrain_marker_rmse\t", train_info['marker_rmse'])
+        # print("valid_time_mse\t", valid_info['time_rmse'], "\ttrain_time_msee\t", train_info['time_rmse'])
+        # print("valid_loss\t", valid_info['loss'], "\ttrain_loss\t", train_info['loss'])
+        # print("valid marker likelihood\t", valid_info['marker_ll'], "\t train marker likelihood\t", train_info['marker_ll'])
+        # print("valid time likelihood\t", valid_info['time_ll'], "\t train time likelihood\t", train_info['time_ll'])
         
         if not os.path.isdir('model'):
             makedir('model')
@@ -79,25 +97,21 @@ def train_one_dataset(params, file_name, train_dataloader, valid_dataloader):
             makedir(os.path.join('model', params.save))
         if not os.path.isdir(os.path.join('model', params.save, params.model)):
             makedir(os.path.join('model', params.save, params.model))
-        #net.save_checkpoint(prefix=os.path.join('model', params.save, file_name), epoch=idx+1)
-        torch.save({'epoch':idx,
-                    'model_state_dict': model.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'loss': train_info['loss'],
-                    },
-                     os.path.join('model', params.save, params.model, file_name)+'_'+ str(idx+1)
-                    )
+
+        checkpoint_model(model, optimizer, idx, train_info['loss'], params, file_name)
         
-        for fs in fields:
-            all_data['train'][fs][idx+1] =  train_info.get(fs, 0.)
-            all_data['valid'][fs][idx+1] =  valid_info.get(fs, 0.)
+        logger.log_train_epoch(idx+1, train_info, valid_info)
+
+        # for fs in metrics:
+        #     all_data['train'][fs][idx+1] =  train_info.get(fs, 0.)
+        #     all_data['valid'][fs][idx+1] =  valid_info.get(fs, 0.)
 
         # output the epoch with the best validation auc
-        for fs in fields:
-            if (best_valid_loss[fs] is None) or (fs_map[fs] == 'small' and valid_info[fs] < best_valid_loss[fs]) or \
-                (fs_map[fs] == 'large' and valid_info[fs] > best_valid_loss[fs]):
-                best_valid_loss[fs] = valid_info[fs]
-                best_epoch[fs] = idx+1
+        # for fs in metrics:
+        #     if (best_valid_loss[fs] is None) or (fs_map[fs] == 'small' and valid_info[fs] < best_valid_loss[fs]) or \
+        #         (fs_map[fs] == 'large' and valid_info[fs] > best_valid_loss[fs]):
+        #         best_valid_loss[fs] = valid_info[fs]
+        #         best_epoch[fs] = idx+1
 
     if not os.path.isdir('result'):
         makedir('result')
@@ -107,7 +121,7 @@ def train_one_dataset(params, file_name, train_dataloader, valid_dataloader):
             makedir(os.path.join('result', params.save, params.model))
 
     f_save_log = open(os.path.join('result', params.save,params.model,  file_name), 'w')
-    for fs in fields:
+    for fs in metrics:
         for ds in datas:
             f_save_log.write(ds + '_'+ fs +":\n" + str(all_data[ds][fs]) + "\n\n")
     f_save_log.close()
@@ -115,10 +129,10 @@ def train_one_dataset(params, file_name, train_dataloader, valid_dataloader):
 
 def test_one_dataset(params, file_name, test_dataloader, best_epoch, save=False):
     print("\n\nStart testing ......................\n Best epoch:", best_epoch)
-    fields = ['loss', 'marker_ll', 'time_ll', 'accuracy',  'time_rmse']
+    metrics = ['loss', 'marker_ll', 'time_ll', 'accuracy',  'time_rmse']
     f_save_log = open(os.path.join('result', params.save,params.model,  file_name), 'a')
 
-    for fs in fields:
+    for fs in metrics:
         model = load_model(params).to(device)
         checkpoint = torch.load(os.path.join('model', params.save, params.model, file_name)+ '_'+str(best_epoch[fs]))
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -155,6 +169,8 @@ def test_one_dataset(params, file_name, test_dataloader, best_epoch, save=False)
         # print("test time likelihood\t", test_info['time_ll'], "\t test marker likelihood\t", test_info['marker_ll'])
 
     f_save_log.close()
+
+    # removes all the checkpointed models
     path = os.path.join('model', params.save, params.model, file_name)+ '*'
     for i in glob.glob(path):
         os.remove(i)
