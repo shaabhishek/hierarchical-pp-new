@@ -310,7 +310,7 @@ if __name__ == '__main__':
         print("\n")
 
         logs_save_path = os.path.join('result', params.save, params.model, file_name)
-        logger = Logger(params.marker_type, logs_save_path)
+        logger = Logger(marker_type=params.marker_type, dataset_name=params.save, model_name=params.model, logs_save_path=logs_save_path)
         train_one_dataset(params, file_name, train_dataloader, valid_dataloader, logger)
         if params.train_test:
             test_data_path = params.data_dir + "/" + params.data_name + '_'+str(params.cv_idx)+ "_test.pkl"

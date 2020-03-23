@@ -1,11 +1,15 @@
 import os
 from datetime import datetime
+from pathlib import Path
 
 import torch
+from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 
 class Logger:
-    def __init__(self, marker_type:str, logs_save_path:str):
+    def __init__(self, marker_type:str, dataset_name:str, model_name:str, logs_save_path:str):
+        self.model_name = model_name
+        self.dataset_name = dataset_name
         self.setup_time = datetime.now()
         
         #NOTE: Only saving the timestamp upto the second
@@ -18,6 +22,9 @@ class Logger:
         self.best_epoch = {}
         self.best_valid_loss = {}
         self.improvement_map = {'loss':'small', 'marker_ll':'large', 'time_ll':'large', 'auc':'large','accuracy':'large', 'marker_rmse':'small', 'time_rmse':'small'}
+
+        tb_log_dir = Path('/home/abhishekshar/hierarchichal_point_process/src/tb_logs') / self.dataset_name / self.model_name
+        self.writer = SummaryWriter(log_dir=tb_log_dir)
 
         self.init_logged_metrics()
 
@@ -42,8 +49,13 @@ class Logger:
 
     def log_train_epoch(self, epoch_num:int, train_info_dict:dict, valid_info_dict:dict):
         for metric_name in self.metrics:
+            # Write to internal stat
             self.logged_metrics['train'][metric_name][epoch_num] =  train_info_dict.get(metric_name, float('inf'))
             self.logged_metrics['valid'][metric_name][epoch_num] =  valid_info_dict.get(metric_name, float('inf'))
+
+            # Write to Tensorboard
+            for split in ['train', 'valid']:
+                self.writer.add_scalar(f"{metric_name}/{split}", self.logged_metrics[split][metric_name][epoch_num], epoch_num)
 
             if (self.best_valid_loss[metric_name] is None) or \
                 (self.improvement_map[metric_name] == 'small' and valid_info_dict[metric_name] < self.best_valid_loss[metric_name]) or \
