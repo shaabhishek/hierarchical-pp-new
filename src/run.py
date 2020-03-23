@@ -98,7 +98,7 @@ def train(net, params, optimizer, dataloader, label):
     return info
 
 
-def test(net, params,  optimizer,  dataloader, label, dump_cluster = 0, preds_file=None):
+def test(net, params, dataloader, label, dump_cluster = 0, preds_file=None):
     """
     x_data: N, (t_i,D), A list of numpy array. #TODO: update doc
     t_data: N, (t_i, 2), A list of numpy array.

@@ -25,11 +25,11 @@ def checkpoint_model(model, optimizer, epoch_num, loss, params, file_name):
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
         'loss': loss,
-    } 
-    path = os.path.join('model', params.save, params.model, file_name)+'_'+ str(epoch_num+1)
+    }
+    path = os.path.join('model', params.save, params.model, file_name)
     torch.save(state, path)
 
-def train_one_dataset(params, file_name, train_dataloader, valid_dataloader):
+def train_one_dataset(params, file_name, train_dataloader, valid_dataloader, logger):
     """
         Input:
             params: Namespace class with hyperparameter values
@@ -39,124 +39,109 @@ def train_one_dataset(params, file_name, train_dataloader, valid_dataloader):
     """
     ### ================================== model initialization ==================================
     model = load_model(params).to(device)
-    logger = Logger(params.marker_type)
+    model.print_info()
 
     if params.l2 >0.:
         optimizer = torch.optim.Adam(model.parameters(), lr = params.lr, weight_decay= params.l2)
     else:
         optimizer = torch.optim.Adam(model.parameters(), lr = params.lr)
 
-    print(model)
-    for pname, pdata in model.named_parameters():
-        print(f"{pname}: {pdata.size()}")
-    print("\n")
 
     ### ================================== start training ==================================
-    # metrics = ['loss', 'marker_ll', 'time_ll', 'accuracy',  'time_rmse']
-    # fs_map = {'loss':'small', 'marker_ll':'large', 'time_ll':'large', 'auc':'large','accuracy':'large', 'marker_rmse':'small', 'time_rmse':'small'}
 
-    # datas = ['train', 'valid']
-    # all_data = {}
-    # for ds in datas:
-    #     all_data[ds] = {}
-    #     for fs in metrics:
-    #         all_data[ds][fs] = {}
-            
-    # best_valid_loss = {}
-    # best_epoch = {}
-    # for fs in metrics:
-    #     best_epoch[fs] =  1
-    #     best_valid_loss[fs] = None
-
-    for idx in range(params.max_iter):
-        params.iter = idx +1
+    for idx in range(1, params.max_iter+1):
+        params.iter = idx
         # Loss is the ELBO
         # Accuracy is for categorical/binary marker,
         # AUC is for binary/categorical marker.
         # Time RMSE is w.r.t expectation.
         # Marker rmse for real marker####
         train_info = train(model, params, optimizer, train_dataloader,  label='Train')
-        valid_info = test(model,  params, optimizer, valid_dataloader, label='Valid')
-               
-        logger.print_train_epoch(idx+1, train_info, valid_info)
+        valid_info = test(model,  params, valid_dataloader, label='Valid')
 
-        # print('epoch', idx + 1)
-        # if params.marker_type != 'real':
-        #     print("valid_auc\t", valid_info['auc'], "\ttrain_auc\t", train_info['auc'])
-        #     print("valid_accuracy\t", valid_info['accuracy'], "\ttrain_accuracy\t", train_info['accuracy'])
-        # else:
-        #     print("valid_marker_rmse\t", valid_info['marker_rmse'], "\ttrain_marker_rmse\t", train_info['marker_rmse'])
-        # print("valid_time_mse\t", valid_info['time_rmse'], "\ttrain_time_msee\t", train_info['time_rmse'])
-        # print("valid_loss\t", valid_info['loss'], "\ttrain_loss\t", train_info['loss'])
-        # print("valid marker likelihood\t", valid_info['marker_ll'], "\t train marker likelihood\t", train_info['marker_ll'])
-        # print("valid time likelihood\t", valid_info['time_ll'], "\t train time likelihood\t", train_info['time_ll'])
-        
-        if not os.path.isdir('model'):
-            makedir('model')
-        if not os.path.isdir(os.path.join('model', params.save)):
-            makedir(os.path.join('model', params.save))
-        if not os.path.isdir(os.path.join('model', params.save, params.model)):
-            makedir(os.path.join('model', params.save, params.model))
+        ### ================== start epoch logging ====================
+        # print train and validation metric values
+        logger.print_train_epoch(idx, train_info, valid_info)
 
-        checkpoint_model(model, optimizer, idx, train_info['loss'], params, file_name)
-        
-        logger.log_train_epoch(idx+1, train_info, valid_info)
+        # save train and validation metric values
+        logger.log_train_epoch(idx, train_info, valid_info)
+        ### ================== finish epoch logging ====================
 
-        # for fs in metrics:
-        #     all_data['train'][fs][idx+1] =  train_info.get(fs, 0.)
-        #     all_data['valid'][fs][idx+1] =  valid_info.get(fs, 0.)
+        # saves the model, optimizer and loss as a checkpoint
+        if logger.get_best_epoch(metric_name='loss') == idx:
+            checkpoint_model(model, optimizer, idx, train_info['loss'], params, file_name)
 
-        # output the epoch with the best validation auc
-        # for fs in metrics:
-        #     if (best_valid_loss[fs] is None) or (fs_map[fs] == 'small' and valid_info[fs] < best_valid_loss[fs]) or \
-        #         (fs_map[fs] == 'large' and valid_info[fs] > best_valid_loss[fs]):
-        #         best_valid_loss[fs] = valid_info[fs]
-        #         best_epoch[fs] = idx+1
+    ### ================================== finish training ==================================
 
-    if not os.path.isdir('result'):
-        makedir('result')
-    if not os.path.isdir(os.path.join('result', params.save)):
-        makedir(os.path.join('result', params.save))
-    if not os.path.isdir(os.path.join('result', params.save, params.model)):
-            makedir(os.path.join('result', params.save, params.model))
+    # End of training: save the logger state (metric values) to file
+    for split in ['train', 'valid']:
+        logger.save_logs_to_file(split)
 
-    f_save_log = open(os.path.join('result', params.save,params.model,  file_name), 'w')
-    for fs in metrics:
-        for ds in datas:
-            f_save_log.write(ds + '_'+ fs +":\n" + str(all_data[ds][fs]) + "\n\n")
-    f_save_log.close()
-    return best_epoch
+    print(f"Model saved at {os.path.join('model', params.save, params.model, file_name)}")
 
-def test_one_dataset(params, file_name, test_dataloader, best_epoch, save=False):
-    print("\n\nStart testing ......................\n Best epoch:", best_epoch)
-    metrics = ['loss', 'marker_ll', 'time_ll', 'accuracy',  'time_rmse']
-    f_save_log = open(os.path.join('result', params.save,params.model,  file_name), 'a')
+def test_one_dataset(params, file_name, test_dataloader, logger:Logger, save=False):
+    print("\n\nStart testing ......................\nBest epoch:", logger.best_epoch)
+    best_epoch_num = logger.get_best_epoch(metric_name='loss')
 
-    for fs in metrics:
-        model = load_model(params).to(device)
-        checkpoint = torch.load(os.path.join('model', params.save, params.model, file_name)+ '_'+str(best_epoch[fs]))
-        model.load_state_dict(checkpoint['model_state_dict'])
+    ### ================================== start setting up state ==================================
 
-        if save and (fs == "loss"):
-            if not os.path.isdir('preds'):
-                makedir('preds')
-            if not os.path.isdir(os.path.join('preds', params.save)):
-                makedir(os.path.join('preds', params.save))
-            if not os.path.isdir(os.path.join('preds', params.save, params.model)):
-                    makedir(os.path.join('preds', params.save, params.model))
-            f_save_preds = open(os.path.join('preds', params.save,params.model,  file_name), 'a')
-        else:
-            f_save_preds = None
+    # Load checkpointed model
+    model = load_model(params).to(device)
+    model_state_path = os.path.join('model', params.save, params.model, file_name)
+    checkpoint = torch.load(model_state_path)
+    model.load_state_dict(checkpoint['model_state_dict'])
 
-        test_info = test(model, params, None, test_dataloader, label='Test', dump_cluster=params.dump_cluster, preds_file=f_save_preds)
-        print("test\t ", fs, ': ', test_info[fs])
-        print("best epoch of metric: ",fs ,"\t", best_epoch[fs], "All Metrics for that epoch", test_info)
-        f_save_log.write('Test results\t :'+ fs  +':\t'+ str(test_info[fs]) + "\n")
-        f_save_log.write('Other results for taking best\t :'+ fs  +':\t'+ str(test_info) + "\n")
-        if fs == 'loss' and params.dump_cluster ==1:
-            f_save_cluster = os.path.join('result', params.save,params.model,  file_name+ '_cluster.pkl')
-            with open(f_save_cluster, 'wb') as handle:
-                pickle.dump(test_info, handle)
+    ### ================================== start testing ==================================
+
+    predictions_save_path = os.path.join('preds', params.save,params.model, file_name)
+    with open(predictions_save_path, 'a') as f_save_preds:
+        # Saving predictions performed by the model itself
+        test_info = test(model, params, test_dataloader, label='Test', dump_cluster=params.dump_cluster, preds_file=f_save_preds)
+
+    ### ================================== finish testing ==================================
+
+    # Print the test metric info
+    logger.print_test_epoch(test_info)
+
+    # Log the test metric info
+    logger.log_test_epoch(best_epoch_num, test_info)
+
+    # End of epoch: save the logger state (metric values) to file
+    logger.save_logs_to_file('test')
+    
+    ### ================================== finish logging ==================================
+
+    # logs_save_path = os.path.join('result', params.save,params.model,  file_name)
+
+
+    # metrics = ['loss', 'marker_ll', 'time_ll', 'accuracy',  'time_rmse']
+    # f_save_log = open(os.path.join('result', params.save,params.model,  file_name), 'a')
+
+    # for fs in metrics:
+    #     model = load_model(params).to(device)
+    #     checkpoint = torch.load(os.path.join('model', params.save, params.model, file_name)+ '_'+str(best_epoch[fs]))
+    #     model.load_state_dict(checkpoint['model_state_dict'])
+
+    #     if save and (fs == "loss"):
+    #         if not os.path.isdir('preds'):
+    #             makedir('preds')
+    #         if not os.path.isdir(os.path.join('preds', params.save)):
+    #             makedir(os.path.join('preds', params.save))
+    #         if not os.path.isdir(os.path.join('preds', params.save, params.model)):
+    #                 makedir(os.path.join('preds', params.save, params.model))
+    #         f_save_preds = open(os.path.join('preds', params.save,params.model,  file_name), 'a')
+    #     else:
+    #         f_save_preds = None
+
+    #     test_info = test(model, params, test_dataloader, label='Test', dump_cluster=params.dump_cluster, preds_file=f_save_preds)
+    #     print("test\t ", fs, ': ', test_info[fs])
+    #     print("best epoch of metric: ",fs ,"\t", best_epoch[fs], "All Metrics for that epoch", test_info)
+    #     f_save_log.write('Test results\t :'+ fs  +':\t'+ str(test_info[fs]) + "\n")
+    #     f_save_log.write('Other results for taking best\t :'+ fs  +':\t'+ str(test_info) + "\n")
+    #     if fs == 'loss' and params.dump_cluster ==1:
+    #         f_save_cluster = os.path.join('result', params.save,params.model,  file_name+ '_cluster.pkl')
+    #         with open(f_save_cluster, 'wb') as handle:
+    #             pickle.dump(test_info, handle)
 
 
         # if params.marker_type != 'real':
@@ -168,13 +153,13 @@ def test_one_dataset(params, file_name, test_dataloader, best_epoch, save=False)
         # print("test_time_rmse\t" , test_info['time_rmse'])
         # print("test time likelihood\t", test_info['time_ll'], "\t test marker likelihood\t", test_info['marker_ll'])
 
-    f_save_log.close()
+    # f_save_log.close()
 
-    # removes all the checkpointed models
-    path = os.path.join('model', params.save, params.model, file_name)+ '*'
-    for i in glob.glob(path):
-        os.remove(i)
-    
+    # # removes all the checkpointed models
+    # path = os.path.join('model', params.save, params.model, file_name)+ '*'
+    # for i in glob.glob(path):
+    #     os.remove(i)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Script to test Marked Point Process.')
@@ -192,7 +177,7 @@ if __name__ == '__main__':
     parser.add_argument('--latent_dim', type=int, default=20, help='latent dim')
     parser.add_argument('--x_given_t', type=bool, default=False, help='whether x given t')
     parser.add_argument('--n_cluster', type=int, default=10, help='number of cluster')
-    
+
 
     ###Helper Parameter###
     parser.add_argument('--model', type=str, default='model2', help='model name')
@@ -239,7 +224,7 @@ if __name__ == '__main__':
         params.batch_size = 64
         params.time_scale = 1e-3
 
-    
+
     elif params.data_name == 'retweet':
         params.marker_dim = 3
         params.time_dim = 2
@@ -256,7 +241,7 @@ if __name__ == '__main__':
         params.time_influence = 0.01
         params.marker_type = 'categorical'
         params.batch_size = 10
-    
+
     elif params.data_name == 'lastfm':
         params.marker_dim = 3150
         params.time_dim = 2
@@ -264,7 +249,7 @@ if __name__ == '__main__':
         params.time_influence = 0.01
         params.marker_type = 'categorical'
         params.batch_size = 32
-    
+
     elif params.data_name == 'simulated_hawkes':
         params.marker_dim = 3150
         params.time_dim = 2
@@ -293,7 +278,7 @@ if __name__ == '__main__':
     params.load = params.data_name
     params.save = params.data_name
     # Read data
-    
+
     #Set Seed for reproducibility
     seedNum = params.seed
     torch.backends.cudnn.deterministic = True
@@ -316,18 +301,21 @@ if __name__ == '__main__':
         #That pkl file should give two list of x and t. It should not be tensor.
         train_dataloader = get_dataloader(train_data_path, params.marker_type, params.batch_size)
         valid_dataloader = get_dataloader(valid_data_path, params.marker_type, params.batch_size)
-        
+
         # train_x_data, train_t_data = load_data(train_data_path)
         # valid_x_data, valid_t_data = load_data(valid_data_path)
         print("\n")
         print("train data length", len(train_dataloader.dataset))
         print("valid data length", len(valid_dataloader.dataset))
         print("\n")
-        best_epoch = train_one_dataset(params, file_name, train_dataloader, valid_dataloader)
+
+        logs_save_path = os.path.join('result', params.save, params.model, file_name)
+        logger = Logger(params.marker_type, logs_save_path)
+        train_one_dataset(params, file_name, train_dataloader, valid_dataloader, logger)
         if params.train_test:
             test_data_path = params.data_dir + "/" + params.data_name + '_'+str(params.cv_idx)+ "_test.pkl"
             test_dataloader = get_dataloader(test_data_path, params.marker_type, params.batch_size)
-            test_one_dataset(params, file_name, test_dataloader, best_epoch, save=True)
+            test_one_dataset(params, file_name, test_dataloader, logger, save=True)
     else:
         test_data_path = params.data_dir + "/" + params.data_name  +'_'+str(params.cv_idx)+"_test.pkl"
         test_dataloader = get_dataloader(test_data_path, params.marker_type, params.batch_size)

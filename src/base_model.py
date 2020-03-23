@@ -179,7 +179,14 @@ class BaseModel(nn.Module):
         # self.encoder = Encoder(rnn_dims=rnn_dims, y_dims=y_dims, z_dims=z_dims)
 
 
-        #Generative network
+    def print_info(self):
+        # dump whatever str(nn.Module) has to offer
+        print(self)
+        
+        # dump parameter info
+        for pname, pdata in self.named_parameters():
+            print(f"{pname}: {pdata.size()}")
+
 
     def create_embedding_nets(self):
         # marker_dim is passed. timeseries_dim is 2

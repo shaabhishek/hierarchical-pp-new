@@ -18,8 +18,10 @@ def train_val_split(data, val_ratio=0.2):
     """
         Input:
             data: dict with keys 'x' and 't'.
-            data['x']: x_data: list of length num_data_train, each element is numpy array of shape T_i x marker_dim
-            data['t']: t_data: list of length num_data_train, each element is numpy array of shape T_i x 3
+            data['x']: x_data: list of length num_data_train, each element is numpy array of shape
+            - [T_i x marker_dim] (if real)
+            - [T_i,] (if categorical)
+            data['t']: t_data: list of length num_data_train, each element is numpy array of shape T_i x 2
         Output:
             train_split, val_split: both follow the same structure as data
     """
