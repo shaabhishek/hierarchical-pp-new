@@ -31,6 +31,7 @@ def sample_gumbel_softmax(logits, temperature):
     y = F.softmax(h, dim=-1)
     return y
 
+
 class MLP(nn.Module):
     def __init__(self, dims:list):
         assert len(dims) >= 2 #should at least be [inputdim, outputdim]

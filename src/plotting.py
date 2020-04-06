@@ -1,3 +1,4 @@
+import os
 import argparse
 from argparse import Namespace
 
@@ -5,120 +6,73 @@ import numpy as np
 import torch
 
 import matplotlib
+
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
 
 from utils.data_loader import get_dataloader
+from utils.model_loader import ModelLoader
+from main import setup_parser, _augment_params
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def load_data(params:Namespace, split_name):
-    split_name = "train" #TODO remove after testing
-    #Data should reside in this path for all datasets. Ideally 5 cross fold validation.
-    data_path = params.data_dir + params.data_name +'_'+str(params.cv_idx)+ f"_{split_name}.pkl"
-    dataloader = get_dataloader(data_path, params.marker_type, params.batch_size)
-    return dataloader
-
-def load_model(params:Namespace):
-    model = load_model(params).to(device)
-    return model
-
-def _augment_params(params:Namespace):
-    params.cv_idx = 1
-
-    ###Fixed parameter###
-    if params.data_name == 'mimic2':
-        params.marker_dim = 75
-        params.base_intensity = -0.
-        params.time_influence = 1.
-        params.time_dim = 2
-        params.marker_type = 'categorical'
-        params.batch_size = 32
-
-    elif params.data_name == 'so':
-        params.marker_dim = 22
-        params.time_dim = 2
-        params.base_intensity = -5.
-        params.time_influence = 0.01
-        params.marker_type = 'categorical'
-        params.batch_size = 32
-
-    elif params.data_name == 'meme':
-        params.marker_dim = 5000
-        params.time_dim = 2
-        params.base_intensity = 0.
-        params.time_influence = 0.01
-        params.marker_type = 'categorical'
-        params.batch_size = 64
-        params.time_scale = 1e-3
-
-    
-    elif params.data_name == 'retweet':
-        params.marker_dim = 3
-        params.time_dim = 2
-        params.base_intensity = 0.
-        params.time_influence = 0.01
-        params.marker_type = 'categorical'
-        params.batch_size = 32
-        params.time_scale = 1e-3
-
-    elif params.data_name == 'book_order':
-        params.marker_dim = 2
-        params.time_dim = 2
-        params.base_intensity = 0.
-        params.time_influence = 0.01
-        params.marker_type = 'categorical'
-        params.batch_size = 10
-    
-    elif params.data_name == 'lastfm':
-        params.marker_dim = 3150
-        params.time_dim = 2
-        params.base_intensity = 0.
-        params.time_influence = 0.01
-        params.marker_type = 'categorical'
-        params.batch_size = 32
-    
-    elif params.data_name == 'simulated_hawkes':
-        params.marker_dim = 3150
-        params.time_dim = 2
-        params.base_intensity = 0.
-        params.time_influence = 0.01
-        params.marker_type = 'categorical'
-        params.batch_size = 32
-
-    elif 'syntheticdata' in params.data_name:
-        params.marker_dim = 2
-        params.time_dim = 2
-        params.base_intensity = 0.
-        params.time_influence = 0.01
-        params.marker_type = 'categorical'
-        params.batch_size = 32
-
-
-    else:#different dataset. Encode those details.
-        raise ValueError
 
 class Plotter():
     def __init__(self):
-        pass
+        self.model = None
+        self.model_path = None
+        self.dataloader = None
+
+    def load_data(self, params: Namespace, split_name):
+        split_name = "train"  # TODO remove after testing
+        # Data should reside in this path for all datasets. Ideally 5 cross fold validation.
+        data_path = params.data_dir + params.data_name + '_' + str(params.cv_idx) + f"_{split_name}.pkl"
+        self.dataloader = get_dataloader(data_path, params.marker_type, params.batch_size)
+
+    def load_model(self, params: Namespace, model_state_path: str):
+        loader = ModelLoader(params, model_state_path=model_state_path)
+        self.model = loader.model
+        self.model_path = loader.model_state_path
+
+
+class HawkesPlotter(Plotter):
+    def __init__(self):
+        super().__init__()
+        self.params = {'lambda_0': .2, 'alpha': .8, 'beta': 1.}
+
+    def _get_intensity(self, t: float, hist: np.ndarray, params: dict):
+        # params: [lambda0, alpha, beta]
+        # hist must be numpy array
+        hist = hist[(hist < t)]
+        return params['lambda_0'] + params['alpha'] * np.sum(np.exp(-1. * (t - hist) / params['beta']))
+
+    def plot_intensity(self, ax: plt.Axes):
+        assert self.dataloader is not None
+        data = self.dataloader.dataset[0]
+        x_vals = np.arange(0, data[-1], .5)
+        y_vals = [self._get_intensity(t=_t, hist=data, params=self.params) for _t in x_vals]
+        ax.plot(x_vals, y_vals)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Script to test Marked Point Process.')
-    
-    parser.add_argument('--model', type=str, default='model2', help='model name')
-    parser.add_argument('--data_name', type=str, default='mimic2', help='data set name')
-
+    parser = setup_parser()
     params = parser.parse_args()
-
+    ###
+    params.model = 'rmtpp'
+    params.data_name = 'simulated_hawkes'
+    ###
     _augment_params(params)
 
-    if params.time_loss == 'intensity':
-        params.n_sample = 1
-    if params.time_loss == 'normal':
-        params.n_sample = 5
+    plotter = HawkesPlotter()
 
-    params.load = params.data_name
+    # Create data loader
+    plotter.load_data(params, "train")
 
-    loader = load_data(params, "train")
-    model = load_model(params)
+    # Load model object & Load model state
+    model_state_path = os.path.join('model', params.data_name, params.model,
+                                    "_g1_do0.5_b32_h256_l20.0_l20_gn10.0_lr0.001_c10_s1_tlintensity_ai40")
+    plotter.load_model(params, model_state_path)
+
+    # Plot
+    fig, ax = plt.subplots(1, 1)
+    plotter.plot_intensity()

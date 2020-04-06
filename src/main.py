@@ -1,5 +1,6 @@
 import sys
 import argparse
+from argparse import Namespace
 import numpy as np
 import torch
 import os, os.path
@@ -10,7 +11,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 from run import train, test
 from utils.data_loader import load_data, get_dataloader
-from utils.model_loader import load_model
+from utils.model_loader import load_model, ModelLoader
 from utils.logger import Logger
 
 def makedir(name):
@@ -86,10 +87,12 @@ def test_one_dataset(params, file_name, test_dataloader, logger:Logger, save=Fal
     ### ================================== start setting up state ==================================
 
     # Load checkpointed model
-    model = load_model(params).to(device)
+    # model = load_model(params).to(device)
     model_state_path = os.path.join('model', params.save, params.model, file_name)
-    checkpoint = torch.load(model_state_path)
-    model.load_state_dict(checkpoint['model_state_dict'])
+    model = ModelLoader(params, model_state_path=model_state_path).model
+
+    # checkpoint = torch.load(model_state_path)
+    # model.load_state_dict(checkpoint['model_state_dict'])
 
     ### ================================== start testing ==================================
 
@@ -111,91 +114,8 @@ def test_one_dataset(params, file_name, test_dataloader, logger:Logger, save=Fal
     
     ### ================================== finish logging ==================================
 
-    # logs_save_path = os.path.join('result', params.save,params.model,  file_name)
 
-
-    # metrics = ['loss', 'marker_ll', 'time_ll', 'accuracy',  'time_rmse']
-    # f_save_log = open(os.path.join('result', params.save,params.model,  file_name), 'a')
-
-    # for fs in metrics:
-    #     model = load_model(params).to(device)
-    #     checkpoint = torch.load(os.path.join('model', params.save, params.model, file_name)+ '_'+str(best_epoch[fs]))
-    #     model.load_state_dict(checkpoint['model_state_dict'])
-
-    #     if save and (fs == "loss"):
-    #         if not os.path.isdir('preds'):
-    #             makedir('preds')
-    #         if not os.path.isdir(os.path.join('preds', params.save)):
-    #             makedir(os.path.join('preds', params.save))
-    #         if not os.path.isdir(os.path.join('preds', params.save, params.model)):
-    #                 makedir(os.path.join('preds', params.save, params.model))
-    #         f_save_preds = open(os.path.join('preds', params.save,params.model,  file_name), 'a')
-    #     else:
-    #         f_save_preds = None
-
-    #     test_info = test(model, params, test_dataloader, label='Test', dump_cluster=params.dump_cluster, preds_file=f_save_preds)
-    #     print("test\t ", fs, ': ', test_info[fs])
-    #     print("best epoch of metric: ",fs ,"\t", best_epoch[fs], "All Metrics for that epoch", test_info)
-    #     f_save_log.write('Test results\t :'+ fs  +':\t'+ str(test_info[fs]) + "\n")
-    #     f_save_log.write('Other results for taking best\t :'+ fs  +':\t'+ str(test_info) + "\n")
-    #     if fs == 'loss' and params.dump_cluster ==1:
-    #         f_save_cluster = os.path.join('result', params.save,params.model,  file_name+ '_cluster.pkl')
-    #         with open(f_save_cluster, 'wb') as handle:
-    #             pickle.dump(test_info, handle)
-
-
-        # if params.marker_type != 'real':
-        #     print("\ntest_auc\t", test_info['auc'])
-        #     print("test_accuracy\t", test_info['accuracy'])
-        # else:
-        #     print("test_marker_rmse\t" , test_info['marker_rmse'])
-        # print("test_loss\t", test_info['loss'])
-        # print("test_time_rmse\t" , test_info['time_rmse'])
-        # print("test time likelihood\t", test_info['time_ll'], "\t test marker likelihood\t", test_info['marker_ll'])
-
-    # f_save_log.close()
-
-    # # removes all the checkpointed models
-    # path = os.path.join('model', params.save, params.model, file_name)+ '*'
-    # for i in glob.glob(path):
-    #     os.remove(i)
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Script to test Marked Point Process.')
-
-    ###Validation Parameter###
-    parser.add_argument('--max_iter', type=int, default=1, help='number of iterations')
-    parser.add_argument('--anneal_iter', type=int, default=40, help='number of iteration over which anneal goes to 1')
-    parser.add_argument('--rnn_hidden_dim', type=int, default=256, help='rnn hidden dim')
-    parser.add_argument('--maxgradnorm', type=float, default=10.0, help='maximum gradient norm')
-    parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
-    parser.add_argument('--gamma', type=float, default=1, help='tradeoff of time and marker in loss. marker loss + gamma * time loss')
-    parser.add_argument('--l2', type=float, default=0., help='regularizer with weight decay parameter')
-    parser.add_argument('--dropout', type=float, default=0.5, help='dropout rate')
-    parser.add_argument('--batch_size', type=int, default=32, help='the batch size')
-    parser.add_argument('--latent_dim', type=int, default=20, help='latent dim')
-    parser.add_argument('--x_given_t', type=bool, default=False, help='whether x given t')
-    parser.add_argument('--n_cluster', type=int, default=10, help='number of cluster')
-
-
-    ###Helper Parameter###
-    parser.add_argument('--model', type=str, default='model2', help='model name')
-    parser.add_argument('--time_loss', type=str, default='intensity', help='whether to use normal loss or intensity loss')
-    parser.add_argument('--time_scale', type=float, default=1, help='scaling factor to multiply the timestamps with')
-    parser.add_argument('--test', type=bool, default=False, help='enable testing')
-    parser.add_argument('--train_test', type=bool, default=True, help='enable testing')
-    parser.add_argument('--show', type=bool, default=True, help='print progress')
-    parser.add_argument('--data_dir', type=str, default='../data/', help='data directory')
-    parser.add_argument('--best_epoch', type=int, default=10, help='best epoch')
-    parser.add_argument('--seed', type=int, default=1, help='seed')
-    parser.add_argument('--dump_cluster', type=int, default=0, help='whether to dump cluster while Testing')
-
-
-
-
-    parser.add_argument('--data_name', type=str, default='mimic2', help='data set name')
-    params = parser.parse_args()
+def _augment_params(params:Namespace):
     params.cv_idx = 1
 
     ###Fixed parameter###
@@ -277,6 +197,47 @@ if __name__ == '__main__':
 
     params.load = params.data_name
     params.save = params.data_name
+    return params
+
+def setup_parser():
+    parser = argparse.ArgumentParser(description='Script to test Marked Point Process.')
+
+    ###Validation Parameter###
+    parser.add_argument('--max_iter', type=int, default=1, help='number of iterations')
+    parser.add_argument('--anneal_iter', type=int, default=40, help='number of iteration over which anneal goes to 1')
+    parser.add_argument('--rnn_hidden_dim', type=int, default=256, help='rnn hidden dim')
+    parser.add_argument('--maxgradnorm', type=float, default=10.0, help='maximum gradient norm')
+    parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
+    parser.add_argument('--gamma', type=float, default=1, help='tradeoff of time and marker in loss. marker loss + gamma * time loss')
+    parser.add_argument('--l2', type=float, default=0., help='regularizer with weight decay parameter')
+    parser.add_argument('--dropout', type=float, default=0.5, help='dropout rate')
+    parser.add_argument('--batch_size', type=int, default=32, help='the batch size')
+    parser.add_argument('--latent_dim', type=int, default=20, help='latent dim')
+    parser.add_argument('--x_given_t', type=bool, default=False, help='whether x given t')
+    parser.add_argument('--n_cluster', type=int, default=10, help='number of cluster')
+
+
+    ###Helper Parameter###
+    parser.add_argument('--model', type=str, default='model2', help='model name')
+    parser.add_argument('--time_loss', type=str, default='intensity', help='whether to use normal loss or intensity loss')
+    parser.add_argument('--time_scale', type=float, default=1, help='scaling factor to multiply the timestamps with')
+    parser.add_argument('--test', type=bool, default=False, help='enable testing')
+    parser.add_argument('--train_test', type=bool, default=True, help='enable testing')
+    parser.add_argument('--show', type=bool, default=True, help='print progress')
+    parser.add_argument('--data_dir', type=str, default='../data/', help='data directory')
+    parser.add_argument('--best_epoch', type=int, default=10, help='best epoch')
+    parser.add_argument('--seed', type=int, default=1, help='seed')
+    parser.add_argument('--dump_cluster', type=int, default=0, help='whether to dump cluster while Testing')
+
+    parser.add_argument('--data_name', type=str, default='mimic2', help='data set name')
+
+    return parser
+
+if __name__ == '__main__':
+    parser = setup_parser()
+    params = parser.parse_args()
+    params = _augment_params(params)
+
     # Read data
 
     #Set Seed for reproducibility
