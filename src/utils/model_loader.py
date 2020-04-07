@@ -6,6 +6,8 @@ import os
 from argparse import Namespace
 from pathlib import Path
 
+from parameters import DataModelParams, RMTPPHyperparams, ModelHyperparams, Model1Hyperparams, Model2Hyperparams
+
 sys.path.insert(0, './../')
 from rmtpp import RMTPP
 from autoregressive import ACD
@@ -14,50 +16,58 @@ from model2_filt import Model2Filter
 from model2_new import Model2New
 from model1 import Model1
 
+
 class ModelLoader:
-    def __init__(self, params, model_state_path:str=None):
-        self.params = params
-        self.model = self._load_model(self.params)
-        if model_state_path is not None:
-            self.model = self._load_model_state(self.model, model_state_path)
-            self.model_state_path = Path(model_state_path)
-        else:
-            self.model_state_path = None
+    def __init__(self, modelparams: DataModelParams, hyperparams: ModelHyperparams):
+        self.model_params = modelparams
+        self.model_hyperparams = hyperparams
+        self.model = self._load_model(self.model_hyperparams)
 
-    def _load_model(self, params):
-        if params.model == 'rmtpp':
-            model = RMTPP(marker_type= params.marker_type, marker_dim = params.marker_dim, time_dim=params.time_dim, rnn_hidden_dim = params.rnn_hidden_dim, x_given_t = params.x_given_t, base_intensity = params.base_intensity, time_influence = params.time_influence, gamma = params.gamma, time_loss = params.time_loss, dropout=params.dropout, latent_dim=None, n_cluster=None, )
-        if params.model == 'ACD':
-            model = ACD()
-        if params.model == 'model1':
-            model = Model1(marker_type= params.marker_type, marker_dim = params.marker_dim, time_dim=params.time_dim, rnn_hidden_dim = params.rnn_hidden_dim, n_cluster=params.n_cluster, latent_dim=params.latent_dim, x_given_t=params.x_given_t, base_intensity=params.base_intensity, time_influence=params.time_influence, gamma = params.gamma, time_loss = params.time_loss, dropout=params.dropout)
-        if params.model == 'model2':
-            model = Model2(marker_type= params.marker_type, marker_dim = params.marker_dim, latent_dim=params.latent_dim, time_dim=params.time_dim, rnn_hidden_dim = params.rnn_hidden_dim, n_cluster=params.n_cluster, x_given_t = params.x_given_t, base_intensity = params.base_intensity, time_influence = params.time_influence, gamma = params.gamma, time_loss = params.time_loss, dropout=params.dropout)
-        if params.model == 'model2_filt':
-            model = Model2Filter(n_sample = params.n_sample, marker_type= params.marker_type, marker_dim = params.marker_dim, latent_dim=params.latent_dim, time_dim=params.time_dim, rnn_hidden_dim = params.rnn_hidden_dim, n_cluster=params.n_cluster, x_given_t = params.x_given_t, base_intensity = params.base_intensity, time_influence = params.time_influence, gamma = params.gamma, time_loss = params.time_loss, dropout=params.dropout)
-        if params.model == 'model2_new':
-            model = Model2New(n_sample = params.n_sample, marker_type= params.marker_type, marker_dim = params.marker_dim, latent_dim=params.latent_dim, time_dim=params.time_dim, rnn_hidden_dim = params.rnn_hidden_dim, n_cluster=params.n_cluster, x_given_t = params.x_given_t, base_intensity = params.base_intensity, time_influence = params.time_influence, gamma = params.gamma, time_loss = params.time_loss, dropout=params.dropout)
-        return model
-    
-    def _load_model_state(self, model:Module, model_state_path:Path):
-        checkpoint = torch.load(model_state_path)
-        model.load_state_dict(checkpoint['model_state_dict'])
+        self.model_state_path = self.model_params.get_model_state_path()
+        if self.model_state_path is not None:
+            self._load_model_state()
+
+    @staticmethod
+    def _load_model(hyperparams):
+        if isinstance(hyperparams, RMTPPHyperparams):
+            model = RMTPP(marker_type=hyperparams.marker_type, marker_dim=hyperparams.marker_dim, time_dim=hyperparams.time_dim,
+                          rnn_hidden_dim=hyperparams.rnn_hidden_dim, x_given_t=hyperparams.x_given_t,
+                          base_intensity=hyperparams.base_intensity, time_influence=hyperparams.time_influence,
+                          gamma=hyperparams.gamma, time_loss=hyperparams.time_loss, dropout=hyperparams.dropout, latent_dim=None,
+                          n_cluster=None, )
+        elif isinstance(hyperparams, Model1Hyperparams):
+            model = Model1(marker_type=hyperparams.marker_type, marker_dim=hyperparams.marker_dim, time_dim=hyperparams.time_dim,
+                           rnn_hidden_dim=hyperparams.rnn_hidden_dim, n_cluster=hyperparams.n_cluster,
+                           latent_dim=hyperparams.latent_dim, x_given_t=hyperparams.x_given_t,
+                           base_intensity=hyperparams.base_intensity, time_influence=hyperparams.time_influence,
+                           gamma=hyperparams.gamma, time_loss=hyperparams.time_loss, dropout=hyperparams.dropout)
+
+        elif isinstance(hyperparams, Model2Hyperparams):
+            model = Model2(marker_type=hyperparams.marker_type, marker_dim=hyperparams.marker_dim, latent_dim=hyperparams.latent_dim,
+                           time_dim=hyperparams.time_dim, rnn_hidden_dim=hyperparams.rnn_hidden_dim, n_cluster=hyperparams.n_cluster,
+                           x_given_t=hyperparams.x_given_t, base_intensity=hyperparams.base_intensity,
+                           time_influence=hyperparams.time_influence, gamma=hyperparams.gamma, time_loss=hyperparams.time_loss,
+                           dropout=hyperparams.dropout)
+
+        if hyperparams.model_name == 'model2_filt':
+            model = Model2Filter(n_sample=hyperparams.n_sample, marker_type=hyperparams.marker_type, marker_dim=hyperparams.marker_dim,
+                                 latent_dim=hyperparams.latent_dim, time_dim=hyperparams.time_dim,
+                                 rnn_hidden_dim=hyperparams.rnn_hidden_dim, n_cluster=hyperparams.n_cluster,
+                                 x_given_t=hyperparams.x_given_t, base_intensity=hyperparams.base_intensity,
+                                 time_influence=hyperparams.time_influence, gamma=hyperparams.gamma, time_loss=hyperparams.time_loss,
+                                 dropout=hyperparams.dropout)
+        if hyperparams.model_name == 'model2_new':
+            model = Model2New(n_sample=hyperparams.n_sample, marker_type=hyperparams.marker_type, marker_dim=hyperparams.marker_dim,
+                              latent_dim=hyperparams.latent_dim, time_dim=hyperparams.time_dim,
+                              rnn_hidden_dim=hyperparams.rnn_hidden_dim, n_cluster=hyperparams.n_cluster,
+                              x_given_t=hyperparams.x_given_t, base_intensity=hyperparams.base_intensity,
+                              time_influence=hyperparams.time_influence, gamma=hyperparams.gamma, time_loss=hyperparams.time_loss,
+                              dropout=hyperparams.dropout)
         return model
 
-def load_model(params):
-    if params.model == 'rmtpp':
-        model = RMTPP(marker_type= params.marker_type, marker_dim = params.marker_dim, time_dim=params.time_dim, rnn_hidden_dim = params.rnn_hidden_dim, x_given_t = params.x_given_t, base_intensity = params.base_intensity, time_influence = params.time_influence, gamma = params.gamma, time_loss = params.time_loss, dropout=params.dropout, latent_dim=None, n_cluster=None, )
-    if params.model == 'ACD':
-        model = ACD()
-    if params.model == 'model1':
-        model = Model1(marker_type= params.marker_type, marker_dim = params.marker_dim, time_dim=params.time_dim, rnn_hidden_dim = params.rnn_hidden_dim, n_cluster=params.n_cluster, latent_dim=params.latent_dim, x_given_t=params.x_given_t, base_intensity=params.base_intensity, time_influence=params.time_influence, gamma = params.gamma, time_loss = params.time_loss, dropout=params.dropout)
-    if params.model == 'model2':
-        model = Model2(marker_type= params.marker_type, marker_dim = params.marker_dim, latent_dim=params.latent_dim, time_dim=params.time_dim, rnn_hidden_dim = params.rnn_hidden_dim, n_cluster=params.n_cluster, x_given_t = params.x_given_t, base_intensity = params.base_intensity, time_influence = params.time_influence, gamma = params.gamma, time_loss = params.time_loss, dropout=params.dropout)
-    if params.model == 'model2_filt':
-        model = Model2Filter(n_sample = params.n_sample, marker_type= params.marker_type, marker_dim = params.marker_dim, latent_dim=params.latent_dim, time_dim=params.time_dim, rnn_hidden_dim = params.rnn_hidden_dim, n_cluster=params.n_cluster, x_given_t = params.x_given_t, base_intensity = params.base_intensity, time_influence = params.time_influence, gamma = params.gamma, time_loss = params.time_loss, dropout=params.dropout)
-    if params.model == 'model2_new':
-        model = Model2New(n_sample = params.n_sample, marker_type= params.marker_type, marker_dim = params.marker_dim, latent_dim=params.latent_dim, time_dim=params.time_dim, rnn_hidden_dim = params.rnn_hidden_dim, n_cluster=params.n_cluster, x_given_t = params.x_given_t, base_intensity = params.base_intensity, time_influence = params.time_influence, gamma = params.gamma, time_loss = params.time_loss, dropout=params.dropout)
-    return model
+    def _load_model_state(self, model: Module, model_state_path: Path):
+        checkpoint = torch.load(self.model_state_path)
+        self.model.load_state_dict(checkpoint['model_state_dict'])
 
 
 # def save_model(model:torch.nn.Module, optimizer:Optimizer, params:Namespace, loss):

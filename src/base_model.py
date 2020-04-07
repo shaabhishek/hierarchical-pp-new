@@ -1,4 +1,5 @@
 import torch
+from torch import Tensor
 import numpy as np
 import random
 import time
@@ -24,67 +25,71 @@ def sample_gumbel_softmax(logits, temperature):
                 These will tend towards a one-hot representation in the limit of temp -> 0
                 shape = BS x k
     """
-    g = Gumbel(torch.zeros(*logits.shape),torch.ones(*logits.shape)).sample().to(device)
+    g = Gumbel(torch.zeros(*logits.shape), torch.ones(*logits.shape)).sample().to(device)
     # g = sample_gumbel(logits.shape)
     # assert g.shape == logits.shape
-    h = (g + logits)/temperature
+    h = (g + logits) / temperature
     y = F.softmax(h, dim=-1)
     return y
 
 
 class MLP(nn.Module):
-    def __init__(self, dims:list):
-        assert len(dims) >= 2 #should at least be [inputdim, outputdim]
+    def __init__(self, dims: list):
+        assert len(dims) >= 2  # should at least be [inputdim, outputdim]
         super().__init__()
         layers = list()
         for i in range(len(dims) - 1):
             n = dims[i]
-            m = dims[i+1]
+            m = dims[i + 1]
             L = nn.Linear(n, m, bias=True)
             layers.append(L)
-            layers.append(nn.ReLU()) #NOTE: Always slaps a non-linearity in the end
+            layers.append(nn.ReLU())  # NOTE: Always slaps a non-linearity in the end
         self.net = nn.Sequential(*layers)
 
     def forward(self, x):
         return self.net(x)
 
+
 class MLPNormal(MLP):
-    def __init__(self, dims:list):
+    def __init__(self, dims: list):
         try:
-            assert len(dims) >= 3 #should at least be [inputdim, hiddendim1, outdim]
+            assert len(dims) >= 3  # should at least be [inputdim, hiddendim1, outdim]
         except AssertionError:
             print(dims)
             raise
-        
-        super().__init__(dims[:-1]) #initializes the core network
+
+        super().__init__(dims[:-1])  # initializes the core network
         self.mu_module = nn.Linear(dims[-2], dims[-1], bias=False)
         self.logvar_module = nn.Linear(dims[-2], dims[-1], bias=False)
 
     def forward(self, x):
         h = self.net(x)
         mu, logvar = self.mu_module(h), self.logvar_module(h)
-        dist = Normal(mu, logvar.div(2).exp()) #std = exp(logvar/2)
+        dist = Normal(mu, logvar.div(2).exp())  # std = exp(logvar/2)
         return dist
 
+
 class MLPCategorical(MLP):
-    def __init__(self, dims:list):
+    def __init__(self, dims: list):
         try:
-            assert len(dims) >= 3 #should at least be [inputdim, hiddendim1, logitsdim] - otherwise it's just a matrix multiplication
+            assert len(
+                dims) >= 3  # should at least be [inputdim, hiddendim1, logitsdim] - otherwise it's just a matrix multiplication
         except AssertionError:
             print(dims)
             raise
-        
-        super().__init__(dims[:-1]) #initializes the core network
+
+        super().__init__(dims[:-1])  # initializes the core network
         self.logit_module = nn.Linear(dims[-2], dims[-1], bias=False)
 
-    def forward(self, x:torch.Tensor):
+    def forward(self, x: torch.Tensor):
         h = self.net(x)
         logits = self.logit_module(h)
         dist = Categorical(logits=logits)
         return dist
 
+
 class BaseEncoder(nn.Module):
-    def __init__(self, rnn_dims:list, y_dims:list, z_dims:list):
+    def __init__(self, rnn_dims: list, y_dims: list, z_dims: list):
         super().__init__()
         self.rnn_dims = rnn_dims
         self.y_dims = y_dims
@@ -107,8 +112,9 @@ class BaseEncoder(nn.Module):
     def forward(self, xt, temp, mask):
         raise NotImplementedError
 
+
 class BaseDecoder(nn.Module):
-    def __init__(self, shared_output_dims:list, marker_dim:int, decoder_in_dim:int, **kwargs):
+    def __init__(self, shared_output_dims: list, marker_dim: int, decoder_in_dim: int, **kwargs):
         super().__init__()
         self.shared_output_dims = shared_output_dims
         self.marker_dim = marker_dim
@@ -116,7 +122,7 @@ class BaseDecoder(nn.Module):
         self.marker_type = kwargs['marker_type']
         self.x_given_t = kwargs['x_given_t']
         self.preprocessing_module_dims = [decoder_in_dim, *self.shared_output_dims]
-        self.preprocessing_module =  self.create_generative_nets()
+        self.preprocessing_module = self.create_generative_nets()
 
     def generate_marker(self, h, t):
         mu, logvar = generate_marker(self, h, t)
@@ -134,7 +140,7 @@ class BaseDecoder(nn.Module):
     def compute_time_log_prob(self, h, t):
         return compute_point_log_likelihood(self, h, t)
 
-    def compute_marker_log_prob(self, x, dist_x_recon:torch.distributions.Distribution):
+    def compute_marker_log_prob(self, x, dist_x_recon: torch.distributions.Distribution):
         if dist_x_recon.__class__.__name__ == "Normal":
             return dist_x_recon.log_prob(x)
         elif dist_x_recon.__class__.__name__ == "Categorical":
@@ -168,7 +174,6 @@ class BaseModel(nn.Module):
         self.embed_x, self.embed_t = self.create_embedding_nets()
         self.shared_output_dims = [256]
 
-
         # Inference network
         if self.latent_dim is not None:
             self.encoder_z_hidden_dims = [64, 64]
@@ -179,15 +184,13 @@ class BaseModel(nn.Module):
             self.z_dims = [z_input_dim, *self.encoder_z_hidden_dims, self.latent_dim]
         # self.encoder = Encoder(rnn_dims=rnn_dims, y_dims=y_dims, z_dims=z_dims)
 
-
     def print_info(self):
         # dump whatever str(nn.Module) has to offer
         print(self)
-        
+
         # dump parameter info
         for pname, pdata in self.named_parameters():
             print(f"{pname}: {pdata.size()}")
-
 
     def create_embedding_nets(self):
         # marker_dim is passed. timeseries_dim is 2
@@ -197,7 +200,7 @@ class BaseModel(nn.Module):
             x_module = nn.Sequential(
                 nn.Linear(self.marker_dim, self.x_embedding_dim[0]),
                 nn.ReLU(),
-        )
+            )
             # raise NotImplementedError
 
         t_module = nn.Sequential(
@@ -220,18 +223,20 @@ class BaseModel(nn.Module):
         metric_dict = {}
         with torch.no_grad():
             # note: both t[0] and pt[0] are 0 by convention
-            time_mse = torch.pow( (predicted_times - event_times) * mask.unsqueeze(-1), 2.) #(T, BS, 1) 
+            time_mse = torch.pow((predicted_times - event_times) * mask.unsqueeze(-1), 2.)  # (T, BS, 1)
             metric_dict['time_mse'] = time_mse.sum().detach().cpu().numpy()
             # note: because 0th timesteps are zero always, reducing count to ensure accuracy stays unbiased
-            metric_dict['time_mse_count'] = mask[1:,:].sum().detach().cpu().numpy()
+            metric_dict['time_mse_count'] = mask[1:, :].sum().detach().cpu().numpy()
 
             if self.marker_type == "categorical":
-                predicted = torch.argmax(marker_logits, dim =-1) #(T, BS)
-                correct_predictions = (predicted == marker)*mask #(T, BS)
-                correct_predictions = correct_predictions[1:] #Keep only the predictions from 2nd timestep
-                
-                metric_dict['marker_acc'] = correct_predictions.sum().detach().cpu().numpy() #count how many correct predictions we made
-                metric_dict['marker_acc_count'] = (mask[1:,:]).sum().cpu().numpy() #count how many predictions we made
+                predicted = torch.argmax(marker_logits, dim=-1)  # (T, BS)
+                correct_predictions = (predicted == marker) * mask  # (T, BS)
+                correct_predictions = correct_predictions[1:]  # Keep only the predictions from 2nd timestep
+
+                metric_dict[
+                    'marker_acc'] = correct_predictions.sum().detach().cpu().numpy()  # count how many correct predictions we made
+                metric_dict['marker_acc_count'] = (
+                    mask[1:, :]).sum().cpu().numpy()  # count how many predictions we made
             else:
                 raise NotImplementedError
 
@@ -254,36 +259,37 @@ def one_hot_encoding(y, n_dims=None):
 
 
 def assert_input(self):
-        assert self.marker_type in {
-            'real', 'categorical', 'binary'}, "Unknown Input type provided!"
+    assert self.marker_type in {
+        'real', 'categorical', 'binary'}, "Unknown Input type provided!"
+
 
 def create_input_embedding_layer(model):
     if model.marker_type == 'categorical':
         x_module = nn.Embedding(model.marker_dim, model.x_embedding_dim[0])
     else:
         x_module = nn.Sequential(
-            nn.Linear(model.marker_dim, model.x_embedding_dim[0])#, nn.ReLU(),
+            nn.Linear(model.marker_dim, model.x_embedding_dim[0])  # , nn.ReLU(),
             # Not sure whether to put Relu at the end of embedding layer
-            #nn.Linear(self.x_embedding_dim[0],
+            # nn.Linear(self.x_embedding_dim[0],
             #          self.x_embedding_dim[1]), nn.ReLU()
         )
 
-    #t_module = nn.Linear(self.time_dim, self.t_embedding_dim[0])
+    # t_module = nn.Linear(self.time_dim, self.t_embedding_dim[0])
     t_module = nn.Sequential(
-        nn.Linear(model.time_dim, model.t_embedding_dim[0])#,
-        #nn.ReLU(),
-        #nn.Dropout(p=0.5),
-        #nn.Linear(model.t_embedding_dim[0], model.t_embedding_dim[0])
+        nn.Linear(model.time_dim, model.t_embedding_dim[0])  # ,
+        # nn.ReLU(),
+        # nn.Dropout(p=0.5),
+        # nn.Linear(model.t_embedding_dim[0], model.t_embedding_dim[0])
     )
     return x_module, t_module
 
 
 def create_output_marker_layer(model):
     embed_module = nn.Sequential(
-        nn.ReLU(),nn.Dropout(model.dropout),
-        nn.Linear(model.hidden_embed_input_dim,model.shared_output_dims[0]),
-        nn.ReLU(),nn.Dropout(model.dropout)
-        #nn.Linear(
+        nn.ReLU(), nn.Dropout(model.dropout),
+        nn.Linear(model.hidden_embed_input_dim, model.shared_output_dims[0]),
+        nn.ReLU(), nn.Dropout(model.dropout)
+        # nn.Linear(
         #    self.shared_output_dims[0], self.shared_output_dims[1]), nn.ReLU()
     )
 
@@ -294,17 +300,18 @@ def create_output_marker_layer(model):
     if model.marker_type == 'real':
         x_module_mu = nn.Linear(l, model.marker_dim)
         x_module_logvar = nn.Linear(l, model.marker_dim)
-    elif model.marker_type == 'binary':#Fix binary
+    elif model.marker_type == 'binary':  # Fix binary
         x_module_mu = nn.Sequential(
             nn.Linear(l, model.marker_dim),
             nn.Sigmoid())
     elif model.marker_type == 'categorical':
         x_module_mu = nn.Sequential(
-            nn.Linear(l, model.marker_dim)#,
-            #nn.Softmax(dim=-1)
+            nn.Linear(l, model.marker_dim)  # ,
+            # nn.Softmax(dim=-1)
         )
 
-    return embed_module, x_module_mu, x_module_logvar    
+    return embed_module, x_module_mu, x_module_logvar
+
 
 # def create_output_time_layer(model, b, ti):
 #     l =model.shared_output_dims[-1]
@@ -323,15 +330,15 @@ def create_output_nets(model, b, ti):
     b: (float) base intensity #TODO
     ti: (float) time influence #TODO
     """
-    
+
     l = model.shared_output_dims[-1]
-    
+
     # Output net for time
     if model.time_loss == 'intensity':
-        h_influence = nn.Linear(l, 1, bias = False)
-        time_influence = nn.Parameter(ti*torch.ones(1, 1, 1))  # 0.005*
-        base_intensity = nn.Parameter(torch.zeros(1, 1, 1)-b)  # -8
-        model.h_influence, model.time_influence, model.base_intensity=h_influence, time_influence, base_intensity
+        h_influence = nn.Linear(l, 1, bias=False)
+        time_influence = nn.Parameter(ti * torch.ones(1, 1, 1))  # 0.005*
+        base_intensity = nn.Parameter(torch.zeros(1, 1, 1) - b)  # -8
+        model.h_influence, model.time_influence, model.base_intensity = h_influence, time_influence, base_intensity
     else:
         model.time_mu = nn.Linear(l, 1)
         model.time_logvar = nn.Linear(l, 1)
@@ -354,6 +361,7 @@ def create_output_nets(model, b, ti):
         )
     model.output_x_mu, model.output_x_logvar = x_module_mu, x_module_logvar
 
+
 def compute_marker_log_likelihood(model, x, mu, logvar):
     """
         Input:  
@@ -365,154 +373,22 @@ def compute_marker_log_likelihood(model, x, mu, logvar):
                 loss : TxBS
     """
     if model.marker_type == 'real':
-        sigma = torch.clamp(logvar.exp().sqrt(), min= model.sigma_min)
+        sigma = torch.clamp(logvar.exp().sqrt(), min=model.sigma_min)
         x_recon_dist = Normal(mu, sigma)
         ll_loss = (x_recon_dist.log_prob(x)
-                    ).sum(dim=-1)
+                   ).sum(dim=-1)
         return ll_loss
     else:
         seq_lengths, batch_size = x.size(0), x.size(1)
-        
-        if  model.marker_type == 'categorical':
+
+        if model.marker_type == 'categorical':
             mu_ = mu.view(-1, model.marker_dim)  # T*BS x marker_dim
             x_ = x.view(-1)  # (T*BS,)
             loss = F.cross_entropy(mu_, x_, reduction='none').view(
                 seq_lengths, batch_size)
-        else:#binary
-            loss = F.binary_cross_entropy(mu, x, reduction= 'none').sum(dim =-1)#TxBS
-        return -loss    
-
-
-class MarkedPointProcessRMTPPModel(nn.Module):
-    def __init__(self, input_dim:int, marker_dim:int, marker_type:str, init_base_intensity:float, init_time_influence:float, x_given_t:bool=False):
-        super().__init__()
-
-        self.input_dim = input_dim
-        self.marker_dim = marker_dim
-        self.x_given_t = x_given_t
-        self.marker_type = marker_type
-
-        if self.x_given_t:
-            self.marker_input_dim = self.input_dim + 1
-        else:
-            self.marker_input_dim = self.input_dim
-
-        self.create_point_net(init_base_intensity, init_time_influence)
-        self.create_marker_net()
-
-    def create_point_net(self, init_base_intensity:float, init_time_influence:float):
-        self.h_influence = nn.Linear(self.input_dim, 1, bias = False) # vector of size `input_dim`
-        self.time_influence = nn.Parameter(init_time_influence * torch.ones(1))  # scalar
-        self.base_intensity = nn.Parameter(torch.zeros(1) - init_base_intensity)  # scalar
-
-    def create_marker_net(self):
-        if self.marker_type == 'categorical':
-            self.marker_net = nn.Linear(self.marker_input_dim, self.marker_dim)
-        else:
-            raise NotImplementedError
-
-        # if model.marker_type == 'real':
-            # x_module_mu = nn.Linear(l, model.marker_dim)
-            # x_module_logvar = nn.Linear(l, model.marker_dim)
-        # elif model.marker_type == 'binary':  # Fix binary
-            # x_module_mu = nn.Sequential(
-                # nn.Linear(l, model.marker_dim),
-                # nn.Sigmoid())
-        # elif model.marker_type == 'categorical':
-            # x_module_mu = nn.Sequential(
-                # nn.Linear(l, model.marker_dim)  # ,
-        # )
-
-    def get_marker_log_prob(self, marker, pred_marker_dist):
-        """
-        Input:
-            marker : Tensor of shape T x BS (if categorical); ground truth
-            pred_marker_dist : Distribution object containing information about the predicted logits
-        Output:
-            log_prob : tensor of shape T x BS - this is the same as 
-        """
-        T, BS = marker.shape[:2]
-        if self.marker_type == "categorical":
-            return pred_marker_dist.log_prob(marker) #(T,BS)
-        else:
-            raise NotImplementedError
-
-
-    def get_log_intensity(self, h, time_interval):
-        """
-        Input:
-            same as for get_point_log_density function
-        Output:
-            log_intensity : tensor of shape TxBS - computed as per eqn 11 in the paper
-        """
-        past_influence = self.h_influence(h)
-        current_influence = self.time_influence * time_interval
-        log_intensity = past_influence + current_influence + self.base_intensity
-        return log_intensity
-
-    def get_point_log_density(self, h, time_intervals):
-        """
-        Input:
-            h : Tensor of shape * x T x BS x self.shared_output_dims[-1] where '*' could possibly have more dimensions
-            h_j is the first hidden state that has information about t_j
-            time_intervals : Tensor of shape * x T x BS x 1  where '*' could possibly have more dimensions
-        Output:
-            log_prob : tensor of shape * x T x BS - computed as per eqn 12 in the paper
-        """
-
-        past_influence = self.h_influence(h) #(*, T, BS, 1)
-        current_influence = self.time_influence * time_intervals #(*, T, BS, 1)
-
-        log_intensity = past_influence + current_influence + self.base_intensity #(*, T, BS, 1)
-        term_2 = (past_influence + self.base_intensity).exp() #(*, T, BS, 1)
-        
-        log_prob = log_intensity + (term_2 - log_intensity.exp()) / self.time_influence
-
-        return log_prob.squeeze(-1)
-
-    def _mc_transformation(self, y, h, tj):
-        """
-        Input:
-            y : N x T x BS x 1
-            h : T x BS x h_dim
-            tj : T x BS x 1 
-        Output:
-            h(y): N x T x BS x 1
-        """
-        tj = tj.unsqueeze(0) # (1, T, BS, 1)
-        query_times = tj - 1 + 1/y # (N, T, BS, 1)
-        time_intervals = query_times - tj # (N, T, BS, 1)
-        log_density = self.get_point_log_density(h, time_intervals).unsqueeze(-1) # (N, T, BS, 1)
-        h = (query_times * log_density.exp()) / y**2 # (N, T, BS, 1)
-        return h
-    
-    def get_next_time(self, h, event_times, num_samples=5):
-        """
-        Input:
-            h : Tensor of shape T x BS x self.shared_output_dims[-1]
-            h_j is the first hidden state that has information about t_j
-            event_times : Tensor of shape T x BS x 1 
-        Output:
-            mu_times_next: Tensor of shape T x BS x 1
-        """
-        y = torch.rand(num_samples, *event_times.shape).to(device) # (N, T, BS, 1) where N = number of samples for monte carlo approx
-        expected_t_next = self._mc_transformation(y, h, event_times).mean(0) # (T, BS, 1)
-        
-        return expected_t_next
-
-    def get_next_event(self, h):
-        """
-        Input:
-            h : Tensor of shape (T+1) x BS x self.shared_output_dims[-1]
-            x_j = f(h_j), where j = 0, 1, ..., T; Also: h_j = f(t_{j-1})
-        Output:
-            x_logits: Tensor of shape (T+1) x BS x 1
-        """
-        x_logits = self.marker_net(h)
-        return x_logits
-        
-    def forward(self):
-        raise NotImplementedError
+        else:  # binary
+            loss = F.binary_cross_entropy(mu, x, reduction='none').sum(dim=-1)  # TxBS
+        return -loss
 
 def compute_point_log_likelihood(model, h, t):
     """
@@ -524,36 +400,36 @@ def compute_point_log_likelihood(model, h, t):
             log_f_t : tensor of shape TxBS
 
     """
-    h_trimmed = h # TxBSxself.shared_output_dims[-1]
+    h_trimmed = h  # TxBSxself.shared_output_dims[-1]
     d_js = t[:, :, 0][:, :, None]  # Shape TxBSx1 Time differences
 
     if model.time_loss == 'intensity':
         past_influence = model.h_influence(h_trimmed)  # TxBSx1
 
         # TxBSx1
-        if model.time_influence>0:
-            ti = torch.clamp(model.time_influence, min = 1e-5)
+        if model.time_influence > 0:
+            ti = torch.clamp(model.time_influence, min=1e-5)
         else:
-            ti = torch.clamp(model.time_influence, max = -1e-5)
+            ti = torch.clamp(model.time_influence, max=-1e-5)
         current_influence = ti * d_js
         base_intensity = model.base_intensity  # 1x1x1
 
-        
         term1 = past_influence + current_influence + base_intensity
         term2 = (past_influence + base_intensity).exp()
         term3 = term1.exp()
 
         log_f_t = term1 + \
-            (1./(ti)) * (term2-term3)
-        return log_f_t[:, :, 0], None # TxBS
+                  (1. / (ti)) * (term2 - term3)
+        return log_f_t[:, :, 0], None  # TxBS
     else:
-        mu_time =  model.time_mu(h_trimmed)#TxBSx1
-        logvar_time =  model.time_logvar(h_trimmed)#TxBSx1
-        sigma_time = logvar_time.exp().sqrt() + model.sigma_min#TxBSx1
+        mu_time = model.time_mu(h_trimmed)  # TxBSx1
+        logvar_time = model.time_logvar(h_trimmed)  # TxBSx1
+        sigma_time = logvar_time.exp().sqrt() + model.sigma_min  # TxBSx1
         time_recon_dist = Normal(mu_time, sigma_time)
         ll_loss = (time_recon_dist.log_prob(d_js)
-                    ).sum(dim=-1)#TxBS
+                   ).sum(dim=-1)  # TxBS
         return ll_loss, mu_time
+
 
 def preprocess_input(model, x, t):
     """
@@ -573,7 +449,7 @@ def preprocess_input(model, x, t):
     #     x = one_hot_encoding(x[:, :], model.marker_dim).to(device)
     phi_x = model.embed_x(x)
     phi_t = model.embed_time(t)
-    #phi_t = t
+    # phi_t = t
     phi = torch.cat([phi_x, phi_t], -1)
     return phi_x, phi_t, phi
 
@@ -593,7 +469,7 @@ def generate_marker(model, h, t):
     if model.x_given_t:
         d_js = t[:, :, 1][:, :, None]  # Shape TxBSx1 Time differences
         h_trimmed = torch.cat([h_trimmed, d_js], -1)
-    
+
     marker_out_mu = model.output_x_mu(h_trimmed)
 
     if model.marker_type == 'real':
