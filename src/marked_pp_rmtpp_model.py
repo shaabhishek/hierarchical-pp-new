@@ -9,13 +9,20 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def extract_closest_hidden_states_and_timestamps(grid_times, hidden_state_sequence, timestamps):
+    """
+
+    :param grid_times: N x BS
+    :param hidden_state_sequence: Tensor T x BS x h_dim
+    :param timestamps: T x BS x 1
+    :return:
+    """
     closest_timestamp_indices = _get_closest_timestamp_index_to_t(grid_times, timestamps).transpose(0,
                                                                                                     1)  # (BS, 1000)
     closest_timestamp = torch.stack(
-        [timestamps[idxs_seq] for idxs_seq in closest_timestamp_indices], dim=1
-    )  # (1000, BS)
+        [timestamps[idxs_seq, batch_idx] for batch_idx, idxs_seq in enumerate(closest_timestamp_indices)], dim=1
+    )  # (1000, BS, 1)
     closest_hidden_states = torch.stack(
-        [hidden_state_sequence[idxs_seq] for idxs_seq in closest_timestamp_indices], dim=1
+        [hidden_state_sequence[idxs_seq, batch_idx] for batch_idx, idxs_seq in enumerate(closest_timestamp_indices)], dim=1
     )  # (1000, BS, h_dim)
     return closest_hidden_states, closest_timestamp
 
@@ -97,19 +104,19 @@ class MarkedPointProcessRMTPPModel(nn.Module):
         current_influence = self.time_influence * time_interval  # (*, T, BS, 1)
         return past_influence, current_influence
 
-    def get_intensity_over_grid(self, hidden_state_sequence, timestamps: Tensor):
+    def get_intensity_over_grid(self, hidden_state_sequence: Tensor, timestamps: Tensor):
         """
 
         :param hidden_state_sequence: Tensor of shape T x BS x h_dim
-        :param timestamps:
+        :param timestamps: T x BS x 1
         :return:
         """
-        sequence_durations, _ = timestamps.max(dim=0).squeeze()  # (BS,)
-        grid_times = torch.stack([torch.linspace(0, t, 1000) for t in sequence_durations], dim=1).to(device)  # (1000, BS)
+        sequence_durations, _ = timestamps.max(dim=0)  # (BS,1)
+        grid_times = torch.stack([torch.linspace(0, t, 1000) for t in sequence_durations.squeeze(-1)], dim=1).to(device)  # (1000, BS)
         closest_hidden_states, closest_timestamps = extract_closest_hidden_states_and_timestamps(grid_times,
                                                                                                      hidden_state_sequence,
-                                                                                                     timestamps)
-        grid_times_since_last_event = (grid_times - closest_timestamps).unsqueeze(-1)  # (1000, BS, 1)
+                                                                                                     timestamps)  # (1000, BS, h_dim), (1000, BS, 1)
+        grid_times_since_last_event = (grid_times.unsqueeze(-1) - closest_timestamps)  # (1000, BS, 1)
         log_intensities: Tensor = self.get_log_intensity(closest_hidden_states, grid_times_since_last_event)
         return log_intensities, grid_times
 
@@ -168,8 +175,9 @@ def _get_closest_timestamp_index_to_t(t, timestamps):
     """
     time_dim = 0
     T, BS, _ = timestamps.shape
-    is_earlier_time = (timestamps.view(T, 1, BS) < t.view(1, *t.shape)).long()  # (T, N, BS)
+    time_since_t = (timestamps.view(T, 1, BS) - t.view(1, *t.shape))  # (T, N, BS)
+    time_since_t[time_since_t > 0] = float('-inf')
     # argmax returns the last index of the largest element,
     # which is the latest 'earlier_time' in our case
-    closest_times = is_earlier_time.argmax(dim=time_dim)  # (N, BS)
+    closest_times = torch.argmax(time_since_t, dim=time_dim)  # (N, BS)
     return closest_times

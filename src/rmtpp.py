@@ -93,7 +93,7 @@ class RMTPP(BaseModel):
 
         return time_log_likelihood, marker_log_likelihood, metric_dict
 
-    def get_hidden_states_from_input(self, t, x):
+    def get_hidden_states_from_input(self, x, t):
         phi_x, phi_t = self.embed_x(x), self.embed_t(t)
         phi_xt = torch.cat([phi_x, phi_t], dim=-1)  # (T,BS, emb_dim)
         time_intervals = t[:, :, 0:1]  # (T, BS, 1)

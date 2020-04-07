@@ -6,7 +6,8 @@ import os
 from argparse import Namespace
 from pathlib import Path
 
-from parameters import DataModelParams, RMTPPHyperparams, ModelHyperparams, Model1Hyperparams, Model2Hyperparams
+from parameters import DataModelParams, RMTPPHyperparams, ModelHyperparams, Model1Hyperparams, Model2Hyperparams, \
+    Model2FilterHyperparams, Model2NewHyperparams
 
 sys.path.insert(0, './../')
 from rmtpp import RMTPP
@@ -18,8 +19,8 @@ from model1 import Model1
 
 
 class ModelLoader:
-    def __init__(self, modelparams: DataModelParams, hyperparams: ModelHyperparams):
-        self.model_params = modelparams
+    def __init__(self, model_params: DataModelParams, hyperparams: ModelHyperparams):
+        self.model_params = model_params
         self.model_hyperparams = hyperparams
         self.model = self._load_model(self.model_hyperparams)
 
@@ -49,23 +50,25 @@ class ModelLoader:
                            time_influence=hyperparams.time_influence, gamma=hyperparams.gamma, time_loss=hyperparams.time_loss,
                            dropout=hyperparams.dropout)
 
-        if hyperparams.model_name == 'model2_filt':
+        elif isinstance(hyperparams, Model2FilterHyperparams):
             model = Model2Filter(n_sample=hyperparams.n_sample, marker_type=hyperparams.marker_type, marker_dim=hyperparams.marker_dim,
                                  latent_dim=hyperparams.latent_dim, time_dim=hyperparams.time_dim,
                                  rnn_hidden_dim=hyperparams.rnn_hidden_dim, n_cluster=hyperparams.n_cluster,
                                  x_given_t=hyperparams.x_given_t, base_intensity=hyperparams.base_intensity,
                                  time_influence=hyperparams.time_influence, gamma=hyperparams.gamma, time_loss=hyperparams.time_loss,
                                  dropout=hyperparams.dropout)
-        if hyperparams.model_name == 'model2_new':
+        elif isinstance(hyperparams, Model2NewHyperparams):
             model = Model2New(n_sample=hyperparams.n_sample, marker_type=hyperparams.marker_type, marker_dim=hyperparams.marker_dim,
                               latent_dim=hyperparams.latent_dim, time_dim=hyperparams.time_dim,
                               rnn_hidden_dim=hyperparams.rnn_hidden_dim, n_cluster=hyperparams.n_cluster,
                               x_given_t=hyperparams.x_given_t, base_intensity=hyperparams.base_intensity,
                               time_influence=hyperparams.time_influence, gamma=hyperparams.gamma, time_loss=hyperparams.time_loss,
                               dropout=hyperparams.dropout)
+        else:
+            raise ValueError("Did not specify model name correctly")
         return model
 
-    def _load_model_state(self, model: Module, model_state_path: Path):
+    def _load_model_state(self):
         checkpoint = torch.load(self.model_state_path)
         self.model.load_state_dict(checkpoint['model_state_dict'])
 

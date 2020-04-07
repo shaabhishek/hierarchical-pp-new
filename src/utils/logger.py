@@ -6,6 +6,9 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 
+from utils.helper import make_intermediate_dirs_if_absent
+
+
 class Logger:
     def __init__(self, marker_type:str, dataset_name:str, model_name:str, logs_save_path:str):
         self.model_name = model_name
@@ -98,10 +101,10 @@ class Logger:
         """
         Create full directory structure leading to the file name in the path recursively
         """
-        dir_name, _ = os.path.split(full_path)
+        # dir_name, _ = os.path.split(full_path)
         
         # Make the parent directory recursively if it doesn't exist
-        os.makedirs(dir_name, exist_ok=True)
+        make_intermediate_dirs_if_absent(full_path)
 
     def save_logs_to_file(self, split:str):
         """
