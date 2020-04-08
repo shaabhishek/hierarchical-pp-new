@@ -23,6 +23,8 @@ from utils.metric import get_marker_metric, compute_time_expectation, get_time_m
 
 
 class RMTPP(BaseModel):
+    model_name = "rmtpp"
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.rnn = self.create_rnn()
@@ -43,7 +45,7 @@ class RMTPP(BaseModel):
         )
         return rnn
 
-    def forward(self, marker_seq, time_seq, mask=None, preds_file=None, **kwargs):
+    def forward(self, marker_seq, time_seq, mask=None, **kwargs):
         time_log_likelihood, marker_log_likelihood, metric_dict = self._forward(marker_seq, time_seq, mask)
 
         marker_loss = (-1. * marker_log_likelihood * mask)[1:, :].sum()
@@ -61,7 +63,7 @@ class RMTPP(BaseModel):
 
     def _forward(self, x, t, mask):
         T, BS, _ = t.shape
-        hidden_seq, event_times, time_intervals = self.get_hidden_states_from_input(t, x)
+        hidden_seq, event_times, time_intervals = self.get_hidden_states_from_input(x, t)
 
         # Generate marker for next_event
         # x_j = f(h_j), where j = 0, 1, ..., T; Also: h_j = f(t_{j-1})

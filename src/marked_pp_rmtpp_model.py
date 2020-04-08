@@ -1,9 +1,6 @@
-from typing import Any, Union
-
 import torch
-from torch import nn, Tensor
 from torch import Tensor
-from torch.nn import Parameter
+from torch import nn
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

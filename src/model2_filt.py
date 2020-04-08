@@ -257,9 +257,9 @@ class Model2Filter(nn.Module):
 
         return sample_y[1:, 0, :, :], ret_sample_z[:, :, :], logits_filter_y[:, 0, :, :], (ret_mu_z[:, :, :], ret_logvar_z[:,  :, :]), sample_pred_y, pred_z
 
-    def forward(self, marker_seq, time_seq, anneal=1., mask=None, temp=0.5, preds_file=None):
+    def forward(self, marker_seq, time_seq, anneal=1., mask=None, temp=0.5):
         time_log_likelihood, marker_log_likelihood, KL, metric_dict=self._forward(
-            marker_seq, time_seq, temp, mask, preds_file)
+            marker_seq, time_seq, temp, mask)
 
         marker_loss=(-1. * marker_log_likelihood * mask)[1:, :].sum()
         time_loss=(-1. * time_log_likelihood * mask)[1:, :].sum()
@@ -284,7 +284,7 @@ class Model2Filter(nn.Module):
         logvar=torch.cat([base_logvar, logvar[:-1, :, :]], dim=0)
         return mu, logvar
 
-    def _forward(self, x, t, temp, mask, preds_file):
+    def _forward(self, x, t, temp, mask):
         n_sample= self.n_sample
         batch_len = mask.sum(dim= 0, keepdim = True)
         # Transform markers and timesteps into the embedding spaces
@@ -367,12 +367,12 @@ class Model2Filter(nn.Module):
                 get_marker_metric(self.marker_type, pred_mu_marker,
                                 x, mask, metric_dict)
                 get_time_metric(pred_mu_time,  t, mask, metric_dict)
-                if preds_file is not None:
-                    import pdb; pdb.set_trace()
-                    if len(pred_mu_time.data.size()) == 3:
-                        np.savetxt(preds_file, (pred_mu_time[1:,:,0]*mask[1:, :]).cpu().numpy().T)
-                    else:
-                        np.savetxt(preds_file, (torch.mean(pred_mu_time, dim =1)[1:,:,0]*mask[1:, :]).cpu().numpy().T)
+                # if preds_file is not None:
+                #     import pdb; pdb.set_trace()
+                #     if len(pred_mu_time.data.size()) == 3:
+                #         np.savetxt(preds_file, (pred_mu_time[1:,:,0]*mask[1:, :]).cpu().numpy().T)
+                #     else:
+                #         np.savetxt(preds_file, (torch.mean(pred_mu_time, dim =1)[1:,:,0]*mask[1:, :]).cpu().numpy().T)
 
 
 

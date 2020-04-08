@@ -129,7 +129,7 @@ class Model1(BaseModel):
             )
         return t_module_mu, t_module_logvar, x_module_mu, x_module_logvar
 
-    def forward(self, marker_seq, time_seq, anneal=1., mask=None, temp=0.5, preds_file=None):
+    def forward(self, marker_seq, time_seq, anneal=1., mask=None, temp=0.5):
 
         time_log_likelihood, marker_log_likelihood, KL, metric_dict = self._forward(marker_seq, time_seq, temp, mask)
 
