@@ -1,165 +1,119 @@
-import numpy as np
 import torch
-import math
-from sklearn import metrics
+from torch.utils.data import DataLoader
+
+from epoch_runner import TrainEpochRunner, ValidEpochRunner, TestEpochRunner
+from optimizer_loader import OptimizerLoader
+from parameters import TrainerParams, TestingParams
+from utils.logger import Logger
+from utils.model_loader import CheckpointedModelLoader, ModelLoader
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-anneal_model = {'hrmtpp', 'model11', 'model2'}
 
-def compute_auc(all_target, all_pred):
-    return metrics.roc_auc_score(all_target, all_pred)
-
-def compute_accuracy(all_target, all_pred):
-    all_pred[all_pred > 0.5] = 1.0
-    all_pred[all_pred <= 0.5] = 0.0
-    return metrics.accuracy_score(all_target, all_pred)
-
-# def shuffle_data(x_data, t_data):
-#     shuffled_ind = np.arange(len(x_data))
-#     np.random.shuffle(shuffled_ind)
-#     x_data = [x_data[i] for i in shuffled_ind]
-#     t_data = [t_data[i] for i in shuffled_ind]
-#     return x_data, t_data
+class BaseRunner:
+    def __init__(self, logger: Logger):
+        self.logger = logger
 
 
-def train(net, params, optimizer, dataloader, label):
-    """
-    net: PyTorch model class
-    params: Namespace class with hyperparameter values
-    optimizer: an optimizer object e.g torch.optim.Adam()
-    x_data: N, (t_i,D), A list of numpy array. #TODO: update
-    t_data: N, (t_i, 2), A list of numpy array. #TODO: update
-    """
-    net.train()
-    N_batches = int(math.ceil(len(dataloader.dataset) / params.batch_size))
-    # batch_size = params.batch_size
-    # Shuffle the data
-    # x_data, t_data = shuffle_data(x_data, t_data)
+class TrainValRunner(BaseRunner):
+    def __init__(self, trainer_params: TrainerParams, train_dataloader: DataLoader,
+                 valid_dataloader: DataLoader, logger):
+        super(TrainValRunner, self).__init__(logger)
+        self.trainer_hyperparams = trainer_params
 
-    time_mse, time_mse_count = 0., 0.
-    marker_mse, marker_mse_count = 0., 0.
-    marker_acc, marker_acc_count = 0., 0.
-    total_loss, marker_ll, time_ll = 0., 0, 0.
-    total_sequence = 0.
+        model_file_identifier = trainer_params.model_file_params.get_model_file_identifier()
+        self.model_state_path = trainer_params.data_model_params.get_model_state_path(model_file_identifier)
 
-    if params.show:
-        from utils.helper import ProgressBar
-        bar = ProgressBar(label, max=N_batches)
+        self.train_dataloader = train_dataloader
+        self.valid_dataloader = valid_dataloader
 
-    for b_idx, (input_x, input_t, input_mask) in enumerate(dataloader):
-        if params.show: bar.update(b_idx)
+        self.model = ModelLoader(trainer_params.data_model_params, trainer_params.model_hyperparams).model
+        self.optimizer = OptimizerLoader(self.model, trainer_params.optimizer_hyperparams).get_optimizer()
 
-        optimizer.zero_grad()
+        self.train_epoch_runner = TrainEpochRunner(self.model, self.train_dataloader, self.optimizer,
+                                                   trainer_params.model_hyperparams.total_anneal_epochs,
+                                                   trainer_params.model_hyperparams.grad_max_norm)
+        self.valid_epoch_runner = ValidEpochRunner(self.model, self.valid_dataloader)
 
-        #If annealing, pass it here using params.iter
-        if params.model in anneal_model:
-            anneal = min(1., params.iter/(params.anneal_iter+0.))
-            loss, meta_info = net(input_x, input_t, mask=input_mask, anneal = anneal)
-        else:
-            loss, meta_info = net(input_x, input_t, mask=input_mask)
+        self.model.print_parameter_info()
 
-        total_loss += meta_info['true_ll'].numpy()
-        marker_ll -= meta_info['marker_ll'].numpy()
-        time_ll -= meta_info['time_ll'].numpy()
+    def train_dataset(self):
+        """
+        Loss is the ELBO
+        Accuracy is for categorical/binary marker,
+        AUC is for binary/categorical marker.
+        Time RMSE is w.r.t expectation.
+        Marker rmse for real marker####
+        """
+        for epoch_num in range(1, self.trainer_hyperparams.num_training_iterations + 1):
+            train_metrics, valid_metrics = self._run_one_train_and_valid_epoch(epoch_num)
 
-        time_mse += meta_info["time_mse"]
-        time_mse_count += meta_info["time_mse_count"]
-        if params.marker_type == 'real':
-            marker_mse +=  meta_info["marker_mse"]
-            marker_mse_count = meta_info["marker_mse_count"]
-        else:
-            marker_acc+=  meta_info["marker_acc"]
-            marker_acc_count += meta_info["marker_acc_count"]
+            self.log_epoch_info(epoch_num, train_metrics, valid_metrics)
+            if self.is_best_epoch(epoch_num):
+                self.checkpoint_model(epoch_num, train_metrics['loss'])
 
-        loss.backward()
-        if params.maxgradnorm > 0:
-            norm = torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm = params.maxgradnorm)
-        optimizer.step()
+        self.save_training_session_logs()
 
-    if params.show: bar.finish()
+    def _run_one_train_and_valid_epoch(self, epoch_num):
+        train_metrics = self.train_epoch_runner.run_epoch(epoch_num)
+        valid_metrics = self.valid_epoch_runner.run_epoch(epoch_num)
+        return train_metrics, valid_metrics
 
-    time_rmse = (time_mse/time_mse_count)** 0.5
-    total_loss /= len(dataloader.dataset)
-    marker_ll /= len(dataloader.dataset)
-    time_ll /= len(dataloader.dataset)
+    def save_training_session_logs(self):
+        # End of training: save the logger state (metric values) to file
+        for split in ['train', 'valid']:
+            self.logger.save_logs_to_file(split)
+        print(f"Model saved at {self.model_state_path}")
 
-    if params.marker_type == 'real':
-        marker_rmse = (marker_mse/marker_mse_count)** 0.5
-        accuracy = None
-        auc = None
-    else:
-        accuracy = marker_acc/marker_acc_count
-        auc = None
-        marker_rmse = None
+    def is_best_epoch(self, idx):
+        return self.logger.get_best_epoch(metric_name='loss') == idx
 
-    info = {'loss': total_loss, 'time_rmse':time_rmse, 'accuracy': accuracy, 'auc':auc,\
-        'marker_rmse': marker_rmse, 'marker_ll':marker_ll, 'time_ll': time_ll}
+    def log_epoch_info(self, epoch_num, train_metrics, valid_metrics):
+        # print train and validation metric values
+        self.logger.print_train_epoch(epoch_num, train_metrics, valid_metrics)
+        # save train and validation metric values
+        self.logger.log_train_epoch(epoch_num, train_metrics, valid_metrics)
 
-    return info
+    def checkpoint_model(self, epoch_num, loss_value):
+        state = {
+            'epoch': epoch_num,
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'loss': loss_value,
+        }
+        torch.save(state, self.model_state_path)
 
 
-def test(net, params, dataloader, label, dump_cluster = 0, preds_file=None):
-    """
-    x_data: N, (t_i,D), A list of numpy array. #TODO: update doc
-    t_data: N, (t_i, 2), A list of numpy array.
-    """
-    net.eval()
-    N_batches = int(math.ceil(len(dataloader.dataset) / params.batch_size))
-    # batch_size = params.batch_size
-    # Shuffle the data
-    # x_data, t_data = shuffle_data(x_data, t_data)
-    time_mse, time_mse_count = 0., 0.
-    marker_mse, marker_mse_count = 0., 0.
-    marker_acc, marker_acc_count = 0., 0.
-    total_loss, marker_ll, time_ll = 0., 0, 0.
-    # total_sequence =0
-    if dump_cluster == 1:
-        zs = []
+class TestRunner(BaseRunner):
+    def __init__(self, testing_params: TestingParams, test_dataloader: DataLoader, logger: Logger):
+        super(TestRunner, self).__init__(logger)
+        self.test_dataloader = test_dataloader
 
-    if params.show:
-        from utils.helper import ProgressBar
-        bar = ProgressBar(label, max=N_batches)
+        self.model_state_path = testing_params.data_model_params.get_model_state_path()
 
-    for b_idx, (input_x, input_t, input_mask) in enumerate(dataloader):
-        if params.show: bar.update(b_idx)
-        with torch.no_grad():
-            loss, meta_info = net(input_x, input_t, mask=input_mask, preds_file=preds_file)
+        self.model = CheckpointedModelLoader(testing_params.data_model_params,
+                                             testing_params.model_hyperparams,
+                                             self.model_state_path).model
 
-        total_loss += meta_info['true_ll'].numpy()
-        marker_ll -= meta_info['marker_ll'].numpy()
-        time_ll -= meta_info['time_ll'].numpy()
+        self.test_epoch_runner = TestEpochRunner(self.model, self.test_dataloader)
 
-        if dump_cluster == 1:
-            zs.append(meta_info['z_cluster'].numpy())
+        # self.predictions_saver = Predictor(testing_params.prediction_params)
 
-        time_mse += meta_info["time_mse"]
-        time_mse_count += meta_info["time_mse_count"]
-        if params.marker_type == 'real':
-            marker_mse +=  meta_info["marker_mse"]
-            marker_mse_count = meta_info["marker_mse_count"]
-        else:
-            marker_acc+=  meta_info["marker_acc"]
-            marker_acc_count += meta_info["marker_acc_count"]
+    def test_dataset(self):
+        print(f"\n\nStart testing ......................\nBest epoch:{self.logger.best_epoch}")
+        best_epoch_num = self.logger.get_best_epoch(metric_name='loss')
 
-    if params.show: bar.finish()
+        test_info = self._run_one_epoch(best_epoch_num)
+        self.log(best_epoch_num, test_info)
 
-    time_rmse = (time_mse/time_mse_count)** 0.5
-    if params.marker_type == 'real':
-        marker_rmse = (marker_mse/marker_mse_count)** 0.5
-        accuracy = None
-        auc = None
-    else:
-        accuracy = marker_acc/marker_acc_count
-        auc = None
-        marker_rmse = None
-    total_loss /= len(dataloader.dataset)
-    marker_ll /= len(dataloader.dataset)
-    time_ll /= len(dataloader.dataset)
-    info = {'loss': total_loss, 'time_rmse':time_rmse, 'accuracy': accuracy, 'auc':auc,\
-        'marker_rmse': marker_rmse, 'marker_ll':marker_ll, 'time_ll': time_ll}
+    def _run_one_epoch(self, epoch_num):
+        test_metrics = self.test_epoch_runner.run_epoch(epoch_num)
+        return test_metrics
 
-    if dump_cluster == 1:
-        zs = np.concatenate(zs, axis= 1)[0,:,:]
-        info['z_cluster'] = zs
-    return info
-
+    def log(self, best_epoch_num, test_info):
+        # Print the test metric info
+        self.logger.print_test_epoch(test_info)
+        # Log the test metric info
+        self.logger.log_test_epoch(best_epoch_num, test_info)
+        # End of epoch: save the logger state (metric values) to file
+        self.logger.save_logs_to_file('test')

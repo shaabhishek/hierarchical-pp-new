@@ -1,33 +1,26 @@
-import os
-from datetime import datetime
-from pathlib import Path
-
-import torch
 from torch.utils.tensorboard import SummaryWriter
-import numpy as np
 
+from parameters import LoggingParams
 from utils.helper import make_intermediate_dirs_if_absent
 
 
 class Logger:
-    def __init__(self, marker_type:str, dataset_name:str, model_name:str, logs_save_path:str):
-        self.model_name = model_name
-        self.dataset_name = dataset_name
-        self.setup_time = datetime.now()
-        
-        #NOTE: Only saving the timestamp upto the second
-        self.logs_save_path = f"{logs_save_path}_{self.setup_time.strftime('%y%m%d%H%M%S')}.log"
-        self.create_full_path(self.logs_save_path)
+    def __init__(self, logging_params: LoggingParams, marker_type: str):
+        self.model_name = logging_params.model_name
+        self.dataset_name = logging_params.dataset_name
+
+        # NOTE: Only saving the timestamp upto the second
+        self.logs_save_path = logging_params.get_logs_file_path()
 
         self.marker_type = marker_type
-        self.metrics = ['loss', 'marker_ll', 'time_ll', 'accuracy',  'time_rmse']
+        self.metrics = ['loss', 'marker_ll', 'time_ll', 'accuracy', 'time_rmse']
         self.logged_metrics = {}
         self.best_epoch = {}
         self.best_valid_loss = {}
-        self.improvement_map = {'loss':'small', 'marker_ll':'large', 'time_ll':'large', 'auc':'large','accuracy':'large', 'marker_rmse':'small', 'time_rmse':'small'}
+        self.improvement_map = {'loss': 'small', 'marker_ll': 'large', 'time_ll': 'large', 'auc': 'large',
+                                'accuracy': 'large', 'marker_rmse': 'small', 'time_rmse': 'small'}
 
-        tb_log_dir = Path('/home/abhishekshar/hierarchichal_point_process/src/tb_logs') / self.dataset_name / self.model_name
-        self.writer = SummaryWriter(log_dir=tb_log_dir)
+        self.writer = SummaryWriter(log_dir=logging_params.get_tensorboard_log_dir())
 
         self.init_logged_metrics()
 
@@ -50,34 +43,37 @@ class Logger:
         else:
             raise ValueError
 
-    def log_train_epoch(self, epoch_num:int, train_info_dict:dict, valid_info_dict:dict):
+    def log_train_epoch(self, epoch_num: int, train_info_dict: dict, valid_info_dict: dict):
         for metric_name in self.metrics:
             # Write to internal stat
-            self.logged_metrics['train'][metric_name][epoch_num] =  train_info_dict.get(metric_name, float('inf'))
-            self.logged_metrics['valid'][metric_name][epoch_num] =  valid_info_dict.get(metric_name, float('inf'))
+            self.logged_metrics['train'][metric_name][epoch_num] = train_info_dict.get(metric_name, float('inf'))
+            self.logged_metrics['valid'][metric_name][epoch_num] = valid_info_dict.get(metric_name, float('inf'))
 
             # Write to Tensorboard
             for split in ['train', 'valid']:
-                self.writer.add_scalar(f"{metric_name}/{split}", self.logged_metrics[split][metric_name][epoch_num], epoch_num)
+                self.writer.add_scalar(f"{metric_name}/{split}", self.logged_metrics[split][metric_name][epoch_num],
+                                       epoch_num)
 
             if (self.best_valid_loss[metric_name] is None) or \
-                (self.improvement_map[metric_name] == 'small' and valid_info_dict[metric_name] < self.best_valid_loss[metric_name]) or \
-                (self.improvement_map[metric_name] == 'large' and valid_info_dict[metric_name] > self.best_valid_loss[metric_name]):
-                
+                    (self.improvement_map[metric_name] == 'small' and valid_info_dict[metric_name] <
+                     self.best_valid_loss[metric_name]) or \
+                    (self.improvement_map[metric_name] == 'large' and valid_info_dict[metric_name] >
+                     self.best_valid_loss[metric_name]):
                 self.best_valid_loss[metric_name] = valid_info_dict[metric_name]
                 self.best_epoch[metric_name] = epoch_num
 
-    def log_test_epoch(self, epoch_num:int, test_info_dict:dict):
+    def log_test_epoch(self, epoch_num: int, test_info_dict: dict):
         for metric_name in self.metrics:
-            self.logged_metrics['test'][metric_name][epoch_num] =  test_info_dict.get(metric_name, float('inf'))
+            self.logged_metrics['test'][metric_name][epoch_num] = test_info_dict.get(metric_name, float('inf'))
 
-    def print_train_epoch(self, epoch_num:int, train_info_dict:dict, valid_info_dict:dict):
+    def print_train_epoch(self, epoch_num: int, train_info_dict: dict, valid_info_dict: dict):
         def _format_line(metric_name, valid_metric_val, train_metric_val):
             return f"Validation {metric_name}: {valid_metric_val:.3f}, \t\t\t Train {metric_name}: {train_metric_val:.3f}"
 
         print('epoch', epoch_num + 1)
         if self.marker_type == 'categorical':
-            print(f"Validation Accuracy: {valid_info_dict['accuracy']:.3f}, \t\t\t Train Accuracy: {train_info_dict['accuracy']:.3f}")
+            print(
+                f"Validation Accuracy: {valid_info_dict['accuracy']:.3f}, \t\t\t Train Accuracy: {train_info_dict['accuracy']:.3f}")
         else:
             raise NotImplementedError
 
@@ -86,8 +82,7 @@ class Logger:
         print(_format_line('Time LL', valid_info_dict['time_ll'], train_info_dict['time_ll']))
         print(_format_line('Time RMSE', valid_info_dict['time_rmse'], train_info_dict['time_rmse']))
 
-
-    def print_test_epoch(self, test_info_dict:dict):
+    def print_test_epoch(self, test_info_dict: dict):
         if self.marker_type == 'categorical':
             print(f"Test Accuracy: {test_info_dict['accuracy']:.3f}")
         else:
@@ -97,16 +92,7 @@ class Logger:
         print(f"Test Time LL: {test_info_dict['time_ll']:.3f}")
         print(f"Test Time RMSE: {test_info_dict['time_rmse']:.3f}")
 
-    def create_full_path(self, full_path):
-        """
-        Create full directory structure leading to the file name in the path recursively
-        """
-        # dir_name, _ = os.path.split(full_path)
-        
-        # Make the parent directory recursively if it doesn't exist
-        make_intermediate_dirs_if_absent(full_path)
-
-    def save_logs_to_file(self, split:str):
+    def save_logs_to_file(self, split: str):
         """
         Saves the logged_metrics dict to files
         split can only be in {train, valid, test}
@@ -117,20 +103,20 @@ class Logger:
             for metric_name in self.metrics:
                 lines = f"{split}_{metric_name}:\n{str(self.logged_metrics[split][metric_name])}\n\n"
                 fobj.write(lines)
-        
+
         print(f"Saved {split} logs to file: {self.logs_save_path}")
-        
+
 
 def test():
     config = {
         "marker_type": "categorical",
         "logs_save_path": "/home/abhishekshar/hierarchichal_point_process/src/utils/logging_testbed/dummylogfile"
-        }
+    }
     logger = Logger(**config)
-    
+
     from random import random, randint
     def _gen_dummy_info():
-        metric_list = ['loss', 'marker_ll', 'time_ll', 'accuracy',  'marker_rmse', 'time_rmse', 'auc']
+        metric_list = ['loss', 'marker_ll', 'time_ll', 'accuracy', 'marker_rmse', 'time_rmse', 'auc']
         dummy_info = {}
 
         for metric in metric_list:
@@ -153,6 +139,6 @@ def test():
     logger.log_test_epoch(logger.get_best_epoch('loss'), dummy_test_info)
     logger.save_logs_to_file('test')
 
-    
+
 if __name__ == "__main__":
     test()

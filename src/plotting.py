@@ -1,21 +1,15 @@
 from argparse import Namespace
-from pathlib import Path
-
-import numpy as np
-import torch
 
 import matplotlib
+import torch
 
-from data_model_sandbox import RMTPPDataModelSandBox, HawkesProcessDataModelSandBox
-from parameters import DataModelParams, RMTPPHyperparams, PlottingParams, HawkesHyperparams, DataParams
+from data_model_sandbox import RMTPPDataModelSandBox, HawkesProcessDataModelSandBox, get_argparse_parser_params
+from parameters import DataModelParams, PlottingParams, DataParams
+from hyperparameters import HawkesHyperparams, RMTPPHyperparams
 from utils.helper import make_intermediate_dirs_if_absent
 
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
-
-from utils.data_loader import get_dataloader
-from utils.model_loader import ModelLoader
-from main import setup_parser, _augment_params
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -23,7 +17,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class BasePlotter():
     def __init__(self, plotting_params: PlottingParams):
         self.plotting_params = plotting_params
-        self._figure_dir = self.plotting_params.get_plotting_dir()
+        self._figure_dir = self.plotting_params.get_plotting_dir
         make_intermediate_dirs_if_absent(self._figure_dir)
 
     def save_plot_and_close_fig(self, fig: plt.Figure, file_name: str):
@@ -106,21 +100,7 @@ def test_hawkes_truemodel(params: Namespace):
 
 
 if __name__ == "__main__":
-    parser = setup_parser()
-    params = parser.parse_args()
-    ###
-    params.model = 'rmtpp'
-    params.data_name = 'simulated_hawkes'
-    ###
-    _augment_params(params)
+    rmtpp_hawkes_params = get_argparse_parser_params()
 
-    test_rmtpp(params)
-    test_hawkes_truemodel(params)
-
-    # Create data loader
-    # plotter.load_data(params, "train")
-
-    # Load model object & Load model state
-    # model_state_path = os.path.join('model', params.data_name, params.model,
-    #                                 "_g1_do0.5_b32_h256_l20.0_l20_gn10.0_lr0.001_c10_s1_tlintensity_ai40")
-    # plotter.load_model(params, model_state_path)
+    test_rmtpp(rmtpp_hawkes_params)
+    test_hawkes_truemodel(rmtpp_hawkes_params)

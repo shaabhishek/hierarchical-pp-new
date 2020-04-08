@@ -1,12 +1,9 @@
-from argparse import Namespace
-
 import numpy as np
 import torch
-from torch.nn import Module
 from torch.utils.data import DataLoader
 
-from base_model import BaseModel
-from parameters import DataModelParams, ModelHyperparams, HawkesHyperparams, DataParams
+from parameters import DataModelParams, DataParams, _augment_params, setup_parser
+from hyperparameters import HawkesHyperparams, BaseModelHyperparams
 from rmtpp import RMTPP
 from utils.data_loader import get_dataloader
 from utils.model_loader import ModelLoader
@@ -14,13 +11,13 @@ from utils.model_loader import ModelLoader
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def load_model(model_params: DataModelParams, model_hyperparams: ModelHyperparams):
+def _load_model_from_params(model_params: DataModelParams, model_hyperparams: BaseModelHyperparams):
     loader = ModelLoader(model_params, model_hyperparams)
     model = loader.model.to(device)
     return model
 
 
-def load_data(params: DataModelParams):
+def load_dataloader_from_params(params: DataModelParams):
     # Data should reside in this path for all datasets. Ideally 5 cross fold validation.
     data_path = params.get_data_file_path()
     dataloader: DataLoader = get_dataloader(data_path, params.marker_type, params.batch_size)
@@ -43,7 +40,7 @@ class HawkesModel:
 
 class DataModelSandBox:
     def __init__(self, data_params: [DataParams, DataModelParams]):
-        self.dataloader: DataLoader = load_data(data_params)
+        self.dataloader: DataLoader = load_dataloader_from_params(data_params)
 
 
 class HawkesProcessDataModelSandBox(DataModelSandBox):
@@ -58,7 +55,6 @@ class HawkesProcessDataModelSandBox(DataModelSandBox):
 
     def get_intensity_over_grid(self, data_timestamps):
         grid_times = np.linspace(0, data_timestamps[-1], 1000)
-        import pdb; pdb.set_trace()
         intensity = np.array([self.model.get_intensity(t=_t, data_timestamps=data_timestamps) for _t in grid_times])
         return intensity, grid_times
 
@@ -66,9 +62,9 @@ class HawkesProcessDataModelSandBox(DataModelSandBox):
 class RMTPPDataModelSandBox(DataModelSandBox):
     model: RMTPP
 
-    def __init__(self, data_model_params: DataModelParams, model_hyperparams: ModelHyperparams):
+    def __init__(self, data_model_params: DataModelParams, model_hyperparams: BaseModelHyperparams):
         super(RMTPPDataModelSandBox, self).__init__(data_model_params)
-        self.model = load_model(data_model_params, model_hyperparams)
+        self.model = _load_model_from_params(data_model_params, model_hyperparams)
 
     def setup(self, idx: int = 1):
         x_data, t_data, mask = self.dataloader.collate_fn([self.dataloader.dataset[idx]])
@@ -81,3 +77,14 @@ class RMTPPDataModelSandBox(DataModelSandBox):
         log_intensity, evaluated_timestamps = self.model.marked_point_process_net.get_intensity_over_grid(hidden_seq,
                                                                                                           data_timestamps)
         return log_intensity, evaluated_timestamps
+
+
+def get_argparse_parser_params(model_name='rmtpp', dataset_name='simulated_hawkes'):
+    parser = setup_parser()
+    params = parser.parse_args()
+    ###
+    params.model = model_name
+    params.data_name = dataset_name
+    ###
+    _augment_params(params)
+    return params

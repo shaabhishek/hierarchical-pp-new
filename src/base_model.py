@@ -153,6 +153,8 @@ class BaseDecoder(nn.Module):
 
 
 class BaseModel(nn.Module):
+    model_name = ""
+
     def __init__(self, **kwargs):
         super().__init__()
         self.marker_type = kwargs['marker_type']
@@ -184,7 +186,7 @@ class BaseModel(nn.Module):
             self.z_dims = [z_input_dim, *self.encoder_z_hidden_dims, self.latent_dim]
         # self.encoder = Encoder(rnn_dims=rnn_dims, y_dims=y_dims, z_dims=z_dims)
 
-    def print_info(self):
+    def print_parameter_info(self):
         # dump whatever str(nn.Module) has to offer
         print(self)
 
@@ -241,9 +243,6 @@ class BaseModel(nn.Module):
                 raise NotImplementedError
 
         return metric_dict
-
-    def forward(self):
-        raise NotImplementedError
 
 
 def one_hot_encoding(y, n_dims=None):
