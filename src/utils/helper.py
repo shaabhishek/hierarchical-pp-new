@@ -1,5 +1,6 @@
 # from progress.bar import Bar
 import os
+from pathlib import Path
 
 from progressbar import bar
 import numpy as np
@@ -38,6 +39,6 @@ def train_val_split(data, val_ratio=0.2):
     return train_split, val_split
 
 
-def make_intermediate_dirs_if_absent(full_file_path):
+def make_intermediate_dirs_if_absent(full_file_path: Path):
     """Make intermediate folders, and don't throw error if they exist"""
-    os.makedirs(full_file_path, exist_ok=True)
+    os.makedirs(full_file_path.resolve(), exist_ok=True)

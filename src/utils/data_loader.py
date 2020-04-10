@@ -91,8 +91,8 @@ def collate_fn_real_marker(xt_tuples):
 ################################ DataSets ################################
 
 class DSet(Dataset):
-    def __init__(self, dset_path):
-        self.x_data, self.t_data = load_data_from_file(dset_path)
+    def __init__(self, dataset_path):
+        self.x_data, self.t_data = load_data_from_file(dataset_path)
 
     def __len__(self):
         pass
@@ -109,36 +109,21 @@ class DSetCategorical(DSet):
         return len(self.x_data)
 
     def __getitem__(self, idx):
-        return (self.x_data[idx], self.t_data[idx])
+        return self.x_data[idx], self.t_data[idx]
 
 
-### Not required anymore - integrated into the existing workflow by
-### processing the simulated data into the standard format and storing it
-# class DSetSimulated(DSet):
-#     def __init__(self, dset_path):
-#         self.t_data = self.read_data(dset_path)
+class SingleSequenceDSetCategorical(DSetCategorical):
+    def __init__(self, dataset_path, sequence_idx=0):
+        super(SingleSequenceDSetCategorical, self).__init__(dataset_path)
+        self.x_data = self.x_data[sequence_idx:sequence_idx + 1]
+        self.t_data = self.t_data[sequence_idx:sequence_idx + 1]
 
-#     def __len__(self):
-#         return len(self.t_data)
+    def __len__(self):
+        return len(self.x_data)
 
-#     def __getitem__(self, idx):
-#         timestamps = [0] + self.t_data[idx] #first time is 0 by convention
-#         intervals = np.diff([0] + timestamps) #first interval is 0 by convention
-#         t_data = np.stack([intervals, timestamps], axis=-1)
-#         x_data = np.ones_like(timestamps)
-#         return (x_data, t_data)
+    def __getitem__(self, idx):
+        return self.x_data[idx], self.t_data[idx]
 
-#     def read_data(self, filename_times):
-#         # could have just used np.loadtxt but made it more general
-#         # because that might not have worked with uneven-length-sequences
-#         data = []
-#         with open(filename_times, 'r') as fobj:
-#             for line in fobj:
-#                 line = line.rstrip().split(' ')
-#                 data.append([float(n) for n in line])
-#         return data
-
-################################ DataLoaders ################################
 
 class DLoaderCategorical(DataLoader):
     marker_type = 'categorical'
@@ -148,18 +133,18 @@ class DLoaderCategorical(DataLoader):
 
 
 if __name__ == "__main__":
-    data_dir = Path("../data")
+    data_dir = Path("../../data")  # wrt utils folder
     # MIMIC
-    data_path = data_dir / 'mimic2_1_train.pkl'
-    marker_type = 'categorical'
-    loader = get_dataloader(data_path=data_path, marker_type=marker_type, batch_size=16)
+    # data_path = data_dir / 'mimic2_1_train.pkl'
+    # marker_type = 'categorical'
+    # loader = get_dataloader(data_path=data_path, marker_type=marker_type, batch_size=16)
 
     # Synthetic - Hawkes
-    # data_path = data_dir / 'rmtpp_synthetic/hawkes/time-train.txt'
-    # marker_type = 'categorical'
-    # dset = DSetSimulated(data_path)
-    # loader = DLoaderCategorical(dset, bs=16)
-    import pdb;
+    data_path = data_dir / 'simulated_hawkes_1_train.pkl'
+    marker_type = 'categorical'
+    dataset = SingleSequenceDSetCategorical(data_path)
+    loader = DLoaderCategorical(dataset, bs=16)
+    import pdb
 
     pdb.set_trace()
 

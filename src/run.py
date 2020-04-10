@@ -45,13 +45,20 @@ class TrainValRunner(BaseRunner):
         Time RMSE is w.r.t expectation.
         Marker rmse for real marker####
         """
+        self.training_start_hook()
         for epoch_num in range(1, self.trainer_hyperparams.num_training_iterations + 1):
             train_metrics, valid_metrics = self._run_one_train_and_valid_epoch(epoch_num)
 
             self.log_epoch_info(epoch_num, train_metrics, valid_metrics)
             if self.is_best_epoch(epoch_num):
                 self.checkpoint_model(epoch_num, train_metrics['loss'])
+        self.training_end_hook()
 
+    def training_start_hook(self):
+        pass
+
+    def training_end_hook(self):
+        print(f"Training finished. Best epoch:{self.logger.get_best_epoch(metric_name='loss')}")
         self.save_training_session_logs()
 
     def _run_one_train_and_valid_epoch(self, epoch_num):
@@ -100,10 +107,19 @@ class TestRunner(BaseRunner):
         # self.predictions_saver = Predictor(testing_params.prediction_params)
 
     def test_dataset(self):
-        print(f"\n\nStart testing ......................\nBest epoch:{self.logger.best_epoch}")
-        best_epoch_num = self.logger.get_best_epoch(metric_name='loss')
+        best_epoch_num = self.testing_start_hook()
 
         test_info = self._run_one_epoch(best_epoch_num)
+        self.testing_end_hook(best_epoch_num, test_info)
+
+    def testing_start_hook(self):
+        print(f"{'Start testing':*^80}")
+        best_epoch_num = self.logger.get_best_epoch(metric_name='loss')
+        if best_epoch_num is None:
+            best_epoch_num = -1
+        return best_epoch_num
+
+    def testing_end_hook(self, best_epoch_num, test_info):
         self.log(best_epoch_num, test_info)
 
     def _run_one_epoch(self, epoch_num):

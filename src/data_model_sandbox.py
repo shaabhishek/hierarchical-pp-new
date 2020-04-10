@@ -2,26 +2,13 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from parameters import DataModelParams, DataParams, _augment_params, setup_parser
 from hyperparameters import HawkesHyperparams, BaseModelHyperparams
+from parameters import DataModelParams, DataParams, _augment_params, setup_parser
 from rmtpp import RMTPP
 from utils.data_loader import get_dataloader
-from utils.model_loader import ModelLoader
+from utils.model_loader import CheckpointedModelLoader
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-def _load_model_from_params(model_params: DataModelParams, model_hyperparams: BaseModelHyperparams):
-    loader = ModelLoader(model_params, model_hyperparams)
-    model = loader.model.to(device)
-    return model
-
-
-def load_dataloader_from_params(params: DataModelParams):
-    # Data should reside in this path for all datasets. Ideally 5 cross fold validation.
-    data_path = params.get_data_file_path()
-    dataloader: DataLoader = get_dataloader(data_path, params.marker_type, params.batch_size)
-    return dataloader
 
 
 class HawkesModel:
@@ -38,14 +25,10 @@ class HawkesModel:
         return intensity
 
 
-class DataModelSandBox:
-    def __init__(self, data_params: [DataParams, DataModelParams]):
-        self.dataloader: DataLoader = load_dataloader_from_params(data_params)
-
-
-class HawkesProcessDataModelSandBox(DataModelSandBox):
+class HawkesProcessDataModelSandBox:
     def __init__(self, data_params: DataParams, model_hyperparams: HawkesHyperparams):
-        super(HawkesProcessDataModelSandBox, self).__init__(data_params)
+        # super(HawkesProcessDataModelSandBox, self).__init__(data_params)
+        self.dataloader = load_dataloader_from_params(data_params)
         self.model = HawkesModel(model_hyperparams)
 
     def setup(self, idx: int = 1):
@@ -59,17 +42,17 @@ class HawkesProcessDataModelSandBox(DataModelSandBox):
         return intensity, grid_times
 
 
-class BaseNNDataModelSandBox(DataModelSandBox):
+class BaseNNDataModelSandBox:
     def __init__(self, data_model_params: DataModelParams, model_hyperparams: BaseModelHyperparams):
-        super(BaseNNDataModelSandBox, self).__init__(data_model_params)
+        self.dataloader = load_dataloader_from_params(data_model_params)
         self.model = _load_model_from_params(data_model_params, model_hyperparams)
 
 
 class RMTPPDataModelSandBox(BaseNNDataModelSandBox):
     model: RMTPP
 
-    def setup(self, idx: int = 1):
-        x_data, t_data, mask = self.dataloader.collate_fn([self.dataloader.dataset[idx]])
+    def setup(self, sequence_idx: int = 0):
+        x_data, t_data, mask = self.dataloader.collate_fn([self.dataloader.dataset[sequence_idx]])
         data_timestamps = t_data[:, :, 1:2]  # (T, BS=1, 1)
         with torch.no_grad():
             hidden_seq, _, _ = self.model.get_hidden_states_from_input(x_data, t_data)
@@ -79,6 +62,19 @@ class RMTPPDataModelSandBox(BaseNNDataModelSandBox):
         log_intensity, evaluated_timestamps = self.model.marked_point_process_net.get_intensity_over_grid(hidden_seq,
                                                                                                           data_timestamps)
         return log_intensity, evaluated_timestamps
+
+
+def _load_model_from_params(data_model_params: DataModelParams, model_hyperparams: BaseModelHyperparams):
+    loader = CheckpointedModelLoader(data_model_params, model_hyperparams)
+    model = loader.model.to(device)
+    return model
+
+
+def load_dataloader_from_params(data_model_params: [DataModelParams, DataParams]):
+    # Data should reside in this path for all datasets. Ideally 5 cross fold validation.
+    data_path = data_model_params.get_data_file_path()
+    dataloader: DataLoader = get_dataloader(data_path, data_model_params.marker_type, data_model_params.batch_size)
+    return dataloader
 
 
 def get_argparse_parser_params(model_name=None, dataset_name=None):

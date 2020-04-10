@@ -8,6 +8,13 @@ from hyperparameters import ModelHyperparams
 from utils.helper import make_intermediate_dirs_if_absent
 
 
+class TimestampedFilenameMixin:
+    setup_time = datetime.now()
+
+    def get_timestamped_file_name(self, filename):
+        return f"{filename}_{self.setup_time.strftime('%y_%m_%d_%H_%M_%S')}"
+
+
 class ModelFileParams:
     def __init__(self, params: Namespace):
         self.identifier_param_dict = {'_g': params.gamma, '_do': params.dropout, '_b': params.batch_size,
@@ -46,7 +53,7 @@ class DataParams(BaseParams):
         return Path(os.path.join('..', 'data', data_file_name))
 
 
-class ModelParams(BaseParams):
+class ModelParams(BaseParams, TimestampedFilenameMixin):
     def __init__(self, params: Namespace, model_file_identifier):
         super(ModelParams, self).__init__(params)
         self.model_name = params.model
@@ -54,6 +61,13 @@ class ModelParams(BaseParams):
 
     def set_model_file_identifier(self, model_file_identifier):
         self._model_file_identifier = model_file_identifier
+
+    def create_model_filename(self):
+        """Format: identifier_timestamp.py"""
+        return self.get_timestamped_file_name(self._model_file_identifier) + ".pt"
+
+    def create_and_set_filename(self):
+        self.set_model_file_identifier(self.create_model_filename())
 
 
 class DataModelParams(BaseParams):
@@ -73,20 +87,17 @@ class DataModelParams(BaseParams):
         else:
             raise AttributeError(f"Did not find the attribute {item} in data or model")
 
+    @staticmethod
+    def get_model_filename(model_file_identifier):
+        return model_file_identifier + ".pt"
+
     def get_model_state_path(self, model_file_identifier=None):
         if model_file_identifier is not None:
-            return self._model_state_dir / (model_file_identifier + ".pt")
+            return self._model_state_dir / self.get_model_filename(model_file_identifier)
         elif self._model_file_identifier is not None:
-            return self._model_state_dir / (self._model_file_identifier + ".pt")
+            return self._model_state_dir / self.get_model_filename(self._model_file_identifier)
         else:
             raise ValueError("Model state file name (identifier) not specified, or doesn't exist yet")
-
-
-class TimestampedFilenameMixin:
-    setup_time = datetime.now()
-
-    def get_timestamped_file_name(self, filename):
-        return f"{filename}_{self.setup_time.strftime('%y%m%d%H%M%S')}"
 
 
 class LoggingParams(BaseParams, TimestampedFilenameMixin):
@@ -100,7 +111,7 @@ class LoggingParams(BaseParams, TimestampedFilenameMixin):
         return self._logs_dir / (self.get_timestamped_file_name(self.filename) + ".log")
 
     def get_tensorboard_log_dir(self):
-        return Path(os.path.join('tb_logs', self.dataset_name, self.model_name))
+        return Path(os.path.join('tb_logs', self.dataset_name, self.model_name, self.get_timestamped_file_name("")))
 
 
 class PredictionParams(BaseParams, TimestampedFilenameMixin):
@@ -279,8 +290,8 @@ def setup_parser():
     parser.add_argument('--time_loss', type=str, default='intensity',
                         help='whether to use normal loss or intensity loss')
     parser.add_argument('--time_scale', type=float, default=1, help='scaling factor to multiply the timestamps with')
-    parser.add_argument('--test', type=bool, default=False, help='enable testing')
-    parser.add_argument('--train_test', type=bool, default=True, help='enable testing')
+    parser.add_argument('--skiptrain', action='store_true', help='disable training if flag is provided')
+    parser.add_argument('--skiptest', action='store_true', help='enable testing')
     parser.add_argument('--show', type=bool, default=True, help='print progress')
     parser.add_argument('--data_dir', type=str, default='../data/', help='data directory')
     parser.add_argument('--best_epoch', type=int, default=10, help='best epoch')

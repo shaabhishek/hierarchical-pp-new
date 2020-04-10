@@ -84,7 +84,7 @@ class CheckpointedModelLoader(ModelLoader):
         self._load_model_state()
 
     def _load_model_state(self):
-        checkpoint = torch.load(self.model_state_path)
+        checkpoint = torch.load(self.model_state_path, map_location=device)
         self.model.load_state_dict(checkpoint['model_state_dict'])
 
     def save_model_state(self):

@@ -40,11 +40,11 @@ class Logger:
         if self.best_epoch[metric_name] is not None:
             return self.best_epoch[metric_name]
         else:
-            raise ValueError
+            return None
 
     def log_train_epoch(self, epoch_num: int, train_info_dict: dict, valid_info_dict: dict):
         for metric_name in self.metrics:
-            # Write to internal stat
+            # Write to internal state
             self.logged_metrics['train'][metric_name][epoch_num] = train_info_dict.get(metric_name, float('inf'))
             self.logged_metrics['valid'][metric_name][epoch_num] = valid_info_dict.get(metric_name, float('inf'))
 
