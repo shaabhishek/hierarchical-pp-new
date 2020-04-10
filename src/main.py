@@ -95,11 +95,10 @@ def pipeline_engine(params: Namespace):
 
 
 if __name__ == '__main__':
-    rmtpp_hawkes_params = get_argparse_parser_params('rmtpp', 'simulated_hawkes')
-    # parser = setup_parser()
-    # params = parser.parse_args()
-    # params = _augment_params(params)
+    # rmtpp_hawkes_params = get_argparse_parser_params('rmtpp', 'simulated_hawkes')
+    # set_seeds(rmtpp_hawkes_params.seed)
 
-    set_seeds(rmtpp_hawkes_params.seed)
+    command_line_params = get_argparse_parser_params()
+    set_seeds(command_line_params.seed)
 
-    pipeline_engine(rmtpp_hawkes_params)
+    pipeline_engine(command_line_params)

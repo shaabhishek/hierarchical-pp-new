@@ -81,12 +81,12 @@ class RMTPPDataModelSandBox(BaseNNDataModelSandBox):
         return log_intensity, evaluated_timestamps
 
 
-def get_argparse_parser_params(model_name='rmtpp', dataset_name='simulated_hawkes'):
+def get_argparse_parser_params(model_name=None, dataset_name=None):
     parser = setup_parser()
     params = parser.parse_args()
     ###
-    params.model = model_name
-    params.data_name = dataset_name
+    params.model = model_name if model_name is not None else params.model
+    params.data_name = dataset_name if dataset_name is not None else params.data_name
     ###
     _augment_params(params)
     return params
