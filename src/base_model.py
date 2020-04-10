@@ -325,11 +325,6 @@ def create_output_marker_layer(model):
 #     return
 
 def create_output_nets(model, b, ti):
-    """
-    b: (float) base intensity #TODO
-    ti: (float) time influence #TODO
-    """
-
     l = model.shared_output_dims[-1]
 
     # Output net for time

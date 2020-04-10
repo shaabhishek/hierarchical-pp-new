@@ -14,7 +14,7 @@ anneal_model = {'hrmtpp', 'model11', 'model2'}
 
 class EpochRunnerMixin:
     def run_epoch(self, epoch_num) -> dict:
-        assert isinstance(self, BaseEpochRunner)
+        assert isinstance(self, (TrainEpochRunner, TestEpochRunner, ValidEpochRunner))
         self.set_model_mode()
         self.reset_epoch_metrics()
         num_batches = self.get_num_batches()
@@ -47,7 +47,8 @@ class BaseEpochRunner:
 class TrainEpochRunner(BaseEpochRunner, EpochRunnerMixin):
     split_name = "train"
 
-    def __init__(self, model: BaseModel, dataloader: DataLoader, optimizer: torch.optim.Optimizer, total_anneal_epochs: int, grad_max_norm: float):
+    def __init__(self, model: BaseModel, dataloader: DataLoader, optimizer: torch.optim.Optimizer,
+                 total_anneal_epochs: int, grad_max_norm: float):
         super(TrainEpochRunner, self).__init__(model, dataloader)
 
         self.optimizer = optimizer

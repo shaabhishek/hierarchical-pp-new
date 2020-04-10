@@ -36,12 +36,14 @@ if __name__ == '__main__':
 
     set_seeds(params.seed)
 
+    model_file_params = ModelFileParams(params)
+    model_hyperparams = ModelHyperparams(params)
+    logging_params = LoggingParams(params=params, model_file_params=model_file_params)
+    logger = Logger(logging_params, marker_type=params.marker_type)
+
     if is_training(params):
-        model_file_params = ModelFileParams(params)
         train_data_model_params = DataModelParams(params=params, split_name='train')
         valid_data_model_params = DataModelParams(params=params, split_name='valid')
-        logging_params = LoggingParams(params=params, model_file_params=model_file_params)
-        model_hyperparams = ModelHyperparams(params)
         optimizer_hyperparams = OptimizerHyperparams(params)
         trainer_hyperparams = TrainerParams(params, train_data_model_params, model_hyperparams, model_file_params,
                                             optimizer_hyperparams)
@@ -58,12 +60,8 @@ if __name__ == '__main__':
         print("valid data length", len(valid_dataloader.dataset))
         print("\n")
 
-        logger = Logger(logging_params, marker_type=params.marker_type)
         train_runner = TrainValRunner(trainer_hyperparams, train_dataloader, valid_dataloader, logger)
         train_runner.train_dataset()
-        import pdb;
-
-        pdb.set_trace()
         # train_one_dataset(params, file_name, train_dataloader, valid_dataloader, logger)
         if params.train_test:
             test_data_model_params = DataModelParams(params=params,
@@ -72,6 +70,7 @@ if __name__ == '__main__':
             prediction_params = PredictionParams(params, model_file_params)
             testing_hyperparams = TestingParams(params, test_data_model_params, model_hyperparams, prediction_params,
                                                 model_file_params)
+
             test_dataloader = load_dataloader_from_params(test_data_model_params)
             test_runner = TestRunner(testing_hyperparams, test_dataloader, logger)
             test_runner.test_dataset()
@@ -79,11 +78,22 @@ if __name__ == '__main__':
             # test_dataloader = get_dataloader(test_data_path, params.marker_type, params.batch_size)
             # test_one_dataset(params, file_name, test_dataloader, logger, save=True)
     else:
-        test_data_path = params.data_dir + "/" + params.data_name + '_' + str(params.cv_idx) + "_test.pkl"
-        test_dataloader = get_dataloader(test_data_path, params.marker_type, params.batch_size)
-        best_epoch = params.best_epoch
-        file_name = ''
-        for item_ in file_name_identifier:
-            file_name = file_name + item_[0] + str(item_[1])
 
-        test_one_dataset(params, file_name, test_dataloader, best_epoch)
+        test_data_model_params = DataModelParams(params=params,
+                                                 model_file_identifier=model_file_params.get_model_file_identifier(),
+                                                 split_name='test')
+        prediction_params = PredictionParams(params, model_file_params)
+        testing_hyperparams = TestingParams(params, test_data_model_params,
+                                            model_hyperparams, prediction_params, model_file_params)
+
+        best_epoch = params.best_epoch #TODO: Make the test runner aware of best epoch
+        test_dataloader = load_dataloader_from_params(test_data_model_params)
+        test_runner = TestRunner(testing_hyperparams, test_dataloader, logger)
+        # test_data_path = params.data_dir + "/" + params.data_name + '_' + str(params.cv_idx) + "_test.pkl"
+        # test_dataloader = get_dataloader(test_data_path, params.marker_type, params.batch_size)
+        test_runner.test_dataset()
+        # file_name = ''
+        # for item_ in file_name_identifier:
+        #     file_name = file_name + item_[0] + str(item_[1])
+        #
+        # test_one_dataset(params, file_name, test_dataloader, best_epoch)
