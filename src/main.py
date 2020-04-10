@@ -1,7 +1,9 @@
+from argparse import Namespace
+
 import numpy as np
 import torch
 
-from data_model_sandbox import load_dataloader_from_params
+from data_model_sandbox import load_dataloader_from_params, get_argparse_parser_params
 from hyperparameters import ModelHyperparams, OptimizerHyperparams
 from parameters import DataModelParams, LoggingParams, ModelFileParams, PredictionParams, _augment_params, setup_parser, \
     TrainerParams, TestingParams
@@ -12,11 +14,11 @@ from utils.logger import Logger
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def set_seeds(seedNum: int):
+def set_seeds(seed_value: int):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-    torch.manual_seed(seedNum)
-    np.random.seed(seedNum)
+    torch.manual_seed(seed_value)
+    np.random.seed(seed_value)
 
 
 def print_input_params(params):
@@ -25,22 +27,15 @@ def print_input_params(params):
         print('\t', key, '\t', d[key])
 
 
-def is_training(params):
+def is_training(params: Namespace):
     return not params.test
 
 
-if __name__ == '__main__':
-    parser = setup_parser()
-    params = parser.parse_args()
-    params = _augment_params(params)
-
-    set_seeds(params.seed)
-
+def pipeline_engine(params: Namespace):
     model_file_params = ModelFileParams(params)
     model_hyperparams = ModelHyperparams(params)
     logging_params = LoggingParams(params=params, model_file_params=model_file_params)
     logger = Logger(logging_params, marker_type=params.marker_type)
-
     if is_training(params):
         train_data_model_params = DataModelParams(params=params, split_name='train')
         valid_data_model_params = DataModelParams(params=params, split_name='valid')
@@ -86,7 +81,7 @@ if __name__ == '__main__':
         testing_hyperparams = TestingParams(params, test_data_model_params,
                                             model_hyperparams, prediction_params, model_file_params)
 
-        best_epoch = params.best_epoch #TODO: Make the test runner aware of best epoch
+        best_epoch = params.best_epoch  # TODO: Make the test runner aware of best epoch
         test_dataloader = load_dataloader_from_params(test_data_model_params)
         test_runner = TestRunner(testing_hyperparams, test_dataloader, logger)
         # test_data_path = params.data_dir + "/" + params.data_name + '_' + str(params.cv_idx) + "_test.pkl"
@@ -97,3 +92,14 @@ if __name__ == '__main__':
         #     file_name = file_name + item_[0] + str(item_[1])
         #
         # test_one_dataset(params, file_name, test_dataloader, best_epoch)
+
+
+if __name__ == '__main__':
+    rmtpp_hawkes_params = get_argparse_parser_params('rmtpp', 'simulated_hawkes')
+    # parser = setup_parser()
+    # params = parser.parse_args()
+    # params = _augment_params(params)
+
+    set_seeds(rmtpp_hawkes_params.seed)
+
+    pipeline_engine(rmtpp_hawkes_params)

@@ -8,3 +8,4 @@ src/model/*
 src/result/*
 *.pyc
 *.log
+**/tb_logs/

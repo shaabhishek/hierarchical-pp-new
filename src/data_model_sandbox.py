@@ -59,12 +59,14 @@ class HawkesProcessDataModelSandBox(DataModelSandBox):
         return intensity, grid_times
 
 
-class RMTPPDataModelSandBox(DataModelSandBox):
-    model: RMTPP
-
+class BaseNNDataModelSandBox(DataModelSandBox):
     def __init__(self, data_model_params: DataModelParams, model_hyperparams: BaseModelHyperparams):
-        super(RMTPPDataModelSandBox, self).__init__(data_model_params)
+        super(BaseNNDataModelSandBox, self).__init__(data_model_params)
         self.model = _load_model_from_params(data_model_params, model_hyperparams)
+
+
+class RMTPPDataModelSandBox(BaseNNDataModelSandBox):
+    model: RMTPP
 
     def setup(self, idx: int = 1):
         x_data, t_data, mask = self.dataloader.collate_fn([self.dataloader.dataset[idx]])

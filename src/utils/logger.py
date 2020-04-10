@@ -1,7 +1,6 @@
 from torch.utils.tensorboard import SummaryWriter
 
 from parameters import LoggingParams
-from utils.helper import make_intermediate_dirs_if_absent
 
 
 class Logger:
@@ -49,10 +48,7 @@ class Logger:
             self.logged_metrics['train'][metric_name][epoch_num] = train_info_dict.get(metric_name, float('inf'))
             self.logged_metrics['valid'][metric_name][epoch_num] = valid_info_dict.get(metric_name, float('inf'))
 
-            # Write to Tensorboard
-            for split in ['train', 'valid']:
-                self.writer.add_scalar(f"{metric_name}/{split}", self.logged_metrics[split][metric_name][epoch_num],
-                                       epoch_num)
+            self.write_train_val_metrics_to_tensorboard(epoch_num, metric_name)
 
             if (self.best_valid_loss[metric_name] is None) or \
                     (self.improvement_map[metric_name] == 'small' and valid_info_dict[metric_name] <
@@ -61,6 +57,11 @@ class Logger:
                      self.best_valid_loss[metric_name]):
                 self.best_valid_loss[metric_name] = valid_info_dict[metric_name]
                 self.best_epoch[metric_name] = epoch_num
+
+    def write_train_val_metrics_to_tensorboard(self, epoch_num, metric_name):
+        for split in ['train', 'valid']:
+            self.writer.add_scalar(f"{metric_name}/{split}", self.logged_metrics[split][metric_name][epoch_num],
+                                   epoch_num)
 
     def log_test_epoch(self, epoch_num: int, test_info_dict: dict):
         for metric_name in self.metrics:

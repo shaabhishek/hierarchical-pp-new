@@ -17,12 +17,12 @@ def valid_subject(path):
 
         for row in csv_reader:
             if line_count == 0:
-                #print(f'Column names are {", ".join(row)}')
+                # print(f'Column names are {", ".join(row)}')
                 line_count += 1
             line_count += 1
             # print(row["ICUSTAY_ID"])
-        #print(f'Processed {line_count} lines.')
-    return line_count-1
+        # print(f'Processed {line_count} lines.')
+    return line_count - 1
 
 
 def get_raw_data(path):
@@ -37,7 +37,7 @@ def get_raw_data(path):
         csv_reader = csv.DictReader(csv_file)
         for row in csv_reader:
             if line_count == 0:
-                #print(f'Column names are {", ".join(row)}')
+                # print(f'Column names are {", ".join(row)}')
                 line_count += 1
             line_count += 1
             episode_info = {}
@@ -51,7 +51,7 @@ def get_raw_data(path):
         csv_reader = csv.DictReader(csv_file)
         for row in csv_reader:
             if line_count == 0:
-                #print(f'Column names are {", ".join(row)}')
+                # print(f'Column names are {", ".join(row)}')
                 line_count += 1
             line_count += 1
             id_ = id_to_icu_map[row["ICUSTAY_ID"]]
@@ -83,7 +83,6 @@ def gender_to_categorical(x):
 
 
 def mimic_correct_datatypes(icu_df):
-
     # TIMES
     icu_df['ADMITTIME'] = icu_df['ADMITTIME'].astype('datetime64')
     icu_df['DEATHTIME'] = icu_df['DEATHTIME'].astype('datetime64')
@@ -112,11 +111,11 @@ def mimic_data_to_df(data, colnames=None):
     icu_df['GENDER'] = icu_df['GENDER'].apply(gender_to_categorical)
 
     # Make ETHNICITY a one-hot feature set, removing the first column to ensure there is no linear dependence
-#     ethnicity_dummies = pandas.get_dummies(icu_df.ETHNICITY, drop_first=True, prefix='ETHNICITY_')
-#     icu_df = pandas.concat([icu_df.drop('ETHNICITY', axis=1), ethnicity_dummies], axis=1)
+    #     ethnicity_dummies = pandas.get_dummies(icu_df.ETHNICITY, drop_first=True, prefix='ETHNICITY_')
+    #     icu_df = pandas.concat([icu_df.drop('ETHNICITY', axis=1), ethnicity_dummies], axis=1)
 
     # Center the AGE column
-#     icu_df['AGE'] = (icu_df.AGE - icu_df.AGE.mean()) / icu_df.AGE.std()
+    #     icu_df['AGE'] = (icu_df.AGE - icu_df.AGE.mean()) / icu_df.AGE.std()
 
     if colnames is None:
         return icu_df
@@ -133,10 +132,10 @@ def compute_markers(data):
     """
     x_data = []
     icu_df = mimic_data_to_df(data)
-    
+
     flat_icd9_codes = list(code for patient_codes in icu_df.ICD9_CODE for code in patient_codes)
     freqs_icd9 = pandas.value_counts(flat_icd9_codes)
-    
+
     # Set the threshold frequency to be 150 to define 'high freq diseases'
     # Restricting the icd9 codes to those
     # which have occurrence frequency of more than threshold freq
@@ -148,13 +147,14 @@ def compute_markers(data):
             if x_i in set_icd9_codes:
                 return x_i
         return 'OTHER'
+
     icu_df['ICD9_CODE'] = icu_df.ICD9_CODE.apply(get_primary_icd9)
 
     icu_df = icu_df.reset_index(drop=True)
 
     # Make the disease as one-hot
     _onehotencoder = OneHotEncoder(sparse=False)
-    _markers = _onehotencoder.fit_transform(icu_df.ICD9_CODE.values.reshape(-1,1))
+    _markers = _onehotencoder.fit_transform(icu_df.ICD9_CODE.values.reshape(-1, 1))
 
     group_patients = icu_df.groupby('SUBJECT_ID')
     for patient_idx, patient_df_rows in group_patients.groups.items():
@@ -171,14 +171,14 @@ def compute_times(data):
         Output:
             t_data: list of length num_data_train, each element is numpy array of shape T_i x 3
     """
-#     max_visit_n = max([len(data_i) for data_i in data])
+    #     max_visit_n = max([len(data_i) for data_i in data])
     t_data = []
     icu_df = mimic_data_to_df(data)
 
     group_patients = icu_df.groupby('SUBJECT_ID')
     for patient_idx, patient_df_rows in group_patients.groups.items():
         t_data_i = icu_df.loc[patient_df_rows][[
-            'ADMITTIME', 'INTIME', 'OUTTIME']].astype('int') / (10**9 * 3600 * 24)
+            'ADMITTIME', 'INTIME', 'OUTTIME']].astype('int') / (10 ** 9 * 3600 * 24)
         admit_times = t_data_i.ADMITTIME
         visit_durations = t_data_i.OUTTIME - t_data_i.INTIME
         # import pdb; pdb.set_trace()
@@ -208,7 +208,7 @@ def fix_normalize_time(data):
         interval_times), np.std(interval_times)
 
     for idx in range(N):
-        data[idx][:, 0] = (data[idx][:, 0]-mean_admit_time)/std_admit_time
+        data[idx][:, 0] = (data[idx][:, 0] - mean_admit_time) / std_admit_time
         data[idx][0, 1] = mean_interval_time
     return data
 
@@ -229,9 +229,9 @@ def save_mimic_data(data=None):
     t_data = compute_times(data)
     t_data = fix_normalize_time(t_data)
 
-    assert(np.all([t_data[idx].shape[1] == 3 for idx in range(100)]))
-    assert(np.all([x_data[idx].shape[0] == t_data[idx].shape[0]
-                   for idx in range(100)]))
+    assert (np.all([t_data[idx].shape[1] == 3 for idx in range(100)]))
+    assert (np.all([x_data[idx].shape[0] == t_data[idx].shape[0]
+                    for idx in range(100)]))
 
     data_dict = {
         't': t_data,
@@ -240,11 +240,11 @@ def save_mimic_data(data=None):
     # Train-Valid-Test Split of 60-20-20
     train_dict, extra_dict = train_val_split(data_dict, val_ratio=0.4)
     val_dict, test_dict = train_val_split(extra_dict, val_ratio=0.5)
-    assert(len(train_dict['x']) == len(train_dict['t']))
-    assert(len(val_dict['x']) == len(val_dict['t']))
-    assert(len(test_dict['x']) == len(test_dict['t']))
-    assert(len(train_dict['x']) + len(val_dict['x']) +
-           len(test_dict['x']) == len(data_dict['x']))
+    assert (len(train_dict['x']) == len(train_dict['t']))
+    assert (len(val_dict['x']) == len(val_dict['t']))
+    assert (len(test_dict['x']) == len(test_dict['t']))
+    assert (len(train_dict['x']) + len(val_dict['x']) +
+            len(test_dict['x']) == len(data_dict['x']))
 
     train_path_data = '../data/mimic_train.pkl'
     valid_path_data = '../data/mimic_valid.pkl'
@@ -298,5 +298,3 @@ if __name__ == "__main__":
     #                 o_count +=1
     #                 break
     # print(f_count, o_count, len(values)- (f_count+o_count))
-
-    
