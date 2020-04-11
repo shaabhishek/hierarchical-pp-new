@@ -7,6 +7,7 @@ from hyperparameters import RMTPPHyperparams, HawkesHyperparams
 from main import Engine
 from parameters import DataModelParams, PlottingParams, DataParams
 from plotting import RMTPPPlotter, HawkesPlotter, SavePlotMixin
+from run import TrainValRunner
 from utils.data_loader import SingleSequenceDSetCategorical, DLoaderCategorical
 
 
@@ -24,11 +25,11 @@ class SimulatedModelTestMixin:
 
 
 class NNModelTestMixin:
-    def test_rmtpp(self, params: Namespace, model_file_identifier):
+    def test_rmtpp(self, params: Namespace, model_filename):
         assert isinstance(self, SimTrueTestPlot)
         data_model_params = DataModelParams(
             params=params,
-            model_file_identifier=model_file_identifier,
+            model_filename=model_filename,
             split_name='train'
         )
         model_hyperparams = RMTPPHyperparams(params)
@@ -48,30 +49,42 @@ class SimTrueTestPlot(NNModelTestMixin, SimulatedModelTestMixin, SavePlotMixin):
         self.fig, self.ax = plt.subplots(1, 1)
 
     def make_plots(self, filename):
-        self.test_rmtpp(self.params, "singletrained_g1_do0.5_b16_h256_l20.0_l20_gn10.0_lr0.001_c10_s1_tlintensity_ai40")
+        self.test_rmtpp(self.params, "singletrained_g1_do0.5_b16_h256_l20.0_l20_gn10.0_lr0.001_c10_s1_tlintensity_ai40.pt")
         self.test_hawkes_true_model(self.params)
         self.ax.legend()
         self.save_plot_and_close_fig(self.fig, filename)
 
 
-def test_single_sequence_training():
+def train_single_sequence():
     rmtpp_hawkes_params = get_argparse_parser_params('rmtpp', 'simulated_hawkes')
-    import pdb; pdb.set_trace()
-    engine = Engine(rmtpp_hawkes_params, "singletrained_g1_do0.5_b16_h256_l20.0_l20_gn10.0_lr0.001_c10_s1_tlintensity_ai40")
-    data_model_params = DataModelParams(
+    engine = Engine(
+        rmtpp_hawkes_params,
+        "singletrained_g1_do0.5_b16_h256_l20.0_l20_gn10.0_lr0.001_c10_s1_tlintensity_ai40.pt"
+    )
+    data_params = DataParams(
         params=rmtpp_hawkes_params,
         split_name='train'
     )
 
     def custom_dataloader():
-        data_path = data_model_params.get_data_file_path()
+        data_path = data_params.get_data_file_path()
         dataset = SingleSequenceDSetCategorical(data_path, sequence_idx=0)
         loader = DLoaderCategorical(dataset, bs=1)
         return loader
 
-    # train_dataloader = custom_dataloader()
-    # engine.train_val_runner = TrainValRunner(engine.trainer_params, train_dataloader,
-    #                                          engine.train_val_runner.valid_dataloader, engine.logger)
+    train_dataloader = custom_dataloader()
+    engine.train_val_runner = TrainValRunner(engine.trainer_params, train_dataloader,
+                                             engine.train_val_runner.valid_dataloader, engine.logger)
+    engine.run()
+
+
+def test_only_model():
+    rmtpp_hawkes_params = get_argparse_parser_params('rmtpp', 'simulated_hawkes')
+    rmtpp_hawkes_params.skiptrain = True
+    engine = Engine(
+        rmtpp_hawkes_params,
+        "singletrained_g1_do0.5_b16_h256_l20.0_l20_gn10.0_lr0.001_c10_s1_tlintensity_ai40.pt"
+    )
     engine.run()
 
 
@@ -81,5 +94,6 @@ def rmtpp_simulated_intensity_plot():
 
 
 if __name__ == "__main__":
-    # rmtpp_simulated_intensity_plot()
-    test_single_sequence_training()
+    rmtpp_simulated_intensity_plot()
+    # train_single_sequence()
+    # test_only_model()

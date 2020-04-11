@@ -21,8 +21,7 @@ class TrainValRunner(BaseRunner):
         super(TrainValRunner, self).__init__(logger)
         self.trainer_hyperparams = trainer_params
 
-        model_file_identifier = trainer_params.model_file_params.get_model_file_identifier()
-        self.model_state_path = trainer_params.data_model_params.get_model_state_path(model_file_identifier)
+        self.model_state_path = trainer_params.data_model_params.get_model_state_path()
 
         self.train_dataloader = train_dataloader
         self.valid_dataloader = valid_dataloader

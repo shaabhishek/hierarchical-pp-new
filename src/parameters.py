@@ -11,8 +11,9 @@ from utils.helper import make_intermediate_dirs_if_absent
 class TimestampedFilenameMixin:
     setup_time = datetime.now()
 
-    def get_timestamped_file_name(self, filename):
-        return f"{filename}_{self.setup_time.strftime('%y_%m_%d_%H_%M_%S')}"
+    @classmethod
+    def get_timestamped_file_name(cls, filename):
+        return f"{filename}_{cls.setup_time.strftime('%y_%m_%d_%H_%M_%S')}"
 
 
 class ModelFileParams:
@@ -53,28 +54,41 @@ class DataParams(BaseParams):
         return Path(os.path.join('..', 'data', data_file_name))
 
 
-class ModelParams(BaseParams, TimestampedFilenameMixin):
-    def __init__(self, params: Namespace, model_file_identifier):
+class ModelParams(BaseParams):
+    def __init__(self, params: Namespace, model_filename):
         super(ModelParams, self).__init__(params)
         self.model_name = params.model
-        self.set_model_file_identifier(model_file_identifier)
+        self.set_model_filename(model_filename)
 
-    def set_model_file_identifier(self, model_file_identifier):
-        self._model_file_identifier = model_file_identifier
+    @staticmethod
+    def _create_model_filename(model_file_identifier):
+        """Format: identifier_timestamp.pt"""
+        return TimestampedFilenameMixin.get_timestamped_file_name(model_file_identifier) + ".pt"
 
-    def create_model_filename(self):
-        """Format: identifier_timestamp.py"""
-        return self.get_timestamped_file_name(self._model_file_identifier) + ".pt"
+    def get_model_filename(self):
+        return self._model_filename
 
-    def create_and_set_filename(self):
-        self.set_model_file_identifier(self.create_model_filename())
+    def set_model_filename(self, filename):
+        self._model_filename = filename
+
+    # def create_and_set_filename(self):
+    #     self.set_model_filename(self._create_model_filename())
+
+    @classmethod
+    def from_identifier(cls, params, model_file_identifier):
+        model_filename = cls._create_model_filename(model_file_identifier)
+        return cls(params, model_filename)
 
 
 class DataModelParams(BaseParams):
-    def __init__(self, params, model_file_identifier=None, split_name="train"):
+
+    def __init__(self, params, model_filename, split_name="train"):
         super(DataModelParams, self).__init__(params)
         self.data_params = DataParams(params, split_name)
-        self.model_params = ModelParams(params, model_file_identifier)
+        self.model_params = ModelParams(params, model_filename)
+        self.make_model_dir()
+
+    def make_model_dir(self):
         self._model_state_dir = Path(os.path.join('model', self.dataset_name, self.model_name))
         make_intermediate_dirs_if_absent(self._model_state_dir)
 
@@ -87,17 +101,21 @@ class DataModelParams(BaseParams):
         else:
             raise AttributeError(f"Did not find the attribute {item} in data or model")
 
-    @staticmethod
-    def get_model_filename(model_file_identifier):
-        return model_file_identifier + ".pt"
-
-    def get_model_state_path(self, model_file_identifier=None):
-        if model_file_identifier is not None:
-            return self._model_state_dir / self.get_model_filename(model_file_identifier)
-        elif self._model_file_identifier is not None:
-            return self._model_state_dir / self.get_model_filename(self._model_file_identifier)
+    def get_model_state_path(self, model_filename: str = None):
+        if model_filename is not None:
+            return self._model_state_dir / model_filename
+        elif self._model_filename is not None:
+            return self._model_state_dir / self.get_model_filename()
         else:
             raise ValueError("Model state file name (identifier) not specified, or doesn't exist yet")
+
+    @classmethod
+    def from_identifier(cls, params, model_file_identifier, split_name):
+        self = object.__new__(cls)
+        self.data_params = DataParams(params, split_name)
+        self.model_params = ModelParams.from_identifier(params, model_file_identifier)
+        self.make_model_dir()
+        return self
 
 
 class LoggingParams(BaseParams, TimestampedFilenameMixin):
@@ -163,21 +181,24 @@ def test_data_model_params():
     from data_model_sandbox import get_argparse_parser_params
     model_name = 'rmtpp'
     dataset_name = 'simulated_hawkes'
-    params = get_argparse_parser_params()
-    model_file_identifier = '_g1_do0.5_b32_h256_l20.0_l20_gn10.0_lr0.001_c10_s1_tlintensity_ai40'
+    params = get_argparse_parser_params(model_name, dataset_name)
     split_name = 'train'
-    model_state_path = Path(os.path.join('model', dataset_name, model_name, model_file_identifier))
 
-    data_model_params = DataModelParams(params, model_file_identifier, split_name)
+    # Test 1
+    model_filename = 'singletrained_g1_do0.5_b16_h256_l20.0_l20_gn10.0_lr0.001_c10_s1_tlintensity_ai40.pt'
+    model_state_path = Path(os.path.join('model', dataset_name, model_name, model_filename))
+    data_model_params = DataModelParams(params, model_filename, split_name)
 
     assert data_model_params.dataset_name == dataset_name
     assert data_model_params.dataset_dir == params.data_dir
     assert data_model_params.get_model_state_path() == model_state_path
 
-    new_model_file_identifier = "bla"
-    new_model_state_path = Path(os.path.join('model', dataset_name, model_name, new_model_file_identifier))
-    data_model_params.set_model_file_identifier(new_model_file_identifier)
+    # Test 2
+    new_model_filename = "bla"
+    new_model_state_path = Path(os.path.join('model', dataset_name, model_name, new_model_filename))
+    data_model_params.set_model_filename(new_model_filename)
     assert data_model_params.get_model_state_path() == new_model_state_path
+
 
 
 if __name__ == '__main__':

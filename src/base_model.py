@@ -211,14 +211,14 @@ class BaseModel(nn.Module):
         )
         return x_module, t_module
 
-    def compute_metrics(self, marker_logits, predicted_times, marker, event_times, mask):
+    def compute_metrics(self, predicted_times, event_times, marker_logits, marker, mask):
         """
         Input:
-            marker_logits : Tensor of shape T x BS x marker_dim; t_j : actual time of event j
-            predicted_times : Tensor of shape T x BS x 1 ; pt_j : predicted time of event j
-            marker : Tensor of shape T x BS
-            event_times : Tensor of shape T x BS x 1
-            mask: Tensor of shape T x BS
+            :param marker_logits : Tensor of shape T x BS x marker_dim; t_j : actual time of event j
+            :param predicted_times : Tensor of shape T x BS x 1 ; pt_j : predicted time of event j
+            :param marker : Tensor of shape T x BS
+            :param event_times : Tensor of shape T x BS x 1
+            :param mask: Tensor of shape T x BS
         Output:
             metric_dict: dict
         """
@@ -227,18 +227,18 @@ class BaseModel(nn.Module):
             # note: both t[0] and pt[0] are 0 by convention
             time_mse = torch.pow((predicted_times - event_times) * mask.unsqueeze(-1), 2.)  # (T, BS, 1)
             metric_dict['time_mse'] = time_mse.sum().detach().cpu().numpy()
-            # note: because 0th timesteps are zero always, reducing count to ensure accuracy stays unbiased
+            # note: because 0th timestamps are zero always, reducing count to ensure accuracy stays unbiased
             metric_dict['time_mse_count'] = mask[1:, :].sum().detach().cpu().numpy()
 
             if self.marker_type == "categorical":
                 predicted = torch.argmax(marker_logits, dim=-1)  # (T, BS)
                 correct_predictions = (predicted == marker) * mask  # (T, BS)
-                correct_predictions = correct_predictions[1:]  # Keep only the predictions from 2nd timestep
+                correct_predictions = correct_predictions[1:]  # Keep only the predictions from 2nd timestamp
 
-                metric_dict[
-                    'marker_acc'] = correct_predictions.sum().detach().cpu().numpy()  # count how many correct predictions we made
-                metric_dict['marker_acc_count'] = (
-                    mask[1:, :]).sum().cpu().numpy()  # count how many predictions we made
+                # count how many correct predictions we made
+                metric_dict['marker_acc'] = correct_predictions.sum().detach().cpu().numpy()
+                # count how many predictions we made
+                metric_dict['marker_acc_count'] = (mask[1:, :]).sum().cpu().numpy()
             else:
                 raise NotImplementedError
 

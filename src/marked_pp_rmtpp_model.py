@@ -133,30 +133,33 @@ class MarkedPointProcessRMTPPModel(nn.Module):
         h = (query_times * log_density.exp()) / y ** 2  # (N, T, BS, 1)
         return h
 
-    def get_next_time(self, h, event_times, num_samples=5):
+    def get_next_event_times(self, preceding_hidden_states, preceding_event_times, num_samples=5):
         """
+        Computes the next event's timestamp value from the preceding hidden state(h)
         Input:
-            h : Tensor of shape T x BS x self.shared_output_dims[-1]
+            :param preceding_hidden_states : Tensor of shape T x BS x self.shared_output_dims[-1]
             h_j is the first hidden state that has information about t_j
-            event_times : Tensor of shape T x BS x 1
+            :param preceding_event_times: Tensor of shape T x BS x 1
+            :param num_samples: number of monte carlo samples to take per event time prediction
         Output:
-            mu_times_next: Tensor of shape T x BS x 1
+            :return expected_t_next: Tensor of shape T x BS x 1
         """
-        y = torch.rand(num_samples, *event_times.shape).to(
+        y = torch.rand(num_samples, *preceding_event_times.shape).to(
             device)  # (N, T, BS, 1) where N = number of samples for monte carlo approx
-        expected_t_next = self._mc_transformation(y, h, event_times).mean(0)  # (T, BS, 1)
+        expected_t_next = self._mc_transformation(y, preceding_hidden_states, preceding_event_times).mean(0)  # (T, BS, 1)
 
         return expected_t_next
 
-    def get_next_event(self, h):
+    def get_next_event_marker_logits(self, preceding_hidden_states):
         """
+        Computes the next event's marker logits from the preceding hidden state(h)
         Input:
             h : Tensor of shape (T+1) x BS x self.shared_output_dims[-1]
             x_j = f(h_j), where j = 0, 1, ..., T; Also: h_j = f(t_{j-1})
         Output:
             x_logits: Tensor of shape (T+1) x BS x 1
         """
-        x_logits = self.marker_net(h)
+        x_logits = self.marker_net(preceding_hidden_states)
         return x_logits
 
     def forward(self):
