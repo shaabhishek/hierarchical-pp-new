@@ -29,7 +29,7 @@ class ModelLoader:
                           rnn_hidden_dim=hyperparams.rnn_hidden_dim, x_given_t=hyperparams.x_given_t,
                           base_intensity=hyperparams.base_intensity, time_influence=hyperparams.time_influence,
                           gamma=hyperparams.gamma, time_loss=hyperparams.time_loss, dropout=hyperparams.dropout,
-                          latent_dim=None,
+                          latent_dim=None, mc_integration_num_samples=hyperparams.mc_integration_num_samples,
                           n_cluster=None, )
         elif isinstance(hyperparams, Model1Hyperparams):
             model = Model1(marker_type=hyperparams.marker_type, marker_dim=hyperparams.marker_dim,

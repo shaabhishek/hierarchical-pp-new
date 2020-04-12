@@ -15,13 +15,13 @@ class HawkesModel:
     def __init__(self, model_hyperparams: HawkesHyperparams):
         self.lambda_0 = model_hyperparams.lambda_0
         self.alpha = model_hyperparams.alpha
-        self.beta = model_hyperparams.beta
+        self.sigma = model_hyperparams.sigma
 
     def get_intensity(self, t: float, data_timestamps: np.ndarray):
-        # params: [lambda0, alpha, beta]
+        # params: [lambda0, alpha, sigma]
         # data_timestamps must be numpy array
         timesteps_in_past = data_timestamps[(data_timestamps < t)]
-        intensity = self.lambda_0 + self.alpha * np.sum(np.exp(-1. * (t - timesteps_in_past) / self.beta))
+        intensity = self.lambda_0 + self.alpha * np.sum(np.exp(-1. * (t - timesteps_in_past) / self.sigma))
         return intensity
 
 
@@ -36,8 +36,11 @@ class HawkesProcessDataModelSandBox:
         data_timestamps = t_data[:, :, 1:2].cpu().numpy().flatten()
         return data_timestamps
 
-    def get_intensity_over_grid(self, data_timestamps):
-        grid_times = np.linspace(0, data_timestamps[-1], 1000)
+    def get_intensity_over_grid(self, data_timestamps, grid_size=None):
+        if grid_size is not None:
+            grid_times = np.linspace(0, data_timestamps[-1], grid_size)
+        else:
+            grid_times = data_timestamps
         intensity = np.array([self.model.get_intensity(t=_t, data_timestamps=data_timestamps) for _t in grid_times])
         return intensity, grid_times
 
@@ -58,9 +61,16 @@ class RMTPPDataModelSandBox(BaseNNDataModelSandBox):
             hidden_seq, _, _ = self.model.get_hidden_states_from_input(x_data, t_data)
         return hidden_seq, data_timestamps
 
-    def get_intensity_over_grid(self, hidden_seq, data_timestamps):
+    def get_intensity_over_grid(self, hidden_seq, data_timestamps, grid_size=1000):
+        if grid_size is not None:
+            sequence_durations, _ = data_timestamps.max(dim=0)  # (BS,1)
+            grid_times = torch.stack([torch.linspace(0, t, grid_size) for t in sequence_durations.squeeze(-1)], dim=1).to(
+                device)  # (N, BS)
+        else:
+            grid_times = data_timestamps.squeeze(-1)
         log_intensity, evaluated_timestamps = self.model.marked_point_process_net.get_intensity_over_grid(hidden_seq,
-                                                                                                          data_timestamps)
+                                                                                                          data_timestamps,
+                                                                                                          grid_times)
         return log_intensity, evaluated_timestamps
 
 

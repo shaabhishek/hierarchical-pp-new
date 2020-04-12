@@ -112,7 +112,7 @@ class TestRunner(BaseRunner):
         self.testing_end_hook(best_epoch_num, test_info)
 
     def testing_start_hook(self):
-        print(f"{'Start testing':*^80}")
+        print(f"\n{'Start testing':*^80}\n")
         best_epoch_num = self.logger.get_best_epoch(metric_name='loss')
         if best_epoch_num is None:
             best_epoch_num = -1

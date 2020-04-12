@@ -1,6 +1,7 @@
 import argparse
 import os
 from argparse import Namespace
+from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
 
@@ -18,10 +19,16 @@ class TimestampedFilenameMixin:
 
 class ModelFileParams:
     def __init__(self, params: Namespace):
-        self.identifier_param_dict = {'_g': params.gamma, '_do': params.dropout, '_b': params.batch_size,
-                                      '_h': params.rnn_hidden_dim, '_l2': params.l2, '_l': params.latent_dim,
-                                      '_gn': params.maxgradnorm, '_lr': params.lr, '_c': params.n_cluster,
-                                      '_s': params.seed, '_tl': params.time_loss, '_ai': params.anneal_iter}
+        self.identifier_param_dict = OrderedDict([
+            ('', params.run_label),
+            ('_g', params.gamma), ('_do', params.dropout),
+            ('_b', params.batch_size),
+            ('_h', params.rnn_hidden_dim), ('_l2', params.l2),
+            ('_l', params.latent_dim),
+            ('_gn', params.maxgradnorm), ('_lr', params.lr),
+            ('_c', params.n_cluster),
+            ('_s', params.seed), ('_tl', params.time_loss),
+            ('_ai', params.anneal_iter)])
 
     def get_model_file_identifier(self):
         file_name = ''
@@ -200,7 +207,6 @@ def test_data_model_params():
     assert data_model_params.get_model_state_path() == new_model_state_path
 
 
-
 if __name__ == '__main__':
     test_data_model_params()
 
@@ -303,7 +309,7 @@ def setup_parser():
     parser.add_argument('--dropout', type=float, default=0.5, help='dropout rate')
     parser.add_argument('--batch_size', type=int, default=32, help='the batch size')
     parser.add_argument('--latent_dim', type=int, default=20, help='latent dim')
-    parser.add_argument('--x_given_t', type=bool, default=False, help='whether x given t')
+    parser.add_argument('--x_given_t', action='store_true', help='whether x given t')
     parser.add_argument('--n_cluster', type=int, default=10, help='number of cluster')
 
     ###Helper Parameter###
@@ -313,12 +319,14 @@ def setup_parser():
     parser.add_argument('--time_scale', type=float, default=1, help='scaling factor to multiply the timestamps with')
     parser.add_argument('--skiptrain', action='store_true', help='disable training if flag is provided')
     parser.add_argument('--skiptest', action='store_true', help='enable testing')
-    parser.add_argument('--show', type=bool, default=True, help='print progress')
     parser.add_argument('--data_dir', type=str, default='../data/', help='data directory')
     parser.add_argument('--best_epoch', type=int, default=10, help='best epoch')
     parser.add_argument('--seed', type=int, default=1, help='seed')
     parser.add_argument('--dump_cluster', type=int, default=0, help='whether to dump cluster while Testing')
-
     parser.add_argument('--data_name', type=str, default='mimic2', help='data set name')
+    parser.add_argument('--run_label', type=str, default='', help='label for the run')
+
+    # Model Specific HyperParameters
+    parser.add_argument('--mc_num_samples', type=int, default=10, help='number of MC samples per event time prediction')
 
     return parser

@@ -26,13 +26,14 @@ def extract_closest_hidden_states_and_timestamps(grid_times, hidden_state_sequen
 
 class MarkedPointProcessRMTPPModel(nn.Module):
     def __init__(self, input_dim: int, marker_dim: int, marker_type: str, init_base_intensity: float,
-                 init_time_influence: float, x_given_t: bool = False):
+                 init_time_influence: float, x_given_t: bool = False, mc_integration_num_samples=None):
         super().__init__()
 
         self.input_dim = input_dim
         self.marker_dim = marker_dim
         self.x_given_t = x_given_t
         self.marker_type = marker_type
+        self.mc_integration_num_samples = mc_integration_num_samples
 
         if self.x_given_t:
             self.marker_input_dim = self.input_dim + 1
@@ -101,18 +102,18 @@ class MarkedPointProcessRMTPPModel(nn.Module):
         current_influence = self.time_influence * time_interval  # (*, T, BS, 1)
         return past_influence, current_influence
 
-    def get_intensity_over_grid(self, hidden_state_sequence: Tensor, timestamps: Tensor):
+    def get_intensity_over_grid(self, hidden_state_sequence: Tensor, data_timestamps: Tensor, grid_times: Tensor):
         """
 
+        :param grid_times:
         :param hidden_state_sequence: Tensor of shape T x BS x h_dim
-        :param timestamps: T x BS x 1
+        :param data_timestamps: T x BS x 1
+        :param grid_times: N x BS where N = number of grid times
         :return:
         """
-        sequence_durations, _ = timestamps.max(dim=0)  # (BS,1)
-        grid_times = torch.stack([torch.linspace(0, t, 1000) for t in sequence_durations.squeeze(-1)], dim=1).to(device)  # (1000, BS)
         closest_hidden_states, closest_timestamps = extract_closest_hidden_states_and_timestamps(grid_times,
-                                                                                                     hidden_state_sequence,
-                                                                                                     timestamps)  # (1000, BS, h_dim), (1000, BS, 1)
+                                                                                                 hidden_state_sequence,
+                                                                                                 data_timestamps)  # (1000, BS, h_dim), (1000, BS, 1)
         grid_times_since_last_event = (grid_times.unsqueeze(-1) - closest_timestamps)  # (1000, BS, 1)
         log_intensities: Tensor = self.get_log_intensity(closest_hidden_states, grid_times_since_last_event)
         return log_intensities, grid_times
@@ -133,18 +134,17 @@ class MarkedPointProcessRMTPPModel(nn.Module):
         h = (query_times * log_density.exp()) / y ** 2  # (N, T, BS, 1)
         return h
 
-    def get_next_event_times(self, preceding_hidden_states, preceding_event_times, num_samples=5):
+    def get_next_event_times(self, preceding_hidden_states, preceding_event_times):
         """
         Computes the next event's timestamp value from the preceding hidden state(h)
         Input:
             :param preceding_hidden_states : Tensor of shape T x BS x self.shared_output_dims[-1]
             h_j is the first hidden state that has information about t_j
             :param preceding_event_times: Tensor of shape T x BS x 1
-            :param num_samples: number of monte carlo samples to take per event time prediction
         Output:
             :return expected_t_next: Tensor of shape T x BS x 1
         """
-        y = torch.rand(num_samples, *preceding_event_times.shape).to(
+        y = torch.rand(self.mc_integration_num_samples, *preceding_event_times.shape).to(
             device)  # (N, T, BS, 1) where N = number of samples for monte carlo approx
         expected_t_next = self._mc_transformation(y, preceding_hidden_states, preceding_event_times).mean(0)  # (T, BS, 1)
 

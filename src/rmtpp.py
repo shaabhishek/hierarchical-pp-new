@@ -35,6 +35,7 @@ class RMTPP(BaseModel):
             "init_base_intensity": self.base_intensity,
             "init_time_influence": self.time_influence,
             "x_given_t": self.x_given_t,
+            "mc_integration_num_samples": kwargs["mc_integration_num_samples"]
         }
         self.marked_point_process_net = MarkedPointProcessRMTPPModel(**mpp_config)
 
@@ -82,8 +83,8 @@ class RMTPP(BaseModel):
 
         with torch.no_grad():
             # The pairs of (h,t) should be (h_j, t_j) where h_j is f(t_j)
-            next_event_times = self.marked_point_process_net.get_next_event_times(hidden_seq[1:], event_times,
-                                                                                  num_samples=10)  # (T, BS, 1)
+            next_event_times = self.marked_point_process_net.get_next_event_times(hidden_seq[1:],
+                                                                                  event_times)  # (T, BS, 1)
             predicted_times = torch.cat([torch.zeros(1, BS, 1).to(device), next_event_times], dim=0)[
                               :-1]  # don't need the predicted timestamp after the last observed event (T, BS, 1)
 

@@ -2,10 +2,10 @@ from argparse import Namespace
 
 
 class HawkesHyperparams:
-    def __init__(self, lambda_0=0.2, alpha=0.8, beta=1.0):
+    def __init__(self, lambda_0=0.2, alpha=0.8, sigma=1.0):
         self.lambda_0 = lambda_0
         self.alpha = alpha
-        self.beta = beta
+        self.sigma = sigma
 
 
 class BaseModelHyperparams:
@@ -33,6 +33,10 @@ class BaseModelHyperparams:
 
 class RMTPPHyperparams(BaseModelHyperparams):
     model_name = 'rmtpp'
+
+    def __init__(self, params: Namespace):
+        super(RMTPPHyperparams, self).__init__(params)
+        self.mc_integration_num_samples = params.mc_num_samples
 
 
 class Model1Hyperparams(BaseModelHyperparams):
