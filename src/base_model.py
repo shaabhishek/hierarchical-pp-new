@@ -174,7 +174,7 @@ class BaseModel(nn.Module):
         self.t_embedding_dim = [8]
         self.emb_dim = self.x_embedding_dim[-1] + self.t_embedding_dim[-1]
         self.embed_x, self.embed_t = self.create_embedding_nets()
-        self.shared_output_dims = [256]
+        self.shared_output_dims = [self.rnn_hidden_dim]
 
         # Inference network
         if self.latent_dim is not None:

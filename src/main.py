@@ -18,8 +18,8 @@ def set_seeds(seed_value: int):
 
 def print_input_params(params: Namespace):
     def _print(a, b):
-        print(f"{a:>20}", end='')
-        print(f"{b:>20}", end='')
+        print(f"{str(a):>20}", end='')
+        print(f"{str(b):>20}", end='')
         print()
 
     params_dict = vars(params)
@@ -29,7 +29,7 @@ def print_input_params(params: Namespace):
 
 
 def pipeline_engine(params: Namespace):
-    engine = Engine(params)
+    engine = Engine(params, params.model_filename)
     print_input_params(params)
     engine.run()
 
@@ -37,6 +37,7 @@ def pipeline_engine(params: Namespace):
 if __name__ == '__main__':
     # rmtpp_hawkes_params = get_argparse_parser_params('rmtpp', 'simulated_hawkes')
     # set_seeds(rmtpp_hawkes_params.seed)
+    # command_line_params = rmtpp_hawkes_params
 
     command_line_params = get_argparse_parser_params()
     set_seeds(command_line_params.seed)

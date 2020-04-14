@@ -128,15 +128,23 @@ class DataModelParams(BaseParams):
 class LoggingParams(BaseParams, TimestampedFilenameMixin):
     def __init__(self, params, model_file_params: ModelFileParams):
         super(LoggingParams, self).__init__(params)
-        self.filename = model_file_params.get_model_file_identifier()
-        self._logs_dir = Path(os.path.join('result', self.dataset_name, self.model_name))
+        self.filename = self.get_timestamped_file_name(model_file_params.get_model_file_identifier())
+        self._logs_dir = Path(os.path.join('logs', self.dataset_name, self.model_name))
         make_intermediate_dirs_if_absent(self._logs_dir)
 
     def get_logs_file_path(self):
-        return self._logs_dir / (self.get_timestamped_file_name(self.filename) + ".log")
+        return self._logs_dir / (self.filename + ".log")
 
     def get_tensorboard_log_dir(self):
-        return Path(os.path.join('tb_logs', self.dataset_name, self.model_name, self.get_timestamped_file_name("")))
+        return Path(os.path.join('tb_logs', self.dataset_name, self.model_name, self.filename))
+
+    @classmethod
+    def from_model_filename(cls, model_filename:str, params, model_file_params):
+        if model_filename.endswith('.pt'):
+            model_filename = model_filename[:-3]
+        self = cls(params, model_file_params)
+        self.filename = model_filename
+        return self
 
 
 class PredictionParams(BaseParams, TimestampedFilenameMixin):
@@ -153,7 +161,7 @@ class PredictionParams(BaseParams, TimestampedFilenameMixin):
 class PlottingParams(BaseParams):
     def __init__(self, params: Namespace):
         super(PlottingParams, self).__init__(params)
-        self._plotting_dir = Path(os.path.join('experiments', self.dataset_name, self.model_name))
+        self._plotting_dir = Path(os.path.join('plots', self.dataset_name, self.model_name))
         make_intermediate_dirs_if_absent(self._plotting_dir)
 
     def get_plotting_dir(self):
@@ -270,7 +278,7 @@ def _augment_params(params: Namespace):
         params.marker_dim = 3150
         params.time_dim = 2
         params.base_intensity = 0.
-        params.time_influence = 0.01
+        params.time_influence = 0.1
         params.marker_type = 'categorical'
         params.batch_size = 16
 
@@ -314,6 +322,7 @@ def setup_parser():
 
     ###Helper Parameter###
     parser.add_argument('--model', type=str, default='model2', help='model name')
+    parser.add_argument('--model_filename', type=str, default=None, help='file path for an appropriate model')
     parser.add_argument('--time_loss', type=str, default='intensity',
                         help='whether to use normal loss or intensity loss')
     parser.add_argument('--time_scale', type=float, default=1, help='scaling factor to multiply the timestamps with')

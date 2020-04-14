@@ -12,11 +12,11 @@ class Logger:
         self.logs_save_path = logging_params.get_logs_file_path()
 
         self.marker_type = marker_type
-        self.metrics = ['loss', 'marker_ll', 'time_ll', 'accuracy', 'time_rmse']
+        self.metrics = ['loss', 'marker_nll', 'time_nll', 'accuracy', 'time_rmse']
         self.logged_metrics = {}
         self.best_epoch = {}
         self.best_valid_loss = {}
-        self.improvement_map = {'loss': 'small', 'marker_ll': 'large', 'time_ll': 'large', 'auc': 'large',
+        self.improvement_map = {'loss': 'small', 'marker_nll': 'small', 'time_nll': 'small', 'auc': 'large',
                                 'accuracy': 'large', 'marker_rmse': 'small', 'time_rmse': 'small'}
 
         self.writer = SummaryWriter(log_dir=logging_params.get_tensorboard_log_dir())
@@ -69,18 +69,20 @@ class Logger:
 
     def print_train_epoch(self, epoch_num: int, train_info_dict: dict, valid_info_dict: dict):
         def _format_line(metric_name, valid_metric_val, train_metric_val):
-            return f"Validation {metric_name}: {valid_metric_val:.3f}, \t\t\t Train {metric_name}: {train_metric_val:.3f}"
+            return f"Validation {metric_name:>15}: {valid_metric_val:>10.3f} {'':\t^4} Train {metric_name:>15}: {train_metric_val:>10.3f}"
 
         print('epoch', epoch_num + 1)
         if self.marker_type == 'categorical':
             print(
-                f"Validation Accuracy: {valid_info_dict['accuracy']:.3f}, \t\t\t Train Accuracy: {train_info_dict['accuracy']:.3f}")
+                _format_line('Accuracy', valid_info_dict['accuracy'], train_info_dict['accuracy'])
+            )
+                # f"Validation {'Accuracy':20}: {valid_info_dict['accuracy']:20.3f} \t\t\t Train Accuracy: {train_info_dict['accuracy']:20.3f}"
         else:
             raise NotImplementedError
 
         print(_format_line('Loss', valid_info_dict['loss'], train_info_dict['loss']))
-        print(_format_line('Marker LL', valid_info_dict['marker_ll'], train_info_dict['marker_ll']))
-        print(_format_line('Time LL', valid_info_dict['time_ll'], train_info_dict['time_ll']))
+        print(_format_line('Marker LL', valid_info_dict['marker_nll'], train_info_dict['marker_nll']))
+        print(_format_line('Time LL', valid_info_dict['time_nll'], train_info_dict['time_nll']))
         print(_format_line('Time RMSE', valid_info_dict['time_rmse'], train_info_dict['time_rmse']))
 
     def print_test_epoch(self, test_info_dict: dict):
@@ -89,8 +91,8 @@ class Logger:
         else:
             raise NotImplementedError
         print(f"Test Loss: {test_info_dict['loss']:.3f}")
-        print(f"Test Marker LL: {test_info_dict['marker_ll']:.3f}")
-        print(f"Test Time LL: {test_info_dict['time_ll']:.3f}")
+        print(f"Test Marker LL: {test_info_dict['marker_nll']:.3f}")
+        print(f"Test Time LL: {test_info_dict['time_nll']:.3f}")
         print(f"Test Time RMSE: {test_info_dict['time_rmse']:.3f}")
 
     def save_logs_to_file(self, split: str):
@@ -117,7 +119,7 @@ def test():
 
     from random import random, randint
     def _gen_dummy_info():
-        metric_list = ['loss', 'marker_ll', 'time_ll', 'accuracy', 'marker_rmse', 'time_rmse', 'auc']
+        metric_list = ['loss', 'marker_nll', 'time_nll', 'accuracy', 'marker_rmse', 'time_rmse', 'auc']
         dummy_info = {}
 
         for metric in metric_list:

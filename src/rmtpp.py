@@ -49,15 +49,15 @@ class RMTPP(BaseModel):
     def forward(self, marker_seq, time_seq, mask=None, **kwargs):
         time_log_likelihood, marker_log_likelihood, metric_dict = self._forward(marker_seq, time_seq, mask)
 
-        marker_loss = (-1. * marker_log_likelihood * mask)[1:, :].sum()
-        time_loss = (-1. * time_log_likelihood * mask)[1:, :].sum()
+        marker_nll = (-1. * marker_log_likelihood * mask)[1:, :].sum()
+        time_nll = (-1. * time_log_likelihood * mask)[1:, :].sum()
 
-        loss = time_loss + marker_loss
+        loss = time_nll + marker_nll
 
         meta_info = {
-            "marker_ll": marker_loss.detach().cpu(),
-            "time_ll": time_loss.detach().cpu(),
-            "true_ll": loss.detach().cpu()
+            "marker_nll": marker_nll.detach().cpu(),
+            "time_nll": time_nll.detach().cpu(),
+            "true_nll": loss.detach().cpu()
         }
 
         return loss, {**meta_info, **metric_dict}

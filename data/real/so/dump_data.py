@@ -1,4 +1,3 @@
-from __future__ import print_function
 import psycopg2 as pg
 import getpass as G
 from collections import namedtuple
@@ -10,9 +9,11 @@ output_badge_labels = 'badges.csv'
 
 SO_events = namedtuple('SO_events', ['times', 'events', 'badge_map', 'userids'])
 
+
 def write():
     try:
-        with pg.connect(database='stackexchange', user='utkarsh', password=G.getpass('DB password: '), host='psql-science') as conn:
+        with pg.connect(database='stackexchange', user='utkarsh', password=G.getpass('DB password: '),
+                        host='psql-science') as conn:
             cur = conn.cursor()
             # Ordering is important for mapping results back to the data, if needed.
             cur.execute('''SELECT userid, BadgeNames, Timestamp FROM so_data ORDER BY userid''')
@@ -51,6 +52,7 @@ def write():
     except pg.OperationalError:
         print('Not running on DB.')
 
+
 def read_events():
     with open(output_events) as f_events:
         events = [[int(y) for y in x.split()] for x in f_events]
@@ -71,7 +73,6 @@ def read_events():
 
     return SO_events(events=events, times=times, badge_map=badge_map, userids=userids)
 
+
 if __name__ == '__main__':
     write()
-
-

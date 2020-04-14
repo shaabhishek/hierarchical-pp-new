@@ -160,7 +160,7 @@ class rnnpp(nn.Module):
         true_loss = time_loss + marker_loss
         #if mask is not None:
         #    loss = loss * mask
-        meta_info = {"marker_ll":marker_loss.detach().cpu(), "time_ll":time_loss.detach().cpu(), "true_ll": true_loss.detach().cpu()}
+        meta_info = {"marker_nll":marker_loss.detach().cpu(), "time_nll":time_loss.detach().cpu(), "true_ll": true_loss.detach().cpu()}
         return loss, {**meta_info, **metric_dict}
 
     def run_forward_rnn(self, x, t):

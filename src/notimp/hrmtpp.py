@@ -120,7 +120,7 @@ class hrmtpp(nn.Module):
 
         loss = self.gamma*time_loss + marker_loss + anneal* kl_loss
         true_loss = time_loss + marker_loss +kl_loss
-        meta_info = {"marker_ll":marker_loss.detach().cpu(), "time_ll":time_loss.detach().cpu(), "kl_loss":kl_loss.detach().cpu(), "true_ll": true_loss.detach().cpu()}
+        meta_info = {"marker_nll":marker_loss.detach().cpu(), "time_nll":time_loss.detach().cpu(), "kl_loss":kl_loss.detach().cpu(), "true_ll": true_loss.detach().cpu()}
         return loss, {**meta_info, **metric_dict}
 
     def run_forward_backward_rnn(self, x, t, mask):

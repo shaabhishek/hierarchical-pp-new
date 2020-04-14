@@ -6,7 +6,7 @@ from hyperparameters import HawkesHyperparams, BaseModelHyperparams
 from parameters import DataModelParams, DataParams, _augment_params, setup_parser
 from rmtpp import RMTPP
 from utils.data_loader import get_dataloader
-from utils.model_loader import CheckpointedModelLoader
+from utils.model_loader import ModelLoader
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -75,7 +75,7 @@ class RMTPPDataModelSandBox(BaseNNDataModelSandBox):
 
 
 def _load_model_from_params(data_model_params: DataModelParams, model_hyperparams: BaseModelHyperparams):
-    loader = CheckpointedModelLoader(data_model_params, model_hyperparams)
+    loader, _ = ModelLoader.from_model_checkpoint(data_model_params, model_hyperparams)
     model = loader.model.to(device)
     return model
 

@@ -115,3 +115,31 @@ class RMTPPPlotter(BasePlotter):
         model_hyperparams = RMTPPHyperparams(params)
         data_model_sandbox = RMTPPDataModelSandBox(data_model_params, model_hyperparams)
         return cls(data_model_sandbox)
+
+
+class IntensityVsTimeIndexPlotMixin:
+    def _make_single_plot(self, plotter):
+        assert isinstance(self, MultipleModelPlot)
+        assert isinstance(plotter, (RMTPPPlotter, HawkesPlotter))
+        plotter.plot_intensity_vs_time_index_to_axes(self.ax, sequence_idx=0)
+
+
+class MultipleModelPlot(BasePlot):
+    def __init__(self, plotting_params, plotter_list):
+        super(MultipleModelPlot, self).__init__(plotting_params)
+        self.plotter_list = plotter_list
+        self.fig, self.ax = plt.subplots(1, 1)
+
+    def plot(self):
+        for plotter in self.plotter_list:
+            self._make_single_plot(plotter)
+        self.ax.legend()
+
+    @classmethod
+    def from_params(cls, params, plotter_list):
+        plotting_params = PlottingParams(params)
+        return cls(plotting_params, plotter_list)
+
+
+class RMTPPHawkesIntensityTimeIndexPlot(IntensityVsTimeIndexPlotMixin, MultipleModelPlot):
+    pass

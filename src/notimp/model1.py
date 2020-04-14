@@ -202,7 +202,7 @@ class Model1(nn.Module):
         NLL = self.gamma*time_loss + marker_loss
         loss = NLL + KL
         true_loss = time_loss + marker_loss
-        meta_info = {"marker_ll":marker_loss.detach().cpu(), "time_ll":time_loss.detach().cpu(), "true_ll": true_loss.detach().cpu(), "kl": KL.detach().cpu()}
+        meta_info = {"marker_nll":marker_loss.detach().cpu(), "time_nll":time_loss.detach().cpu(), "true_ll": true_loss.detach().cpu(), "kl": KL.detach().cpu()}
         return loss, {**meta_info, **metric_dict}
     
     def _forward(self, x, t, temp, mask):

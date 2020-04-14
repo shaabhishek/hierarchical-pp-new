@@ -17,7 +17,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class ModelLoader:
-    def __init__(self, model_params: DataModelParams, hyperparams: BaseModelHyperparams):
+    def __init__(self, model_params: DataModelParams, hyperparams):
         self.model_hyperparams = hyperparams
         self.model = self._load_model(self.model_hyperparams).to(device)
 
@@ -71,24 +71,32 @@ class ModelLoader:
             raise ValueError("Did not specify model name correctly")
         return model
 
-
-class CheckpointedModelLoader(ModelLoader):
-
-    def __init__(self, model_params: DataModelParams, hyperparams: BaseModelHyperparams, model_state_path: str = None):
-        super(CheckpointedModelLoader, self).__init__(model_params, hyperparams)
-
-        if model_state_path is not None:
-            self.model_state_path = model_state_path
-        else:
-            self.model_state_path = model_params.get_model_state_path()
-        self._load_model_state()
-
-    def _load_model_state(self):
-        checkpoint = torch.load(self.model_state_path, map_location=device)
+    @classmethod
+    def from_model_checkpoint(cls, model_params, hyperparams):
+        self = cls(model_params, hyperparams)
+        model_state_path = model_params.get_model_state_path()
+        checkpoint = torch.load(model_state_path, map_location=device)
+        epoch_num = checkpoint['epoch']
+        print(f"Loading model from {model_state_path}, Epoch number: {epoch_num}")
         self.model.load_state_dict(checkpoint['model_state_dict'])
+        return self.model, epoch_num
 
-    def save_model_state(self):
-        raise NotImplementedError
+
+
+# class CheckpointedModelLoader(ModelLoader):
+#
+#     def __init__(self, model_params: DataModelParams, hyperparams):
+#         super(CheckpointedModelLoader, self).__init__(model_params, hyperparams)
+#         self.model_state_path = model_params.get_model_state_path()
+#         self._load_model_state()
+#
+#     def _load_model_state(self):
+#         checkpoint = torch.load(self.model_state_path, map_location=device)
+#         print(f"Loading model from {self.model_state_path}, Epoch number: {checkpoint['epoch']}")
+#         self.model.load_state_dict(checkpoint['model_state_dict'])
+#
+#     def save_model_state(self):
+#         raise NotImplementedError
 
 # def save_model(model:torch.nn.Module, optimizer:Optimizer, params:Namespace, loss):
 #     state = {

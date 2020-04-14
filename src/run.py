@@ -5,7 +5,7 @@ from epoch_runner import TrainEpochRunner, ValidEpochRunner, TestEpochRunner
 from optimizer_loader import OptimizerLoader
 from parameters import TrainerParams, TestingParams
 from utils.logger import Logger
-from utils.model_loader import CheckpointedModelLoader, ModelLoader
+from utils.model_loader import ModelLoader
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -16,8 +16,8 @@ class BaseRunner:
 
 
 class TrainValRunner(BaseRunner):
-    def __init__(self, trainer_params: TrainerParams, train_dataloader: DataLoader,
-                 valid_dataloader: DataLoader, logger):
+    def __init__(self, trainer_params: TrainerParams, train_dataloader: DataLoader, valid_dataloader: DataLoader,
+                 logger, is_loading_previous_model):
         super(TrainValRunner, self).__init__(logger)
         self.trainer_hyperparams = trainer_params
 
@@ -26,26 +26,49 @@ class TrainValRunner(BaseRunner):
         self.train_dataloader = train_dataloader
         self.valid_dataloader = valid_dataloader
 
-        self.model = ModelLoader(trainer_params.data_model_params, trainer_params.model_hyperparams).model
-        self.optimizer = OptimizerLoader(self.model, trainer_params.optimizer_hyperparams).get_optimizer()
+        self.model, model_epoch_num = self.load_model(trainer_params, is_loading_previous_model)
+        self.optimizer = self.load_optimizer(trainer_params, self.model, is_loading_previous_model)
+        self.starting_epoch_num = 1 if is_loading_previous_model is None else model_epoch_num
 
-        self.train_epoch_runner = TrainEpochRunner(self.model, self.train_dataloader, self.optimizer,
+        self.train_epoch_runner = TrainEpochRunner(self.model, self.train_dataloader, self.optimizer, logger,
                                                    trainer_params.model_hyperparams.total_anneal_epochs,
                                                    trainer_params.model_hyperparams.grad_max_norm)
-        self.valid_epoch_runner = ValidEpochRunner(self.model, self.valid_dataloader)
+        self.valid_epoch_runner = ValidEpochRunner(self.model, self.valid_dataloader, logger)
 
         self.model.print_parameter_info()
 
-    def train_dataset(self):
+    @staticmethod
+    def load_optimizer(trainer_params, model, is_loading_previous_model):
+        if is_loading_previous_model:
+            optimizer = OptimizerLoader.from_model_checkpoint(
+                trainer_params.data_model_params.get_model_state_path(),
+                model, trainer_params.optimizer_hyperparams)
+        else:
+            optimizer = OptimizerLoader.from_scratch(model, trainer_params.optimizer_hyperparams)
+        return optimizer
+
+    @staticmethod
+    def load_model(trainer_params, is_loading_previous_model):
+        if is_loading_previous_model:
+            model, epoch_num = ModelLoader.from_model_checkpoint(trainer_params.data_model_params,
+                                                                 trainer_params.model_hyperparams)
+            return model, epoch_num
+        else:
+            model = ModelLoader(trainer_params.data_model_params,
+                                trainer_params.model_hyperparams).model
+            return model, 1
+
+    def train_dataset(self, starting_epoch):
         """
         Loss is the ELBO
         Accuracy is for categorical/binary marker,
         AUC is for binary/categorical marker.
         Time RMSE is w.r.t expectation.
         Marker rmse for real marker####
+        :param starting_epoch:
         """
         self.training_start_hook()
-        for epoch_num in range(1, self.trainer_hyperparams.num_training_iterations + 1):
+        for epoch_num in range(starting_epoch, self.trainer_hyperparams.num_training_iterations + starting_epoch):
             train_metrics, valid_metrics = self._run_one_train_and_valid_epoch(epoch_num)
 
             self.log_epoch_info(epoch_num, train_metrics, valid_metrics)
@@ -97,11 +120,10 @@ class TestRunner(BaseRunner):
 
         self.model_state_path = testing_params.data_model_params.get_model_state_path()
 
-        self.model = CheckpointedModelLoader(testing_params.data_model_params,
-                                             testing_params.model_hyperparams,
-                                             self.model_state_path).model
+        self.model, _ = ModelLoader.from_model_checkpoint(testing_params.data_model_params,
+                                                          testing_params.model_hyperparams)
 
-        self.test_epoch_runner = TestEpochRunner(self.model, self.test_dataloader)
+        self.test_epoch_runner = TestEpochRunner(self.model, self.test_dataloader, logger)
 
         # self.predictions_saver = Predictor(testing_params.prediction_params)
 

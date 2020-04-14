@@ -4,8 +4,8 @@ class EpochMetrics:
         self.total_data_points = 0.
         self.total_loss = 0.
 
-        self.marker_ll = 0.
-        self.time_ll = 0.
+        self.marker_nll = 0.
+        self.time_nll = 0.
 
         self.time_mse = 0.
         self.time_mse_count = 0.
@@ -35,7 +35,7 @@ class EpochMetrics:
         """
         time_rmse = self._reduce_time_rmse()
         total_loss = self._reduce_mean(num_sequences)
-        marker_ll, time_ll = self._reduce_marker_time_likelihood(num_sequences)
+        marker_nll, time_nll = self._reduce_marker_time_likelihood(num_sequences)
         if self.marker_type == 'real':
             marker_rmse = self._reduce_marker_mse()
             marker_accuracy = None
@@ -45,8 +45,8 @@ class EpochMetrics:
             marker_auc = None
             marker_rmse = None
             reduced_metric_dict = {'loss': total_loss, 'time_rmse': time_rmse, 'accuracy': marker_accuracy,
-                                   'auc': marker_auc, 'marker_rmse': marker_rmse, 'marker_ll': marker_ll,
-                                   'time_ll': time_ll}
+                                   'auc': marker_auc, 'marker_rmse': marker_rmse, 'marker_nll': marker_nll,
+                                   'time_nll': time_nll}
         return reduced_metric_dict
 
     def _reduce_marker_accuracy(self):
@@ -66,12 +66,12 @@ class EpochMetrics:
         return time_rmse
 
     def _reduce_marker_time_likelihood(self, N):
-        marker_ll = self._reduce_mean(N)
-        time_ll = self._reduce_mean(N)
-        return marker_ll, time_ll
+        marker_nll = self._reduce_mean(N)
+        time_nll = self._reduce_mean(N)
+        return marker_nll, time_nll
 
     def _update_total_loss_batch(self, meta_info):
-        self.total_loss += meta_info['true_ll'].numpy()
+        self.total_loss += meta_info['true_nll'].numpy()
 
     def _update_marker_accuracy_batch(self, meta_info):
         self.marker_acc += meta_info["marker_acc"]
@@ -86,5 +86,5 @@ class EpochMetrics:
         self.time_mse_count += meta_info["time_mse_count"]
 
     def _update_marker_time_likelihood_batch(self, meta_info):
-        self.marker_ll -= meta_info['marker_ll'].numpy()
-        self.time_ll -= meta_info['time_ll'].numpy()
+        self.marker_nll += meta_info['marker_nll'].numpy()
+        self.time_nll += meta_info['time_nll'].numpy()
