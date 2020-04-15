@@ -75,8 +75,8 @@ class RMTPPDataModelSandBox(BaseNNDataModelSandBox):
 
 
 def _load_model_from_params(data_model_params: DataModelParams, model_hyperparams: BaseModelHyperparams):
-    loader, _ = ModelLoader.from_model_checkpoint(data_model_params, model_hyperparams)
-    model = loader.model.to(device)
+    model, _ = ModelLoader.from_model_checkpoint(data_model_params, model_hyperparams)
+    model = model.to(device)
     return model
 
 

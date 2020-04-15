@@ -20,7 +20,7 @@ class BasePlot:
         self._figure_dir = self.plotting_params.get_plotting_dir()
 
     def save_plot_and_close_fig(self, fig: plt.Figure, file_name: str):
-        figure_path = self._figure_dir / (file_name + ".png")
+        figure_path = self._figure_dir / (file_name + ".pdf")
         fig.savefig(figure_path)
         print(f"Saved plot to {figure_path}")
         plt.close(fig)
@@ -121,7 +121,7 @@ class IntensityVsTimeIndexPlotMixin:
     def _make_single_plot(self, plotter):
         assert isinstance(self, MultipleModelPlot)
         assert isinstance(plotter, (RMTPPPlotter, HawkesPlotter))
-        plotter.plot_intensity_vs_time_index_to_axes(self.ax, sequence_idx=0)
+        plotter.plot_intensity_vs_time_index_to_axes(self.ax, sequence_idx=10)
 
 
 class MultipleModelPlot(BasePlot):
@@ -130,9 +130,10 @@ class MultipleModelPlot(BasePlot):
         self.plotter_list = plotter_list
         self.fig, self.ax = plt.subplots(1, 1)
 
-    def plot(self):
+    def plot(self, plot_title):
         for plotter in self.plotter_list:
             self._make_single_plot(plotter)
+        self.ax.set_title(plot_title)
         self.ax.legend()
 
     @classmethod
