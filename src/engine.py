@@ -15,10 +15,13 @@ class Engine:
         self.logger = self._make_logger(self.params, self.model_file_params, self.model_filename)
 
     def run(self):
-        if self._is_training():
-            self.train()
-        if self._is_testing():
-            self.test()
+        try:
+            if self._is_training():
+                self.train()
+            if self._is_testing():
+                self.test()
+        finally:
+            self.logger.writer.close()
 
     def train(self):
         self._setup_train(self.params, self.model_file_params, self.model_hyperparams, self.model_filename)

@@ -335,6 +335,6 @@ def setup_parser():
     parser.add_argument('--run_label', type=str, default='', help='label for the run')
 
     # Model Specific HyperParameters
-    parser.add_argument('--mc_num_samples', type=int, default=10, help='number of MC samples per event time prediction')
+    parser.add_argument('--mc_num_samples', type=int, default=50, help='number of MC samples per event time prediction')
 
     return parser

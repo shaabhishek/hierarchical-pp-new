@@ -119,7 +119,7 @@ class MarkedPointProcessRMTPPModel(nn.Module):
         log_intensities: Tensor = self.get_log_intensity(closest_hidden_states, grid_times_since_last_event)
         return log_intensities, grid_times
 
-    def _mc_transformation(self, y, h, tj):
+    def _mc_transformation(self, y, h, tj, eps = 1e-6):
         """
         Input:
             y : N x T x BS x 1
@@ -128,11 +128,16 @@ class MarkedPointProcessRMTPPModel(nn.Module):
         Output:
             h(y): N x T x BS x 1
         """
+        y += eps
         tj = tj.unsqueeze(0)  # (1, T, BS, 1)
         query_times = tj - 1 + 1 / y  # (N, T, BS, 1)
         time_intervals = query_times - tj  # (N, T, BS, 1)
         log_density = self.get_point_log_density(h, time_intervals).unsqueeze(-1)  # (N, T, BS, 1)
         h = (query_times * log_density.exp()) / y ** 2  # (N, T, BS, 1)
+        try:
+            assert not torch.isnan(h).any()
+        except AssertionError:
+            import pdb; pdb.set_trace()
         return h
 
     def get_next_event_times(self, preceding_hidden_states, preceding_event_times):

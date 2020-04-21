@@ -1,5 +1,5 @@
 import torch
-from torch import Tensor
+from torch import Tensor, nn as nn
 import numpy as np
 import random
 import time
@@ -465,3 +465,21 @@ def generate_marker(model, h, t):
     else:
         marker_out_logvar = None
     return marker_out_mu, marker_out_logvar
+
+
+def create_mlp(dims: list):
+    layers = list()
+    for i in range(len(dims) - 1):
+        n = dims[i]
+        m = dims[i + 1]
+        L = nn.Linear(n, m, bias=True)
+        layers.append(L)
+        layers.append(nn.ReLU())
+
+    return nn.Sequential(*layers)
+
+
+def _get_timestamps_and_intervals_from_data(time_data):
+    time_intervals = time_data[:, :, 0:1]  # (T, BS, 1)
+    event_times = time_data[:, :, 1:2]  # (T, BS, 1)
+    return time_intervals, event_times
