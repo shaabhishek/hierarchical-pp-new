@@ -102,6 +102,7 @@ class TrainValRunner(BaseRunner):
         self.logger.print_train_epoch(epoch_num, train_metrics, valid_metrics)
         # save train and validation metric values
         self.logger.log_train_epoch(epoch_num, train_metrics, valid_metrics)
+        self.logger.write_train_val_metrics_to_tensorboard(epoch_num)
 
     def checkpoint_model(self, epoch_num, loss_value):
         state = {

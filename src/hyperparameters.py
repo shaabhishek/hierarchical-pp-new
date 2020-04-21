@@ -19,12 +19,14 @@ class BaseModelHyperparams:
         self.x_given_t = params.x_given_t
         self.base_intensity = params.base_intensity
         self.time_influence = params.time_influence
+        self.mc_integration_num_samples = params.mc_num_samples
         self.gamma = params.gamma
         self.time_loss = params.time_loss
         self.dropout = params.dropout
 
         self.total_anneal_epochs = params.anneal_iter
         self.grad_max_norm = params.maxgradnorm
+
 
     @property
     def model_name(self):
@@ -36,7 +38,6 @@ class RMTPPHyperparams(BaseModelHyperparams):
 
     def __init__(self, params: Namespace):
         super(RMTPPHyperparams, self).__init__(params)
-        self.mc_integration_num_samples = params.mc_num_samples
 
 
 class Model1Hyperparams(BaseModelHyperparams):

@@ -23,7 +23,7 @@ def plot_model_intensity_vs_time_index(model_filename, model_name, dataset_name,
             )
         ]
     )
-    plot_object.plot()
+    plot_object.plot("Intensity vs Time Index")
     plot_object.save_plot_and_close_fig(plot_object.fig, f"{label}_rmtpp_hawkes_intensity_vs_time_index")
 
 
@@ -63,7 +63,7 @@ def test_only_model():
 
 def rmtpp_simulated_intensity_plot():
     rmtpp_hawkes_params = get_argparse_parser_params('rmtpp', 'simulated_hawkes')
-    MultipleModelPlot(rmtpp_hawkes_params).make_plots("singletrained_rmtpp_hawkes_comparison_nogrid_idx0")
+    MultipleModelPlot.from_params(rmtpp_hawkes_params).plot("singletrained_rmtpp_hawkes_comparison_nogrid_idx0")
 
 
 if __name__ == "__main__":

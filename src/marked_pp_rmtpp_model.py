@@ -82,11 +82,12 @@ class MarkedPointProcessRMTPPModel(nn.Module):
     def get_point_log_density(self, h, time_intervals):
         """
         Input:
-            h : Tensor of shape * x T x BS x self.shared_output_dims[-1] where '*' could possibly have more dimensions
-            h_j is the first hidden state that has information about t_j
-            time_intervals : Tensor of shape * x T x BS x 1  where '*' could possibly have more dimensions
+        :param h : Tensor of shape * x T x BS x self.shared_output_dims[-1] where '*' could possibly have more dimensions
+            h_j is the first hidden state that has information about t_{j-1}, which means it should not have seen t_j
+        :param time_intervals : Tensor of shape * x T x BS x 1  where '*' could possibly have more dimensions
+            i_j = t_j - t_{j-1} (meaning i_1 = t_1 - t_0 = t_1, and t_0 = i_0 = 0)
         Output:
-            log_prob : tensor of shape * x T x BS - computed as per eqn 12 in the paper
+        :return log_prob : tensor of shape * x T x BS - computed as per eqn 12 in the paper
         """
 
         past_influence, current_influence = self._get_past_and_current_influences(h, time_intervals)
@@ -144,8 +145,8 @@ class MarkedPointProcessRMTPPModel(nn.Module):
         Output:
             :return expected_t_next: Tensor of shape T x BS x 1
         """
-        y = torch.rand(self.mc_integration_num_samples, *preceding_event_times.shape).to(
-            device)  # (N, T, BS, 1) where N = number of samples for monte carlo approx
+        # (N, T, BS, 1) where N = number of samples for monte carlo approx
+        y = torch.rand(self.mc_integration_num_samples, *preceding_event_times.shape).to(device)
         expected_t_next = self._mc_transformation(y, preceding_hidden_states, preceding_event_times).mean(0)  # (T, BS, 1)
 
         return expected_t_next

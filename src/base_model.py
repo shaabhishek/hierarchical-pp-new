@@ -43,6 +43,7 @@ class MLP(nn.Module):
             m = dims[i + 1]
             L = nn.Linear(n, m, bias=True)
             layers.append(L)
+            layers.append(nn.LayerNorm(m))
             layers.append(nn.ReLU())  # NOTE: Always slaps a non-linearity in the end
         self.net = nn.Sequential(*layers)
 
@@ -124,31 +125,14 @@ class BaseDecoder(nn.Module):
         self.preprocessing_module_dims = [decoder_in_dim, *self.shared_output_dims]
         self.preprocessing_module = self.create_generative_nets()
 
-    def generate_marker(self, h, t):
-        mu, logvar = generate_marker(self, h, t)
-        if self.marker_type == 'real':
-            return Normal(mu, logvar.div(2).exp())
-        elif self.marker_type == 'categorical':
-            return Categorical(logits=mu)
-        else:
-            raise NotImplementedError
-
     def create_generative_nets(self):
-        gen_pre_module = MLP(self.preprocessing_module_dims)
-        return gen_pre_module
+        module = MLP(self.preprocessing_module_dims)
+        return module
 
-    def compute_time_log_prob(self, h, t):
-        return compute_point_log_likelihood(self, h, t)
+    def _get_marker_distribution(self, h):
+        raise NotImplementedError
 
-    def compute_marker_log_prob(self, x, dist_x_recon: torch.distributions.Distribution):
-        if dist_x_recon.__class__.__name__ == "Normal":
-            return dist_x_recon.log_prob(x)
-        elif dist_x_recon.__class__.__name__ == "Categorical":
-            return dist_x_recon.log_prob(x)
-        else:
-            raise NotImplementedError
-
-    def forward(self, concat_hzy):
+    def _compute_log_likelihoods(self, *args):
         raise NotImplementedError
 
 
@@ -243,6 +227,16 @@ class BaseModel(nn.Module):
                 raise NotImplementedError
 
         return metric_dict
+
+    @staticmethod
+    def augment_hidden_sequence(h_prime, hidden_seq):
+        """
+            Append h_prime to h_0 .. h_{T-1}
+            NOTE: h_j = f(t_{j}, h_{j-1}) => the first 'h' that has saw t_j
+            this is important to note for computing intensity / next event's time
+            """
+        hidden_seq = torch.cat([h_prime, hidden_seq], dim=0)  # (T+1, BS, rnn_hidden_dim)
+        return hidden_seq
 
 
 def one_hot_encoding(y, n_dims=None):

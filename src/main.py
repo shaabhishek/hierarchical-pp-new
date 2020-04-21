@@ -39,7 +39,11 @@ if __name__ == '__main__':
     # set_seeds(rmtpp_hawkes_params.seed)
     # command_line_params = rmtpp_hawkes_params
 
-    command_line_params = get_argparse_parser_params()
-    set_seeds(command_line_params.seed)
+    model1_hawkes_params = get_argparse_parser_params('model1', 'simulated_hawkes')
+    set_seeds(model1_hawkes_params.seed)
+    command_line_params = model1_hawkes_params
+
+    # command_line_params = get_argparse_parser_params()
+    # set_seeds(command_line_params.seed)
 
     pipeline_engine(command_line_params)

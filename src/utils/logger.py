@@ -48,7 +48,7 @@ class Logger:
             self.logged_metrics['train'][metric_name][epoch_num] = train_info_dict.get(metric_name, float('inf'))
             self.logged_metrics['valid'][metric_name][epoch_num] = valid_info_dict.get(metric_name, float('inf'))
 
-            self.write_train_val_metrics_to_tensorboard(epoch_num, metric_name)
+            # self.write_train_val_metrics_to_tensorboard(epoch_num, metric_name)
 
             if (self.best_valid_loss[metric_name] is None) or \
                     (self.improvement_map[metric_name] == 'small' and valid_info_dict[metric_name] <
@@ -58,10 +58,11 @@ class Logger:
                 self.best_valid_loss[metric_name] = valid_info_dict[metric_name]
                 self.best_epoch[metric_name] = epoch_num
 
-    def write_train_val_metrics_to_tensorboard(self, epoch_num, metric_name):
-        for split in ['train', 'valid']:
-            self.writer.add_scalar(f"{metric_name}/{split}", self.logged_metrics[split][metric_name][epoch_num],
-                                   epoch_num)
+    def write_train_val_metrics_to_tensorboard(self, epoch_num):
+        for metric_name in self.metrics:
+            for split in ['train', 'valid']:
+                self.writer.add_scalar(f"{metric_name}/{split}", self.logged_metrics[split][metric_name][epoch_num],
+                                       epoch_num)
 
     def log_test_epoch(self, epoch_num: int, test_info_dict: dict):
         for metric_name in self.metrics:
@@ -71,12 +72,11 @@ class Logger:
         def _format_line(metric_name, valid_metric_val, train_metric_val):
             return f"Validation {metric_name:>15}: {valid_metric_val:>10.3f} {'':\t^4} Train {metric_name:>15}: {train_metric_val:>10.3f}"
 
-        print('epoch', epoch_num + 1)
+        print('Epoch', epoch_num)
         if self.marker_type == 'categorical':
             print(
                 _format_line('Accuracy', valid_info_dict['accuracy'], train_info_dict['accuracy'])
             )
-                # f"Validation {'Accuracy':20}: {valid_info_dict['accuracy']:20.3f} \t\t\t Train Accuracy: {train_info_dict['accuracy']:20.3f}"
         else:
             raise NotImplementedError
 

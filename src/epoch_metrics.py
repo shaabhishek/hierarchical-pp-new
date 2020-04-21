@@ -44,9 +44,9 @@ class EpochMetrics:
             marker_accuracy = self._reduce_marker_accuracy()
             marker_auc = None
             marker_rmse = None
-            reduced_metric_dict = {'loss': total_loss, 'time_rmse': time_rmse, 'accuracy': marker_accuracy,
-                                   'auc': marker_auc, 'marker_rmse': marker_rmse, 'marker_nll': marker_nll,
-                                   'time_nll': time_nll}
+        reduced_metric_dict = {'loss': total_loss, 'time_rmse': time_rmse, 'accuracy': marker_accuracy,
+                               'auc': marker_auc, 'marker_rmse': marker_rmse, 'marker_nll': marker_nll,
+                               'time_nll': time_nll}
         return reduced_metric_dict
 
     def _reduce_marker_accuracy(self):

@@ -280,7 +280,6 @@ def _augment_params(params: Namespace):
         params.base_intensity = 0.
         params.time_influence = 0.1
         params.marker_type = 'categorical'
-        params.batch_size = 16
 
     elif 'syntheticdata' in params.data_name:
         params.marker_dim = 2

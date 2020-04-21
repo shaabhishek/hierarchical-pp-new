@@ -3,7 +3,7 @@ from engine import Engine
 from test_models import plot_model_intensity_vs_time_index
 
 
-class ExperimentToBeNamed:
+class RMTPPMCIntegrationExperiment:
     def __init__(self):
         self.model_filenames = [
             "rmtpp_mc_50_g1_do0.5_b16_h128_l20.0_l20_gn1000.0_lr0.01_c10_s1_tlintensity_ai40_20_04_14_18_08_10.pt",
@@ -19,6 +19,10 @@ class ExperimentToBeNamed:
         engines = [Engine(rmtpp_hawkes_params, model_filename) for model_filename in self.model_filenames]
         import pdb; pdb.set_trace()
 
+class Model1Experiment:
+    pass
+
 
 if __name__ == '__main__':
-    ExperimentToBeNamed().make_plots()
+    # RMTPPMCIntegrationExperiment().make_plots()
+    pass

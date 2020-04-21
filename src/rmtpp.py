@@ -1,25 +1,15 @@
 import torch
-import numpy as np
-import random
-import time
 
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.nn.utils.rnn as rnnutils
 from torch.distributions.normal import Normal
-from torch.distributions.kl import kl_divergence
-from torch.optim import Adam
-import matplotlib.pyplot as plt
 from base_model import BaseModel
 from marked_pp_rmtpp_model import MarkedPointProcessRMTPPModel
-from base_model import compute_marker_log_likelihood, compute_point_log_likelihood, create_output_nets, generate_marker
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 DEBUG = False
 
 # Move it to utils
-from utils.metric import get_marker_metric, compute_time_expectation, get_time_metric
 
 
 class RMTPP(BaseModel):
@@ -124,12 +114,7 @@ class RMTPP(BaseModel):
         # Run RNN over the concatenated embedded sequence
         h_prime = torch.zeros(1, BS, self.rnn_hidden_dim).to(device)
         hidden_seq, _ = self.rnn(phi_xt, h_prime)
-        """
-        Append h_prime to h_0 .. h_{T-1}
-        NOTE: h_j = f(t_{j}, h_{j-1}) => the first 'h' that has saw t_j
-        this is important to note for computing intensity / next event's time
-        """
-        hidden_seq = torch.cat([h_prime, hidden_seq], dim=0)  # (T+1, BS, rnn_hidden_dim)
+        hidden_seq = self.augment_hidden_sequence(h_prime, hidden_seq)
         return hidden_seq, event_times, time_intervals
 
 
