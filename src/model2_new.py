@@ -4,9 +4,10 @@ from torch.distributions import Normal, Categorical
 from torch.distributions import kl_divergence
 import math
 
-from base_model import BaseEncoder, BaseDecoder, BaseModel
+from base_model import BaseEncoder, BaseDecoder, BaseModel, _get_timestamps_and_intervals_from_data, MLP
 
 # from base_model import sample_gumbel_softmax, create_output_nets
+from utils.helper import _prepend_dims_to_tensor, assert_shape
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -14,18 +15,21 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class Model2(BaseModel):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.logvar_min = math.log(1e-20)
-        self.sigma_min = 1e-10
         self.gamma = kwargs['gamma']
         self.dropout = kwargs['dropout']
 
-        # Inference network
+        # Prior distributions
+        self.prior_dist_y = Categorical(logits=torch.ones(1, self.cluster_dim).to(device))
+        self.prior_dist_z = Normal(torch.tensor([0.]).to(device), torch.tensor([1.]).to(device))
+
+        # Encoder / Inference network
         # Override the values provided to z_module by base model
         self.reverse_rnn_dims = [self.emb_dim + self.rnn_hidden_dim, self.rnn_hidden_dim]  # phi_xt+h -> h
         z_input_dim = self.reverse_rnn_dims[-1] + self.cluster_dim + self.latent_dim  # h+y+z
         self.z_dims[0] = z_input_dim
         self.encoder = Encoder(rnn_dims=self.rnn_dims, y_dims=self.y_dims, z_dims=self.z_dims,
-                               reverse_rnn_dims=self.reverse_rnn_dims)
+                               reverse_rnn_dims=self.reverse_rnn_dims,
+                               num_posterior_samples=kwargs['n_samples_posterior'])
 
         # Generative network
         encoder_out_dim = self.rnn_hidden_dim + self.latent_dim + self.cluster_dim
@@ -167,8 +171,8 @@ class Model2(BaseModel):
 
 
 class Encoder(BaseEncoder):
-    def __init__(self, rnn_dims: list, y_dims: list, z_dims: list, reverse_rnn_dims: list):
-        super().__init__(rnn_dims, y_dims, z_dims)
+    def __init__(self, rnn_dims: list, y_dims: list, z_dims: list, reverse_rnn_dims: list, num_posterior_samples: int):
+        super().__init__(rnn_dims, y_dims, z_dims, num_posterior_samples)
         # self.birnn =
         self.reverse_rnn_dims = reverse_rnn_dims
         self.reverse_cell = nn.GRUCell(input_size=self.reverse_rnn_dims[0], hidden_size=self.reverse_rnn_dims[1])
@@ -177,10 +181,10 @@ class Encoder(BaseEncoder):
         T, BS, _ = xt.shape
 
         augmented_hidden_seq, reverse_hidden_seq = self._get_encoded_h(xt, mask, T, BS)
-        dist_y, sample_y = self._get_encoded_y(augmented_hidden_seq, mask, T, BS, temp, 1)
-        dist_z, sample_z = self._get_encoded_z(sample_y, reverse_hidden_seq, T, BS)
+        dist_y, sample_y = self._get_encoded_y(augmented_hidden_seq, mask, T, BS, temp, self.num_posterior_samples)
+        dist_z, sample_z = self._get_encoded_z(sample_y, reverse_hidden_seq, T, BS, self.num_posterior_samples)
 
-        return (sample_y, dist_y), (sample_z, dist_z)
+        return (augmented_hidden_seq, reverse_hidden_seq), (sample_y, dist_y), (sample_z, dist_z)
 
     def _get_encoded_h(self, xt: torch.Tensor, mask: torch.Tensor, T: int, BS: int):
         """
@@ -227,7 +231,7 @@ class Encoder(BaseEncoder):
         reverse_hidden_seq = torch.cat(list(reversed(outs)), dim=0)
         return reverse_hidden_seq
 
-    def _get_encoded_z(self, sample_y, reverse_hidden_seq, T, BS):
+    def _get_encoded_z(self, sample_y, reverse_hidden_seq, T, BS, Nz):
         """
 
         The conditional independencies imply the following relation for z:
@@ -242,33 +246,42 @@ class Encoder(BaseEncoder):
         z_prime is a special latent state made of only zeros, and not learned
         a_0 is g(h_prime, x_0, a_1) and h_prime is also only zeros, and not learned
 
-        :param sample_y: T x BS x y_dim
-        :param reverse_hidden_seq:
-        :return:
+        :param Nz:
+        :param sample_y: Ny x T x BS x y_dim
+        :param reverse_hidden_seq: T x BS x h_dim
+        [a_0, ..., a_{T-1}]
+        :return: dist_z_seq, sample_z_seq
+        dist_z_seq: Nz x Ny x T x BS x z_dim
+        sample_z_seq: Nz x Ny x T x BS x z_dim
         """
+        Ny = self.num_posterior_samples
         # Ancestral sampling
         _dists_z, _samples_z = [], []
-        _prev_z = torch.zeros(1, BS, self.latent_dim).to(device)
+        _prev_z = torch.zeros(Nz, Ny, 1, BS, self.latent_dim).to(device)
         for time_idx in range(T - 1, -1, -1):
             concat_ayz = torch.cat(
-                [reverse_hidden_seq[time_idx].unsqueeze(0), _prev_z, sample_y[time_idx].unsqueeze(0)], dim=-1
-            )  # (1, BS, (latent+cluster+hidden_dim))
-            _dist_z = self.z_module(concat_ayz)
+                [
+                    _prepend_dims_to_tensor(reverse_hidden_seq[time_idx:time_idx + 1], Nz, Ny),
+                    _prev_z,
+                    _prepend_dims_to_tensor(sample_y[:, time_idx:time_idx + 1]),
+                ], dim=-1
+            )  # (Nz, Ny, 1, BS, (latent+cluster+hidden_dim))
+            _dist_z = self.z_module(concat_ayz)  # (Nz, Ny, 1, BS, z_dim)
             _dists_z.append(_dist_z)
-            sample_z_ = _dist_z.rsample()
+            sample_z_ = _dist_z.rsample()  # (Nz, Ny, 1, BS, z_dim)
             _samples_z.append(sample_z_)
             _prev_z = sample_z_
 
-        dist_z_seq = self._concat_z_distributions(_dists_z)
-        sample_z_seq = torch.cat(_samples_z, dim=0)
+        dist_z_seq = self._concat_z_distributions(_dists_z, dim=2)
+        sample_z_seq = torch.cat(_samples_z, dim=2)  # (Nz, Ny, 1, BS, z_dim)
 
-        assert sample_z_seq.shape == (T, BS, self.latent_dim), f"Shape of tensor is incorrect: {sample_z_seq.shape}"
+        assert_shape("Z samples", sample_z_seq.shape, (Nz, Ny, T, BS, self.latent_dim))
         return dist_z_seq, sample_z_seq
 
     @staticmethod
-    def _concat_z_distributions(_dists_z):
-        mu_z = torch.cat([dist.mean for dist in _dists_z], dim=0)
-        stddev_z = torch.cat([dist.stddev for dist in _dists_z], dim=0)
+    def _concat_z_distributions(_dists_z, dim):
+        mu_z = torch.cat([dist.mean for dist in _dists_z], dim=dim)
+        stddev_z = torch.cat([dist.stddev for dist in _dists_z], dim=dim)
         dist_z = Normal(loc=mu_z, scale=stddev_z)
         return dist_z
 
@@ -276,7 +289,62 @@ class Encoder(BaseEncoder):
 class Decoder(BaseDecoder):
     def __init__(self, shared_output_dims: list, marker_dim: int, decoder_in_dim: int, **kwargs):
         super().__init__(shared_output_dims, marker_dim, decoder_in_dim, **kwargs)
+        self.smoothing_net = MLP()
 
-    def forward(self, concat_hzy):
+    def forward(self, augmented_hidden_seq, posterior_sample_z, posterior_sample_y, t, x):
         out = self.preprocessing_module(concat_hzy)
+        T, BS, _ = t.shape
+        time_intervals, event_times = _get_timestamps_and_intervals_from_data(t)
+
+        phi_hzy_seq = self.preprocess_latent_states(augmented_hidden_seq, posterior_sample_y, posterior_sample_z, T, BS)
         return out
+
+    def preprocess_latent_states(self, augmented_hidden_seq, posterior_sample_y, posterior_sample_z, T, BS):
+        """
+        Transforms latent states to a representation which is then used as a hidden state to compute
+         densities and likelihoods of time and marker.
+
+        - Specifically, the latent state transformation is divided into 'past latent states' and 'future latent states'
+        'Past latent states' as defined as ancestors of the data_j
+        'Future latent states' as defined as descendants of the data_j
+        - The decoder transforms:
+        x_j <- mlp( mlp(past latent states), mlp(future latent states) )
+
+        For this decoder, the dependence is (for x_j := data_j):
+        x_j <- f(h_{j-1}, y, z_i, h_j) where [h_{j-1}, y, z_i] are 'past' and [h_j] is 'future' as per the model.
+        meaning x_j <- f( g1(h_{j-1}, y, z_i), g2(h_j) )
+
+        Boundary conditions:
+        x_0 = f( g1( h_prime, y, z_0 ), g2(h_0) )
+        x_1 = f( g1( h_0, y, z_1 ), g2(h_1) )
+        x_{T-1} = f( g1( h_{T-1}, y, z_{T-1} ), g2(h_{T-1}) )
+
+        The job of this funtion is to return [phi_0, .., phi_{T-1}] so that they can be used to generate
+        [data_0, .., data_{T-1}]
+
+        :param augmented_hidden_seq: T x BS x h_dim
+        [h_prime, h0, ..., h_{T-1}]
+        :param posterior_sample_y: Ny x T x BS x y_dim
+        [y, ..., y]
+        :param posterior_sample_z: Nz x Ny x T x BS x latent_dim
+        [z_0, ..., z_{T-1}]
+        :return: phi_hzy_seq: Nz x Ny x T x BS x shared_output_dims[-1]
+        [phi_0, ..., phi_{T-1}]
+        """
+
+        def _get_final_dim(*args):
+            tensors = tuple(args)
+            return tuple(tensor.shape[-1] for tensor in tensors)
+
+        # h_dim, y_dim = _get_final_dim(augmented_hidden_seq, posterior_sample_y)
+        Nz, Ny = posterior_sample_z.shape[0], posterior_sample_y.shape[0]
+        concat_hzy = torch.cat(
+            [
+                _prepend_dims_to_tensor(augmented_hidden_seq[:-1], Nz, Ny),
+                posterior_sample_z,
+                _prepend_dims_to_tensor(posterior_sample_y, Nz)
+            ],
+            dim=-1
+        )  # (Nz, Ny, T, BS, (h+z+y)_dims)
+        phi_hzy_seq = self.preprocessing_module(concat_hzy)  # (Nz, Ny, T,BS,shared_output_dims[-1])
+        return phi_hzy_seq

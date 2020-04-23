@@ -35,7 +35,7 @@ class TrainValRunner(BaseRunner):
                                                    trainer_params.model_hyperparams.grad_max_norm)
         self.valid_epoch_runner = ValidEpochRunner(self.model, self.valid_dataloader, logger)
 
-        self.model.print_parameter_info()
+        self.model.print_model_info()
 
     @staticmethod
     def load_optimizer(trainer_params, model, is_loading_previous_model):

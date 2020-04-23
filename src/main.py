@@ -5,6 +5,7 @@ import torch
 
 from data_model_sandbox import get_argparse_parser_params
 from engine import Engine
+from utils.helper import pretty_print_table
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -17,15 +18,10 @@ def set_seeds(seed_value: int):
 
 
 def print_input_params(params: Namespace):
-    def _print(a, b):
-        print(f"{str(a):>20}", end='')
-        print(f"{str(b):>20}", end='')
-        print()
-
     params_dict = vars(params)
-    _print('Parameter', 'Value')
+    pretty_print_table('Parameter', 'Value')
     for param, value in params_dict.items():
-        _print(param, value)
+        pretty_print_table(param, value)
 
 
 def pipeline_engine(params: Namespace):

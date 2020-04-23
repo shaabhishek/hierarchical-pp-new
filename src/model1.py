@@ -4,7 +4,7 @@ from torch.distributions import kl_divergence, Normal, Categorical
 
 from base_model import BaseEncoder, BaseDecoder, BaseModel, _get_timestamps_and_intervals_from_data
 from marked_pp_rmtpp_model import MarkedPointProcessRMTPPModel
-from utils.helper import _prepend_dims_to_tensor, _assert_shape
+from utils.helper import _prepend_dims_to_tensor, assert_shape
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -195,8 +195,8 @@ class Model1Encoder(BaseEncoder):
                 sample_y
             ], dim=-1
         )  # (N, T, BS, ..)
-        dist_z = self.z_module(concat_hxty)  # (N,T,BS,latent_dim)
-        sample_z = dist_z.rsample((Nz,))  # (n_sample, N,T,BS,latent_dim)
+        dist_z = self.z_module(concat_hxty)  # (Ny,T,BS,latent_dim)
+        sample_z = dist_z.rsample((Nz,))  # (Nz, Ny, T,BS,latent_dim)
         return dist_z, sample_z
 
 
@@ -311,8 +311,8 @@ class Model1Decoder(BaseDecoder):
         marker_log_likelihood = self.marked_point_process_net.get_marker_log_prob(marker_seq, predicted_marker_dist)
         time_log_likelihood_expectation = time_log_likelihood.mean((0, 1))
         marker_log_likelihood_expectation = marker_log_likelihood.mean((0, 1))
-        _assert_shape("time log likelihood", time_log_likelihood_expectation.shape, (T, BS,))
-        _assert_shape("marker log likelihood", marker_log_likelihood_expectation.shape, (T, BS))
+        assert_shape("time log likelihood", time_log_likelihood_expectation.shape, (T, BS,))
+        assert_shape("marker log likelihood", marker_log_likelihood_expectation.shape, (T, BS))
         return marker_log_likelihood_expectation, time_log_likelihood_expectation
 
     def _get_predicted_times(self, phi_hzy_seq, event_times, BS):

@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 
+import torch
 from progressbar import bar
 import numpy as np
 
@@ -52,5 +53,11 @@ def _prepend_dims_to_tensor(tensor, *dims):
     return tensor.view(*[1 for _ in dims], *tensor.shape).expand(*dims, *tensor.shape)
 
 
-def _assert_shape(variable_name, variable_shape, expected_shape):
+def assert_shape(variable_name: str, variable_shape: torch.Size, expected_shape: tuple):
     assert variable_shape == expected_shape, f"Shape of {variable_name} is incorrect: {variable_shape}, Expected: {expected_shape} "
+
+
+def pretty_print_table(*args):
+    for arg in args:
+        print(f"{str(arg):>60}", end='')
+    print()

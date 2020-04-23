@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal, Categorical, Gumbel
 
-from utils.helper import _assert_shape
+from utils.helper import assert_shape, pretty_print_table
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -126,12 +126,12 @@ class BaseEncoder(nn.Module):
         last_time_hidden_state = torch.cat(
             [hidden_seq[last_time_idxs[i], i][None, :] for i in range(BS)],
             dim=0)  # (BS,rnn_hidden_dim)
-        _assert_shape("last timestep's hidden state", last_time_hidden_state.shape, (BS, self.rnn_hidden_dim))
+        assert_shape("last timestep's hidden state", last_time_hidden_state.shape, (BS, self.rnn_hidden_dim))
 
         dist_y = self.y_module(last_time_hidden_state)  # shape(dist_y.logits) = (BS, y_dim)
         sample_y = sample_gumbel_softmax(dist_y.logits, temp, Ny)  # (N, BS, y_dim)
         sample_y = sample_y.unsqueeze(1).expand(Ny, T, -1, -1)  # (N, T, BS,y_dim)
-        _assert_shape("sample_y", sample_y.shape, (Ny, T, BS, self.y_dim))
+        assert_shape("sample_y", sample_y.shape, (Ny, T, BS, self.y_dim))
         return dist_y, sample_y
 
 
@@ -191,13 +191,14 @@ class BaseModel(nn.Module):
             self.z_dims = [z_input_dim, *self.encoder_z_hidden_dims, self.latent_dim]
         # self.encoder = Encoder(rnn_dims=rnn_dims, y_dims=y_dims, z_dims=z_dims)
 
-    def print_parameter_info(self):
+    def print_model_info(self):
         # dump whatever str(nn.Module) has to offer
         print(self)
 
         # dump parameter info
-        for pname, pdata in self.named_parameters():
-            print(f"{pname}: {pdata.size()}")
+        pretty_print_table("Parameter Name", "Size")
+        for param_name, param_data in self.named_parameters():
+            pretty_print_table(param_name, param_data.size())
 
     def create_embedding_nets(self):
         # marker_dim is passed. timeseries_dim is 2

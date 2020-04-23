@@ -324,7 +324,7 @@ def setup_parser():
                         help='whether to use normal loss or intensity loss')
     parser.add_argument('--time_scale', type=float, default=1, help='scaling factor to multiply the timestamps with')
     parser.add_argument('--mc_num_samples', type=int, default=50, help='number of MC samples per event time prediction')
-    parser.add_argument('--n_samples_posterior', type=int, default=10,
+    parser.add_argument('--n_samples_posterior', type=int, default=2,
                         help='number of MC samples to average wrt posterior')
 
     # Model Training Parameters
