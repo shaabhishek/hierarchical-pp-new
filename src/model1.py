@@ -3,8 +3,8 @@ import torch.nn as nn
 from torch.distributions import kl_divergence, Normal, Categorical
 
 from base_model import BaseEncoder, BaseDecoder, BaseModel, _get_timestamps_and_intervals_from_data
-from base_model import sample_gumbel_softmax
 from marked_pp_rmtpp_model import MarkedPointProcessRMTPPModel
+from utils.helper import _prepend_dims_to_tensor, _assert_shape
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -21,13 +21,12 @@ class Model1(BaseModel):
         self.prior_dist_y = Categorical(logits=torch.ones(1, self.cluster_dim).to(device))
         self.prior_dist_z = Normal(torch.tensor([0.]).to(device), torch.tensor([1.]).to(device))
 
-        # Forward RNN
-        # self.rnn = self.create_rnn()
+        # Encoder / Inference network
+        self.encoder = Model1Encoder(rnn_dims=self.rnn_dims,
+                                     y_dims=self.y_dims, z_dims=self.z_dims,
+                                     num_posterior_samples=kwargs['n_samples_posterior'])
 
-        # Inference network
-        self.encoder = Model1Encoder(rnn_dims=self.rnn_dims, y_dims=self.y_dims, z_dims=self.z_dims)
-
-        # Generative network
+        # Decoder / Generative network
         encoder_out_dim = self.rnn_hidden_dim + self.latent_dim + self.cluster_dim
 
         mpp_config = {
@@ -69,15 +68,15 @@ class Model1(BaseModel):
 
     def forward(self, marker_seq, time_seq, anneal=1., mask=None, temp=0.5):
 
-        time_log_likelihood, marker_log_likelihood, KL, metric_dict = self._forward(marker_seq, time_seq, temp, mask)
+        time_log_likelihood, marker_log_likelihood, kl, metric_dict = self._forward(marker_seq, time_seq, temp, mask)
 
         marker_nll = (-1. * marker_log_likelihood * mask)[1:, :].sum()
         time_nll = (-1. * time_log_likelihood * mask)[1:, :].sum()
 
-        loss = self.gamma * time_nll + marker_nll + anneal * KL
-        true_loss = time_nll + marker_nll + KL
+        loss = self.gamma * time_nll + marker_nll + anneal * kl
+        true_loss = time_nll + marker_nll + kl
         meta_info = {"marker_nll": marker_nll.detach().cpu(), "time_nll": time_nll.detach().cpu(),
-                     "true_nll": true_loss.detach().cpu(), "kl": KL.detach().cpu()}
+                     "true_nll": true_loss.detach().cpu(), "kl": kl.detach().cpu()}
         return loss, {**meta_info, **metric_dict}
 
     def compute_metrics(self, predicted_times, event_times, marker_logits, marker, mask):
@@ -89,15 +88,14 @@ class Model1(BaseModel):
     def _forward(self, x, t, temp, mask):
         time_intervals, event_times = _get_timestamps_and_intervals_from_data(t)  # (T, BS, 1)
         T, BS, _ = t.shape
-        phi_x, phi_xt = self._preprocess_inputs(t, x)
+        phi_x, phi_xt = self.preprocess_inputs(x, t)
 
         """Encoder
         Get the sampled value and (mean + var) latent variable using the hidden state sequence.
         The (augmented) hidden state sequence includes the initial hidden state (h_prime) made of zeros as well 
         """
         augmented_hidden_seq, (posterior_sample_y, posterior_dist_y), (
-            posterior_sample_z, posterior_dist_z) = self.encoder(phi_xt, temp,
-                                                                 mask)
+            posterior_sample_z, posterior_dist_z) = self.encoder(phi_xt, temp, mask)
 
         """Decoder
         Use the latent states computed by the encoder to compute the Log likelihood, and the reconstructed samples
@@ -112,12 +110,12 @@ class Model1(BaseModel):
         """
         # Prior distributions
         prior_dist_y, prior_dist_z = self._get_prior_distributions()
-        kl_divergence = self._compute_kl(prior_dist_y, posterior_dist_y, prior_dist_z, posterior_dist_z, mask)
+        kl = self._compute_kl(prior_dist_y, posterior_dist_y, prior_dist_z, posterior_dist_z, mask)
 
         metric_dict = self.compute_metrics(predicted_times, event_times, predicted_marker_logits, x, mask)
-        return time_log_likelihood, marker_log_likelihood, kl_divergence, metric_dict
+        return time_log_likelihood, marker_log_likelihood, kl, metric_dict
 
-    def _preprocess_inputs(self, t, x):
+    def preprocess_inputs(self, x, t):
         # Transform markers and timesteps into the embedding spaces
         phi_x, phi_t = self.embed_x(x), self.embed_t(t)
         phi_xt = torch.cat([phi_x, phi_t], dim=-1)  # (T,BS, emb_dim)
@@ -128,8 +126,17 @@ class Model1(BaseModel):
 
     @staticmethod
     def _compute_kl(prior_dist_y, posterior_dist_y, prior_dist_z, posterior_dist_z, mask):
+        """
+
+        :param prior_dist_y: Distribution with logits 1 x y_dim
+        :param posterior_dist_y: Distribution with logits BS x y_dim
+        :param prior_dist_z: Distribution with mean/var (scalar) 0./1.
+        :param posterior_dist_z: Distribution with mean/var Ny x T x BS x z_dim
+        :param mask: T x BS
+        :return:
+        """
         kl_cluster = kl_divergence(posterior_dist_y, prior_dist_y)  # (1,BS)
-        kl_latent_state = kl_divergence(posterior_dist_z, prior_dist_z).sum(-1) * mask
+        kl_latent_state = kl_divergence(posterior_dist_z, prior_dist_z).mean(0).sum(-1) * mask # (T, BS)
         kl = kl_cluster.sum() + kl_latent_state.sum()
         assert (kl >= 0), "kl should be non-negative"
         return kl
@@ -137,8 +144,8 @@ class Model1(BaseModel):
 
 class Model1Encoder(BaseEncoder):
 
-    def __init__(self, rnn_dims: list, y_dims: list, z_dims: list, ):
-        super().__init__(rnn_dims, y_dims, z_dims)
+    def __init__(self, rnn_dims: list, y_dims: list, z_dims: list, num_posterior_samples: int):
+        super().__init__(rnn_dims, y_dims, z_dims, num_posterior_samples)
 
     def forward(self, xt, temp, mask):
         """
@@ -147,17 +154,16 @@ class Model1Encoder(BaseEncoder):
             temp: scalar
             mask : Tensor TxBS
         Output:
-            sample_y: Tensor of shape T x BS x cluster_dim
-            sample_z: Tensor of shape T x BS x latent_dim
-            logits_y: Tensor of shape 1 x BS x cluster_dim
-            mu_z: Tensor of shape T x BS x latent_dim
-            logvar_z: Tensor of shape T x BS x latent_dim
+            dist_y: Distribution with logits of shape BS x cluster_dim
+            sample_y: Tensor of shape Ny x T x BS x cluster_dim
+            dist_z: Distribution with mean/std of shape Ny x T x BS x latent_dim
+            sample_z: Tensor of shape Nz x Ny x T x BS x latent_dim
         """
         T, BS, _ = xt.shape
 
         augmented_hidden_seq = self._get_encoded_h(xt, BS)
-        dist_y, sample_y = self._get_encoded_y(augmented_hidden_seq, mask, T, BS, temp)
-        dist_z, sample_z = self._get_encoded_z(augmented_hidden_seq, xt, sample_y)
+        dist_y, sample_y = self._get_encoded_y(augmented_hidden_seq, mask, T, BS, temp, self.num_posterior_samples)
+        dist_z, sample_z = self._get_encoded_z(augmented_hidden_seq, xt, sample_y, self.num_posterior_samples)
         return augmented_hidden_seq, (sample_y, dist_y), (sample_z, dist_z)
 
     def _get_encoded_h(self, xt, BS):
@@ -167,33 +173,30 @@ class Model1Encoder(BaseEncoder):
         augmented_hidden_seq = BaseModel.augment_hidden_sequence(h_prime, hidden_seq)
         return augmented_hidden_seq
 
-    def _get_encoded_y(self, augmented_hidden_seq: torch.Tensor, mask: torch.Tensor, T: int, BS: int, temp: float):
-        """Encoder for y - discrete latent state"""
-        hidden_seq = augmented_hidden_seq[1:]
-        # Need the last time index of each sequence based on mask
-        last_time_idxs = torch.argmax(mask, dim=0)  # (BS,)
-        # Pick out the state corresponding to last time step for each batch data point
-        last_time_hidden_state = torch.cat([hidden_seq[last_time_idxs[i], i][None, :] for i in range(BS)],
-                                           dim=0)  # (BS,rnn_hidden_dim)
-        assert last_time_hidden_state.shape == (
-            BS, self.rnn_hidden_dim), f"Shape of tensor is incorrect: {last_time_hidden_state.shape}"
-        dist_y = self.y_module(last_time_hidden_state)  # shape(dist_y.logits) = (BS, y_dim)
-        sample_y = sample_gumbel_softmax(dist_y.logits, temp)  # (BS, y_dim)
-        sample_y = sample_y.unsqueeze(0).expand(T, -1, -1)  # (T,BS,y_dim)
-        assert sample_y.shape == (T, BS, self.y_dim), f"Shape of y_sample is incorrect: {sample_y.shape}"
-        return dist_y, sample_y
-
-    def _get_encoded_z(self, augmented_hidden_seq, data, sample_y):
+    def _get_encoded_z(self, augmented_hidden_seq, data, sample_y, Nz):
         """Encoder for z - continuous latent state
         Computes z_t <- f(y, h_{t-1}, data_t)
-        :param augmented_hidden_seq: [h_prime, h_0, ..., h_{T-1}]
-        :param data: [data_0, ..., data_{T-1}]
+
+        :param Nz: int
+        :param augmented_hidden_seq: T x BS x h_dim
+        [h_prime, h_0, ..., h_{T-1}]
+        :param data: T x BS x embed_dim
+        [data_0, ..., data_{T-1}]
+        :param sample_y: Ny x T x BS x y_dim
         This is embedded data sequence which has information for both marker and time.
-        :return sample_z : Sample [z_0, ..., z_{T-1}] for each batch
+        :return sample_z : Nz x Ny x T x BS x latent_dim
+        Sample [z_0, ..., z_{T-1}] for each batch
         """
-        concat_hxty = torch.cat([augmented_hidden_seq[:-1], data, sample_y], dim=-1)  # (T, BS, ..)
-        dist_z = self.z_module(concat_hxty)  # (T,BS,latent_dim)
-        sample_z = dist_z.rsample()  # (T,BS,latent_dim)
+        Ny = self.num_posterior_samples
+        concat_hxty = torch.cat(
+            [
+                _prepend_dims_to_tensor(augmented_hidden_seq[:-1], Ny),
+                _prepend_dims_to_tensor(data, Ny),
+                sample_y
+            ], dim=-1
+        )  # (N, T, BS, ..)
+        dist_z = self.z_module(concat_hxty)  # (N,T,BS,latent_dim)
+        sample_z = dist_z.rsample((Nz,))  # (n_sample, N,T,BS,latent_dim)
         return dist_z, sample_z
 
 
@@ -203,30 +206,62 @@ class Model1Decoder(BaseDecoder):
         self.marked_point_process_net = MarkedPointProcessRMTPPModel(**mpp_config)
 
     def forward(self, augmented_hidden_seq, posterior_sample_z, posterior_sample_y, t, x):
+        """
+
+        :param augmented_hidden_seq: T x BS x h_dim
+        :param posterior_sample_z: Nz x Ny x T x BS x latent_dim
+        :param posterior_sample_y: Ny x T x BS x y_dim
+        :param t: T x BS x t_dim=2
+        time data
+        :param x: T x BS
+        marker data
+
+        :return: marker_log_likelihood: T x BS
+        :return: time_log_likelihood: T x BS
+        :return: predicted_times: Nz x Ny x T x BS x 1
+        :return: dist_marker_recon_logits: Nz x Ny x T x BS x x_dim
+        """
         T, BS, _ = t.shape
         time_intervals, event_times = _get_timestamps_and_intervals_from_data(t)
 
-        phi_hzy_seq = self._preprocess_latent_states(augmented_hidden_seq, posterior_sample_y, posterior_sample_z)
+        phi_hzy_seq = self.preprocess_latent_states(augmented_hidden_seq, posterior_sample_y, posterior_sample_z, T, BS)
 
         dist_marker_recon = self._get_marker_distribution(phi_hzy_seq)
         marker_log_likelihood, time_log_likelihood = self._compute_log_likelihoods(phi_hzy_seq, time_intervals,
-                                                                                   x, dist_marker_recon)
+                                                                                   x, dist_marker_recon, T, BS)
         predicted_times = self._get_predicted_times(phi_hzy_seq, event_times, BS)
 
         return marker_log_likelihood, time_log_likelihood, predicted_times, dist_marker_recon.logits
 
-    def _preprocess_latent_states(self, augmented_hidden_seq, posterior_sample_y, posterior_sample_z):
+    def preprocess_latent_states(self, augmented_hidden_seq, posterior_sample_y, posterior_sample_z, T, BS):
         """
         Transforms [(h_prime, z_0, y), (h_0, z_1, y), ..., (h_{T-2}, z_{T-1}, y)] to ---> [phi_0, .., phi_{T-1}]
 
-        :param augmented_hidden_seq: [h_prime, h0, ..., h_{T-1}]
-        :param posterior_sample_y: [y, ..., y]
-        :param posterior_sample_z: [z_0, ..., z_{T-1}]
-        :return: phi_hzy_seq: [phi_0, ..., phi_{T-1}]
+        :param augmented_hidden_seq: T x BS x h_dim
+        [h_prime, h0, ..., h_{T-1}]
+        :param posterior_sample_y: Ny x T x BS x y_dim
+        [y, ..., y]
+        :param posterior_sample_z: Nz x Ny x T x BS x latent_dim
+        [z_0, ..., z_{T-1}]
+        :return: phi_hzy_seq: Nz x Ny x T x BS x shared_output_dims[-1]
+        [phi_0, ..., phi_{T-1}]
         """
-        concat_hzy = torch.cat([augmented_hidden_seq[:-1], posterior_sample_z,
-                                posterior_sample_y], dim=-1)  # (T,BS,h+z+y dims)
-        phi_hzy_seq = self.preprocessing_module(concat_hzy)  # (T,BS,shared_output_dims[-1])
+
+        def _get_final_dim(*args):
+            tensors = tuple(args)
+            return tuple(tensor.shape[-1] for tensor in tensors)
+
+        # h_dim, y_dim = _get_final_dim(augmented_hidden_seq, posterior_sample_y)
+        Nz, Ny = posterior_sample_z.shape[0], posterior_sample_y.shape[0]
+        concat_hzy = torch.cat(
+            [
+                _prepend_dims_to_tensor(augmented_hidden_seq[:-1], Nz, Ny),
+                posterior_sample_z,
+                _prepend_dims_to_tensor(posterior_sample_y, Nz)
+            ],
+            dim=-1
+        )  # (Nz, Ny, T, BS, (h+z+y)_dims)
+        phi_hzy_seq = self.preprocessing_module(concat_hzy)  # (Nz, Ny, T,BS,shared_output_dims[-1])
         return phi_hzy_seq
 
     def _get_marker_distribution(self, h):
@@ -240,41 +275,65 @@ class Model1Decoder(BaseDecoder):
             raise NotImplementedError
 
     def _compute_log_likelihoods(self, phi_hzy_seq: torch.Tensor, time_intervals: torch.Tensor,
-                                 marker_seq: torch.Tensor, predicted_marker_dist: torch.distributions.Distribution):
+                                 marker_seq: torch.Tensor, predicted_marker_dist: torch.distributions.Distribution,
+                                 T: int, BS: int):
         """
-            :param phi_hzy_seq: [phi_0, ..., phi_{T-1}]
-            :param time_intervals: [i_0, ..., i_{T-1}]
-            :param marker_seq: [x_0, ..., x_{T-1}]
-            :param predicted_marker_dist: [fx_0, ..., fx_{T-1}]
+        :param phi_hzy_seq: Nz x Ny x T x BS x shared_output_dims[-1]
+        [phi_0, ..., phi_{T-1}]
+        :param time_intervals: T x BS x 1
+        [i_0, ..., i_{T-1}]
+        :param marker_seq: T x BS
+        [x_0, ..., x_{T-1}]
+        :param predicted_marker_dist: distribution with logits of shape Nz x Ny x T x BS x x_dim
+        [fx_0, ..., fx_{T-1}]
 
-            Compute Log Likelihoods
-            Relationship between ll and (h,t,i)
-            `logf*(t_{j+1}) = g(h_j, z_{j+1}, y, (t_{j+1}-t_j)) = g(phi_j, i_{j+1})`
-            which implies
-            (first timestep) `logf*(t0) = g(h', z_0, y, t_0) := g(phi_0, i_0)`
-            (last timestep) `logf*(t_{T-1}) = g(phi_{T-2}, i_{T-1})`
+        :return marker_log_likelihood: T x BS
+        :return time_log_likelihood: T x BS
 
-            Boundary Conditions:
-            logf*(t0) is the likelihood of the first event but it's not based on past
-            information, so we don't use it in likelihood computation (forward function)
+
+        Computing Time Log Likelihood:
+        Relationship between ll and (h,t,i)
+        `logf*(t_{j+1}) = g(h_j, z_{j+1}, y, (t_{j+1}-t_j)) = g(phi_j, i_{j+1})`
+        which implies
+        (first timestep) `logf*(t0) = g(h', z_0, y, t_0) := g(phi_0, i_0)`
+        (last timestep) `logf*(t_{T-1}) = g(phi_{T-2}, i_{T-1})`
+
+        Boundary Conditions:
+        logf*(t0) is the likelihood of the first event but it's not based on past
+        information, so we don't use it in likelihood computation (forward function)
+
+        Finally, Expectation is taken wrt posterior samples by taking the mean along first two dimensions
+
         """
-        time_log_likelihood = self.marked_point_process_net.get_point_log_density(phi_hzy_seq, time_intervals)
+        Nz, Ny = phi_hzy_seq.shape[:2]
+        expanded_time_intervals = _prepend_dims_to_tensor(time_intervals, Nz, Ny)
+        time_log_likelihood = self.marked_point_process_net.get_point_log_density(phi_hzy_seq, expanded_time_intervals)
         marker_log_likelihood = self.marked_point_process_net.get_marker_log_prob(marker_seq, predicted_marker_dist)
-        return marker_log_likelihood, time_log_likelihood
+        time_log_likelihood_expectation = time_log_likelihood.mean((0, 1))
+        marker_log_likelihood_expectation = marker_log_likelihood.mean((0, 1))
+        _assert_shape("time log likelihood", time_log_likelihood_expectation.shape, (T, BS,))
+        _assert_shape("marker log likelihood", marker_log_likelihood_expectation.shape, (T, BS))
+        return marker_log_likelihood_expectation, time_log_likelihood_expectation
 
     def _get_predicted_times(self, phi_hzy_seq, event_times, BS):
         """
         Predicts the next event for each time step using MC Integration
 
-        :param phi_hzy_seq: [phi_0, .., phi_{T-1}] = f[(h_prime, z_0, y), (h_0, z_1, y), ..., (h_{T-2}, z_{T-1}, y)]
-        :param event_times: [t_0, ..., t_{T-1}]
+        :param phi_hzy_seq: Nz x Ny x T x BS x phi_dim
+        [phi_0, .., phi_{T-1}] = f[(h_prime, z_0, y), (h_0, z_1, y), ..., (h_{T-2}, z_{T-1}, y)]
+        :param event_times: T x BS x 1
+        [t_0, ..., t_{T-1}]
         :param BS: int, Batch size
-        :return: predicted_times = [t'_0, ..., t'_{T-1}]
+        :return: predicted_times = Nz x Ny x T x BS x 1
+        [t'_0, ..., t'_{T-1}]
         """
+        Nz, Ny = phi_hzy_seq.shape[:2]
+        expanded_event_times = _prepend_dims_to_tensor(event_times[:-1], Nz, Ny) # Nz, Ny, T-1, BS, 1
+        # import pdb; pdb.set_trace()
         with torch.no_grad():
             # The pairs of (h,t) should be (h_j, t_j) where h_j has information about t_j
-            next_event_times = self.marked_point_process_net.get_next_event_times(phi_hzy_seq[1:],
-                                                                                  event_times[:-1])  # (T-1, BS, 1)
-            # don't need the predicted timestamp after the last observed event (T, BS, 1)
-            predicted_times = torch.cat([torch.zeros(1, BS, 1).to(device), next_event_times], dim=0)
+            # don't need the predicted timestamp after the last observed event at time T
+            next_event_times = self.marked_point_process_net.get_next_event_times(phi_hzy_seq[:, :, 1:],
+                                                                                  expanded_event_times) # (*, T-1, BS, 1)
+            predicted_times = torch.cat([torch.zeros(Nz, Ny, 1, BS, 1).to(device), next_event_times], dim=2)
         return predicted_times

@@ -293,48 +293,62 @@ def _augment_params(params: Namespace):
     else:  # different dataset. Encode those details.
         raise ValueError
 
-    if params.time_loss == 'intensity':
-        params.n_sample = 1
-    if params.time_loss == 'normal':
-        params.n_sample = 5
+    if params.toy:
+        _set_toy_params(params)
 
     return params
+
+
+def _set_toy_params(params):
+    params.mc_num_samples = 2
+    params.n_samples_posterior = 1
+    params.n_cluster = 2
+    params.latent_dim = 2
+    params.rnn_hidden_dim = 32
+    params.max_iter = 2
 
 
 def setup_parser():
     parser = argparse.ArgumentParser(description='Script to test Marked Point Process.')
 
-    ###Validation Parameter###
-    parser.add_argument('--max_iter', type=int, default=1, help='number of iterations')
-    parser.add_argument('--anneal_iter', type=int, default=40, help='number of iteration over which anneal goes to 1')
-    parser.add_argument('--rnn_hidden_dim', type=int, default=256, help='rnn hidden dim')
-    parser.add_argument('--maxgradnorm', type=float, default=10.0, help='maximum gradient norm')
+    # Optimization Hyperparameters
     parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
-    parser.add_argument('--gamma', type=float, default=1,
-                        help='tradeoff of time and marker in loss. marker loss + gamma * time loss')
     parser.add_argument('--l2', type=float, default=0., help='regularizer with weight decay parameter')
-    parser.add_argument('--dropout', type=float, default=0.5, help='dropout rate')
-    parser.add_argument('--batch_size', type=int, default=32, help='the batch size')
-    parser.add_argument('--latent_dim', type=int, default=20, help='latent dim')
-    parser.add_argument('--x_given_t', action='store_true', help='whether x given t')
-    parser.add_argument('--n_cluster', type=int, default=10, help='number of cluster')
+    parser.add_argument('--maxgradnorm', type=float, default=1000.0, help='maximum gradient norm')
 
-    ###Helper Parameter###
-    parser.add_argument('--model', type=str, default='model2', help='model name')
-    parser.add_argument('--model_filename', type=str, default=None, help='file path for an appropriate model')
+    # Model Hyperparameters
+    parser.add_argument('--x_given_t', action='store_true', help='x given t when flag provided')
+    parser.add_argument('--gamma', type=float, default=1,
+                        help='trade-off of time and marker in loss. marker loss + gamma * time loss')
     parser.add_argument('--time_loss', type=str, default='intensity',
                         help='whether to use normal loss or intensity loss')
     parser.add_argument('--time_scale', type=float, default=1, help='scaling factor to multiply the timestamps with')
+    parser.add_argument('--mc_num_samples', type=int, default=50, help='number of MC samples per event time prediction')
+    parser.add_argument('--n_samples_posterior', type=int, default=10,
+                        help='number of MC samples to average wrt posterior')
+
+    # Model Training Parameters
+    parser.add_argument('--anneal_iter', type=int, default=100,
+                        help='number of iteration over which kl divergence annealing goes to 1')
+    parser.add_argument('--max_iter', type=int, default=100, help='number of iterations')
+    parser.add_argument('--batch_size', type=int, default=16, help='the batch size')
+
+    # Model Network Parameters
+    parser.add_argument('--rnn_hidden_dim', type=int, default=128, help='rnn hidden dim')
+    parser.add_argument('--dropout', type=float, default=0.5, help='dropout rate')
+    parser.add_argument('--latent_dim', type=int, default=5, help='latent dim')
+    parser.add_argument('--n_cluster', type=int, default=5, help='number of cluster')
+
+    # Training Helper Parameters
+    parser.add_argument('--model', type=str, default='model2', help='model name')
+    parser.add_argument('--model_filename', type=str, default=None, help='file path for an appropriate model')
     parser.add_argument('--skiptrain', action='store_true', help='disable training if flag is provided')
-    parser.add_argument('--skiptest', action='store_true', help='enable testing')
+    parser.add_argument('--skiptest', action='store_true', help='disable training if flag is provided')
     parser.add_argument('--data_dir', type=str, default='../data/', help='data directory')
-    parser.add_argument('--best_epoch', type=int, default=10, help='best epoch')
     parser.add_argument('--seed', type=int, default=1, help='seed')
     parser.add_argument('--dump_cluster', type=int, default=0, help='whether to dump cluster while Testing')
-    parser.add_argument('--data_name', type=str, default='mimic2', help='data set name')
+    parser.add_argument('--data_name', type=str, default='simulated_hawkes', help='data set name')
     parser.add_argument('--run_label', type=str, default='', help='label for the run')
-
-    # Model Specific HyperParameters
-    parser.add_argument('--mc_num_samples', type=int, default=50, help='number of MC samples per event time prediction')
+    parser.add_argument('--toy', action='store_false', help='run with toy parameters if flag is provided')
 
     return parser

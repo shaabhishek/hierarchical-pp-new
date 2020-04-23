@@ -10,7 +10,7 @@ sys.path.insert(0, './../')
 from rmtpp import RMTPP
 from model2 import Model2
 from model2_filt import Model2Filter
-from model2_new import Model2New
+from model2_new import Model2 as Model2New
 from model1 import Model1
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -38,7 +38,8 @@ class ModelLoader:
                            latent_dim=hyperparams.latent_dim, x_given_t=hyperparams.x_given_t,
                            base_intensity=hyperparams.base_intensity, time_influence=hyperparams.time_influence,
                            gamma=hyperparams.gamma, time_loss=hyperparams.time_loss, dropout=hyperparams.dropout,
-                           mc_integration_num_samples=hyperparams.mc_integration_num_samples)
+                           mc_integration_num_samples=hyperparams.mc_integration_num_samples,
+                           n_samples_posterior=hyperparams.n_samples_posterior)
 
         elif isinstance(hyperparams, Model2Hyperparams):
             model = Model2(marker_type=hyperparams.marker_type, marker_dim=hyperparams.marker_dim,
@@ -60,14 +61,14 @@ class ModelLoader:
                                  time_loss=hyperparams.time_loss,
                                  dropout=hyperparams.dropout)
         elif isinstance(hyperparams, Model2NewHyperparams):
-            model = Model2New(n_sample=hyperparams.n_sample, marker_type=hyperparams.marker_type,
+            model = Model2New(marker_type=hyperparams.marker_type,
                               marker_dim=hyperparams.marker_dim,
                               latent_dim=hyperparams.latent_dim, time_dim=hyperparams.time_dim,
                               rnn_hidden_dim=hyperparams.rnn_hidden_dim, n_cluster=hyperparams.n_cluster,
                               x_given_t=hyperparams.x_given_t, base_intensity=hyperparams.base_intensity,
                               time_influence=hyperparams.time_influence, gamma=hyperparams.gamma,
                               time_loss=hyperparams.time_loss,
-                              dropout=hyperparams.dropout)
+                              dropout=hyperparams.dropout, n_samples_posterior=hyperparams.n_samples_posterior)
         else:
             raise ValueError("Did not specify model name correctly")
         return model

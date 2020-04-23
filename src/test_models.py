@@ -1,29 +1,29 @@
 from data_model_sandbox import get_argparse_parser_params
 from engine import Engine
 from parameters import DataParams
-from plotting import RMTPPPlotter, HawkesPlotter, MultipleModelPlot, RMTPPHawkesIntensityTimeIndexPlot
+from plotting import HawkesPlotter, MultipleModelPlot, Model1Plotter
 from run import TrainValRunner
 from utils.data_loader import SingleSequenceDSetCategorical, DLoaderCategorical
 
 
-def plot_model_intensity_vs_time_index(model_filename, model_name, dataset_name, label):
-    rmtpp_hawkes_params = get_argparse_parser_params(model_name, dataset_name)
-    plot_object = RMTPPHawkesIntensityTimeIndexPlot.from_params(
-        params=rmtpp_hawkes_params,
+def plot_model_intensity_vs_time_index(model_name, dataset_name, plotter_class, model_filename, label, sequence_idx=0):
+    model_dataset_params = get_argparse_parser_params(model_name, dataset_name)
+    plot_object = MultipleModelPlot.from_params(
+        params=model_dataset_params,
         plotter_list=[
-            RMTPPPlotter.from_filename(
+            plotter_class.from_filename(
                 model_filename=model_filename,
-                params=rmtpp_hawkes_params,
+                params=model_dataset_params,
                 split_name="train"
             ),
             HawkesPlotter.from_hyperparams(
-                {'lambda_0': .2, 'alpha': .8, 'sigma': 1.},
-                params=rmtpp_hawkes_params,
+                {'lambda_0': 0, 'alpha': .8, 'sigma': 1.},
+                params=model_dataset_params,
                 split_name='train'
             )
         ]
     )
-    plot_object.plot("Intensity vs Time Index")
+    plot_object.plot("Intensity vs Time Index", sequence_idx)
     plot_object.save_plot_and_close_fig(plot_object.fig, f"{label}_rmtpp_hawkes_intensity_vs_time_index")
 
 
@@ -70,4 +70,11 @@ if __name__ == "__main__":
     # rmtpp_simulated_intensity_plot()
     # train_single_sequence()
     # test_only_model()
-    plot_model_intensity_vs_time_index()
+    plot_model_intensity_vs_time_index(
+        "model1",
+        "simulated_hawkes",
+        Model1Plotter,
+        "test_model_1_g1_do0.5_b32_h256_l20.0_l20_gn10.0_lr0.001_c10_s1_tlintensity_ai40_20_04_20_12_12_20.pt",
+        "model1_vs_hawkes",
+        20
+    )
