@@ -41,4 +41,16 @@ def train_val_split(data, val_ratio=0.2):
 
 def make_intermediate_dirs_if_absent(full_file_path: Path):
     """Make intermediate folders, and don't throw error if they exist"""
-    os.makedirs(full_file_path.resolve(), exist_ok=True)
+    os.makedirs(str(full_file_path.resolve()), exist_ok=True)
+
+
+def _prepend_dims_to_tensor(tensor, *dims):
+    """Add dimensions of required size in the beginning of tensor
+    Example:
+    _prepend_dims(tensor, d1, d2) modifies tensor of shape (a,b,c) to tensor of shape (d1, d2, a, b, c)
+    """
+    return tensor.view(*[1 for _ in dims], *tensor.shape).expand(*dims, *tensor.shape)
+
+
+def _assert_shape(variable_name, variable_shape, expected_shape):
+    assert variable_shape == expected_shape, f"Shape of {variable_name} is incorrect: {variable_shape}, Expected: {expected_shape} "

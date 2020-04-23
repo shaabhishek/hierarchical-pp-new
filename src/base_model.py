@@ -1,21 +1,15 @@
 import torch
-from torch import Tensor, nn as nn
-import numpy as np
-import random
-import time
 
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.nn.utils.rnn as rnnutils
 from torch.distributions import Normal, Categorical, Gumbel
-from torch.distributions import kl_divergence
-from torch.optim import Adam
-import matplotlib.pyplot as plt
+
+from utils.helper import _assert_shape
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def sample_gumbel_softmax(logits, temperature):
+def sample_gumbel_softmax(logits, temperature, n_sample):
     """
         Input:
         logits: Tensor of log probs, shape = BS x k
@@ -23,11 +17,9 @@ def sample_gumbel_softmax(logits, temperature):
 
         Output: Tensor of values sampled from Gumbel softmax.
                 These will tend towards a one-hot representation in the limit of temp -> 0
-                shape = BS x k
+                shape = n_sample x BS x k
     """
-    g = Gumbel(torch.zeros(*logits.shape), torch.ones(*logits.shape)).sample().to(device)
-    # g = sample_gumbel(logits.shape)
-    # assert g.shape == logits.shape
+    g = Gumbel(torch.zeros(*logits.shape), torch.ones(*logits.shape)).rsample((n_sample,)).to(device)
     h = (g + logits) / temperature
     y = F.softmax(h, dim=-1)
     return y
@@ -35,14 +27,14 @@ def sample_gumbel_softmax(logits, temperature):
 
 class MLP(nn.Module):
     def __init__(self, dims: list):
-        assert len(dims) >= 2  # should at least be [inputdim, outputdim]
+        assert len(dims) >= 2  # should at least be [input_dim, output_dim]
         super().__init__()
         layers = list()
         for i in range(len(dims) - 1):
             n = dims[i]
             m = dims[i + 1]
-            L = nn.Linear(n, m, bias=True)
-            layers.append(L)
+            layer = nn.Linear(n, m, bias=True)
+            layers.append(layer)
             layers.append(nn.LayerNorm(m))
             layers.append(nn.ReLU())  # NOTE: Always slaps a non-linearity in the end
         self.net = nn.Sequential(*layers)
@@ -90,7 +82,7 @@ class MLPCategorical(MLP):
 
 
 class BaseEncoder(nn.Module):
-    def __init__(self, rnn_dims: list, y_dims: list, z_dims: list):
+    def __init__(self, rnn_dims: list, y_dims: list, z_dims: list, num_posterior_samples:int):
         super().__init__()
         self.rnn_dims = rnn_dims
         self.y_dims = y_dims
@@ -98,6 +90,7 @@ class BaseEncoder(nn.Module):
         self.rnn_hidden_dim = rnn_dims[-1]
         self.y_dim = y_dims[-1]
         self.latent_dim = z_dims[-1]
+        self.num_posterior_samples = num_posterior_samples
         self.y_module, self.rnn_module, self.z_module = self.create_inference_nets()
 
     def create_inference_nets(self):
@@ -112,6 +105,34 @@ class BaseEncoder(nn.Module):
 
     def forward(self, xt, temp, mask):
         raise NotImplementedError
+
+    def _get_encoded_y(self, augmented_hidden_seq: torch.Tensor, mask: torch.Tensor, T: int, BS: int, temp: float, Ny: int):
+        """
+        Encoder for y - discrete latent state
+
+        :param Ny:
+        :param augmented_hidden_seq:
+        :param mask:
+        :param T:
+        :param BS:
+        :param temp:
+        :return: dist_y, sample_y
+        sample_y: N x T x BS x y_dim
+        """
+        hidden_seq = augmented_hidden_seq[1:]
+        # Need the last time index of each sequence based on mask
+        last_time_idxs = torch.argmax(mask, dim=0)  # (BS,)
+        # Pick out the state corresponding to last time step for each batch data point
+        last_time_hidden_state = torch.cat(
+            [hidden_seq[last_time_idxs[i], i][None, :] for i in range(BS)],
+            dim=0)  # (BS,rnn_hidden_dim)
+        _assert_shape("last timestep's hidden state", last_time_hidden_state.shape, (BS, self.rnn_hidden_dim))
+
+        dist_y = self.y_module(last_time_hidden_state)  # shape(dist_y.logits) = (BS, y_dim)
+        sample_y = sample_gumbel_softmax(dist_y.logits, temp, Ny)  # (N, BS, y_dim)
+        sample_y = sample_y.unsqueeze(1).expand(Ny, T, -1, -1)  # (N, T, BS,y_dim)
+        _assert_shape("sample_y", sample_y.shape, (Ny, T, BS, self.y_dim))
+        return dist_y, sample_y
 
 
 class BaseDecoder(nn.Module):
@@ -198,31 +219,35 @@ class BaseModel(nn.Module):
     def compute_metrics(self, predicted_times, event_times, marker_logits, marker, mask):
         """
         Input:
-            :param marker_logits : Tensor of shape T x BS x marker_dim; t_j : actual time of event j
-            :param predicted_times : Tensor of shape T x BS x 1 ; pt_j : predicted time of event j
-            :param marker : Tensor of shape T x BS
-            :param event_times : Tensor of shape T x BS x 1
-            :param mask: Tensor of shape T x BS
+            :param predicted_times: Nz x Ny x T x BS x 1 ;
+            pt_j : predicted time of event j
+            :param event_times : T x BS x 1
+            t_j : actual time of event j
+            :param marker_logits : * x T x BS x marker_dim;
+            :param marker : T x BS
+            :param mask: T x BS
         Output:
             metric_dict: dict
         """
         metric_dict = {}
+        Nz, Ny = predicted_times.shape[:2]
+        num_total_events = Nz * Ny * mask[1:, :].sum().detach().cpu().numpy()
         with torch.no_grad():
             # note: both t[0] and pt[0] are 0 by convention
-            time_mse = torch.pow((predicted_times - event_times) * mask.unsqueeze(-1), 2.)  # (T, BS, 1)
-            metric_dict['time_mse'] = time_mse.sum().detach().cpu().numpy()
+            time_squared_error = torch.pow((predicted_times - event_times) * mask.unsqueeze(-1), 2.) # (Nz, Ny, T, BS, 1)
+            metric_dict['time_mse'] = time_squared_error.sum().cpu().numpy()
             # note: because 0th timestamps are zero always, reducing count to ensure accuracy stays unbiased
-            metric_dict['time_mse_count'] = mask[1:, :].sum().detach().cpu().numpy()
+            metric_dict['time_mse_count'] = num_total_events
 
             if self.marker_type == "categorical":
-                predicted = torch.argmax(marker_logits, dim=-1)  # (T, BS)
-                correct_predictions = (predicted == marker) * mask  # (T, BS)
-                correct_predictions = correct_predictions[1:]  # Keep only the predictions from 2nd timestamp
+                predicted = torch.argmax(marker_logits, dim=-1)  # (Nz, Ny, T, BS)
+                correct_predictions = (predicted == marker) * mask  # (Nz, Ny, T, BS)
+                correct_predictions = correct_predictions[:, :, 1:]  # Keep only the predictions from 2nd timestamp
 
                 # count how many correct predictions we made
-                metric_dict['marker_acc'] = correct_predictions.sum().detach().cpu().numpy()
+                metric_dict['marker_acc'] = correct_predictions.sum().cpu().numpy()
                 # count how many predictions we made
-                metric_dict['marker_acc_count'] = (mask[1:, :]).sum().cpu().numpy()
+                metric_dict['marker_acc_count'] = num_total_events
             else:
                 raise NotImplementedError
 
@@ -252,219 +277,7 @@ def one_hot_encoding(y, n_dims=None):
 
 
 def assert_input(self):
-    assert self.marker_type in {
-        'real', 'categorical', 'binary'}, "Unknown Input type provided!"
-
-
-def create_input_embedding_layer(model):
-    if model.marker_type == 'categorical':
-        x_module = nn.Embedding(model.marker_dim, model.x_embedding_dim[0])
-    else:
-        x_module = nn.Sequential(
-            nn.Linear(model.marker_dim, model.x_embedding_dim[0])  # , nn.ReLU(),
-            # Not sure whether to put Relu at the end of embedding layer
-            # nn.Linear(self.x_embedding_dim[0],
-            #          self.x_embedding_dim[1]), nn.ReLU()
-        )
-
-    # t_module = nn.Linear(self.time_dim, self.t_embedding_dim[0])
-    t_module = nn.Sequential(
-        nn.Linear(model.time_dim, model.t_embedding_dim[0])  # ,
-        # nn.ReLU(),
-        # nn.Dropout(p=0.5),
-        # nn.Linear(model.t_embedding_dim[0], model.t_embedding_dim[0])
-    )
-    return x_module, t_module
-
-
-def create_output_marker_layer(model):
-    embed_module = nn.Sequential(
-        nn.ReLU(), nn.Dropout(model.dropout),
-        nn.Linear(model.hidden_embed_input_dim, model.shared_output_dims[0]),
-        nn.ReLU(), nn.Dropout(model.dropout)
-        # nn.Linear(
-        #    self.shared_output_dims[0], self.shared_output_dims[1]), nn.ReLU()
-    )
-
-    x_module_logvar = None
-    l = model.shared_output_dims[-1]
-    if model.x_given_t:
-        l += 1
-    if model.marker_type == 'real':
-        x_module_mu = nn.Linear(l, model.marker_dim)
-        x_module_logvar = nn.Linear(l, model.marker_dim)
-    elif model.marker_type == 'binary':  # Fix binary
-        x_module_mu = nn.Sequential(
-            nn.Linear(l, model.marker_dim),
-            nn.Sigmoid())
-    elif model.marker_type == 'categorical':
-        x_module_mu = nn.Sequential(
-            nn.Linear(l, model.marker_dim)  # ,
-            # nn.Softmax(dim=-1)
-        )
-
-    return embed_module, x_module_mu, x_module_logvar
-
-
-# def create_output_time_layer(model, b, ti):
-#     l =model.shared_output_dims[-1]
-#     if model.time_loss == 'intensity':
-#         h_influence =  nn.Linear(l, 1, bias=False)
-#         time_influence = nn.Parameter(ti*torch.ones(1, 1, 1))#0.005*
-#         base_intensity =  nn.Parameter(torch.zeros(1, 1, 1)-b)#-8
-#         model.h_influence, model.time_influence, model.base_intensity =  h_influence, time_influence, base_intensity
-#     else:
-#         model.time_mu =   nn.Linear(l, 1)
-#         model.time_logvar =   nn.Linear(l, 1)
-#     return
-
-def create_output_nets(model, b, ti):
-    l = model.shared_output_dims[-1]
-
-    # Output net for time
-    if model.time_loss == 'intensity':
-        h_influence = nn.Linear(l, 1, bias=False)
-        time_influence = nn.Parameter(ti * torch.ones(1, 1, 1))  # 0.005*
-        base_intensity = nn.Parameter(torch.zeros(1, 1, 1) - b)  # -8
-        model.h_influence, model.time_influence, model.base_intensity = h_influence, time_influence, base_intensity
-    else:
-        model.time_mu = nn.Linear(l, 1)
-        model.time_logvar = nn.Linear(l, 1)
-
-    # Output net for markers
-    x_module_logvar = None
-    if model.x_given_t:
-        l += 1
-    if model.marker_type == 'real':
-        x_module_mu = nn.Linear(l, model.marker_dim)
-        x_module_logvar = nn.Linear(l, model.marker_dim)
-    elif model.marker_type == 'binary':  # Fix binary
-        x_module_mu = nn.Sequential(
-            nn.Linear(l, model.marker_dim),
-            nn.Sigmoid())
-    elif model.marker_type == 'categorical':
-        x_module_mu = nn.Sequential(
-            nn.Linear(l, model.marker_dim)  # ,
-            # nn.Softmax(dim=-1)
-        )
-    model.output_x_mu, model.output_x_logvar = x_module_mu, x_module_logvar
-
-
-def compute_marker_log_likelihood(model, x, mu, logvar):
-    """
-        Input:  
-                x   : Tensor of shape TxBSxmarker_dim (if real)
-                    Tensor of shape TxBSx1(if categorical)
-                mu : Tensor of shape T x BS x marker_dim
-                logvar : Tensor of shape T x BS x marker_dim #None in case of non real marker
-        Output:
-                loss : TxBS
-    """
-    if model.marker_type == 'real':
-        sigma = torch.clamp(logvar.exp().sqrt(), min=model.sigma_min)
-        x_recon_dist = Normal(mu, sigma)
-        ll_loss = (x_recon_dist.log_prob(x)
-                   ).sum(dim=-1)
-        return ll_loss
-    else:
-        seq_lengths, batch_size = x.size(0), x.size(1)
-
-        if model.marker_type == 'categorical':
-            mu_ = mu.view(-1, model.marker_dim)  # T*BS x marker_dim
-            x_ = x.view(-1)  # (T*BS,)
-            loss = F.cross_entropy(mu_, x_, reduction='none').view(
-                seq_lengths, batch_size)
-        else:  # binary
-            loss = F.binary_cross_entropy(mu, x, reduction='none').sum(dim=-1)  # TxBS
-        return -loss
-
-def compute_point_log_likelihood(model, h, t):
-    """
-        Input:
-            h : Tensor of shape (T)xBSxself.shared_output_dims[-1]
-            t : Tensor of shape TxBSxtime_dim [i,:,0] represents actual time at timestep i ,\
-                [i,:,1] represents time gap d_i = t_i- t_{i-1}
-        Output:
-            log_f_t : tensor of shape TxBS
-
-    """
-    h_trimmed = h  # TxBSxself.shared_output_dims[-1]
-    d_js = t[:, :, 0][:, :, None]  # Shape TxBSx1 Time differences
-
-    if model.time_loss == 'intensity':
-        past_influence = model.h_influence(h_trimmed)  # TxBSx1
-
-        # TxBSx1
-        if model.time_influence > 0:
-            ti = torch.clamp(model.time_influence, min=1e-5)
-        else:
-            ti = torch.clamp(model.time_influence, max=-1e-5)
-        current_influence = ti * d_js
-        base_intensity = model.base_intensity  # 1x1x1
-
-        term1 = past_influence + current_influence + base_intensity
-        term2 = (past_influence + base_intensity).exp()
-        term3 = term1.exp()
-
-        log_f_t = term1 + \
-                  (1. / (ti)) * (term2 - term3)
-        return log_f_t[:, :, 0], None  # TxBS
-    else:
-        mu_time = model.time_mu(h_trimmed)  # TxBSx1
-        logvar_time = model.time_logvar(h_trimmed)  # TxBSx1
-        sigma_time = logvar_time.exp().sqrt() + model.sigma_min  # TxBSx1
-        time_recon_dist = Normal(mu_time, sigma_time)
-        ll_loss = (time_recon_dist.log_prob(d_js)
-                   ).sum(dim=-1)  # TxBS
-        return ll_loss, mu_time
-
-
-def preprocess_input(model, x, t):
-    """
-        Input: 
-            x   : Tensor of shape TxBSxmarker_dim (if real)
-                    Tensor of shape TxBSx1(if categorical)
-            t   : Tensor of shape TxBSxtime_dim. [i,:,0] represents actual time at timestep i ,\
-                [i,:,1] represents time gap d_i = t_i- t_{i-1}
-
-        Output:
-            phi_x : Tensor of shape TxBSx self.x_embedding_dim[-1]
-            phi_t : Tensor of shape TxBSx self.t_embedding_dim[-1]
-            phi   : Tensor of shape TxBS x (self.x_embedding_dim[-1] + self.t_embedding_dim[-1])
-    """
-    # if model.marker_type == 'categorical':
-    #     # Shape TxBSxmarker_dim
-    #     x = one_hot_encoding(x[:, :], model.marker_dim).to(device)
-    phi_x = model.embed_x(x)
-    phi_t = model.embed_time(t)
-    # phi_t = t
-    phi = torch.cat([phi_x, phi_t], -1)
-    return phi_x, phi_t, phi
-
-
-def generate_marker(model, h, t):
-    """
-        Input:
-            h : Tensor of shape TxBSxself.shared_output_dims[-1]
-            t : Tensor of shape TxBSxtime_dim [i,:,0] represents actual time at timestep i ,\
-                [i,:,1] represents time gap d_i = t_i- t_{i-1}
-        Output:
-            marker_out_mu : Tensor of shape T x BS x marker_dim
-            marker_out_logvar : Tensor of shape T x BS x marker_dim #None in case of non real marker
-    """
-    # h_trimmed = h[:-1, :, :]
-    h_trimmed = h
-    if model.x_given_t:
-        d_js = t[:, :, 1][:, :, None]  # Shape TxBSx1 Time differences
-        h_trimmed = torch.cat([h_trimmed, d_js], -1)
-
-    marker_out_mu = model.output_x_mu(h_trimmed)
-
-    if model.marker_type == 'real':
-        marker_out_logvar = model.output_x_logvar(h_trimmed)
-    else:
-        marker_out_logvar = None
-    return marker_out_mu, marker_out_logvar
+    assert self.marker_type in {'categorical'}, "Unknown Input type provided!"
 
 
 def create_mlp(dims: list):
@@ -479,7 +292,7 @@ def create_mlp(dims: list):
     return nn.Sequential(*layers)
 
 
-def _get_timestamps_and_intervals_from_data(time_data):
-    time_intervals = time_data[:, :, 0:1]  # (T, BS, 1)
-    event_times = time_data[:, :, 1:2]  # (T, BS, 1)
+def _get_timestamps_and_intervals_from_data(time_data_tensor):
+    time_intervals = time_data_tensor[:, :, 0:1]  # (T, BS, 1)
+    event_times = time_data_tensor[:, :, 1:2]  # (T, BS, 1)
     return time_intervals, event_times

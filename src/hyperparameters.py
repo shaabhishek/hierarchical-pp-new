@@ -47,6 +47,7 @@ class Model1Hyperparams(BaseModelHyperparams):
         super(Model1Hyperparams, self).__init__(params)
         self.latent_dim = params.latent_dim
         self.n_cluster = params.n_cluster
+        self.n_samples_posterior = params.n_samples_posterior
 
 
 class Model2Hyperparams(BaseModelHyperparams):
@@ -56,6 +57,7 @@ class Model2Hyperparams(BaseModelHyperparams):
         super(Model2Hyperparams, self).__init__(params)
         self.latent_dim = params.latent_dim
         self.n_cluster = params.n_cluster
+        self.n_samples_posterior = params.n_samples_posterior
 
 
 class Model2FilterHyperparams(BaseModelHyperparams):
@@ -65,7 +67,7 @@ class Model2FilterHyperparams(BaseModelHyperparams):
         super(Model2FilterHyperparams, self).__init__(params)
         self.latent_dim = params.latent_dim
         self.n_cluster = params.n_cluster
-        self.n_sample = params.n_sample
+        self.n_samples_posterior = params.n_samples_posterior
 
 
 class Model2NewHyperparams(BaseModelHyperparams):
@@ -75,7 +77,7 @@ class Model2NewHyperparams(BaseModelHyperparams):
         super(Model2NewHyperparams, self).__init__(params)
         self.latent_dim = params.latent_dim
         self.n_cluster = params.n_cluster
-        self.n_sample = params.n_sample
+        self.n_samples_posterior = params.n_samples_posterior
 
 
 class ModelHyperparams:

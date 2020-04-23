@@ -1,11 +1,12 @@
 from abc import abstractmethod, ABC
 
 import matplotlib
+import numpy
 import torch
 from matplotlib.axes import Axes, np
 
-from data_model_sandbox import HawkesProcessDataModelSandBox, RMTPPDataModelSandBox
-from hyperparameters import RMTPPHyperparams, HawkesHyperparams
+from data_model_sandbox import HawkesProcessDataModelSandBox, RMTPPDataModelSandBox, Model1DataModelSandBox
+from hyperparameters import RMTPPHyperparams, HawkesHyperparams, Model1Hyperparams
 from parameters import PlottingParams, DataModelParams, DataParams
 
 matplotlib.use('agg')
@@ -26,7 +27,7 @@ class BasePlot:
         plt.close(fig)
 
 
-class BasePlotter(ABC):
+class BasePlotter:
 
     @abstractmethod
     def _get_intensity(self, sequence_idx, grid_size):
@@ -35,10 +36,6 @@ class BasePlotter(ABC):
     @staticmethod
     def _plot_data_timestamps(data_timestamps, ax: Axes):
         ax.scatter(data_timestamps, [0] * len(data_timestamps), s=1)
-
-    @staticmethod
-    def _make_plot(ax, plot_title):
-        ax.set_title(plot_title)
 
 
 class HawkesPlotter(BasePlotter):
@@ -55,13 +52,11 @@ class HawkesPlotter(BasePlotter):
         intensity_vals, t_vals, data_timestamps = self._get_intensity(sequence_idx, grid_size)
         ax.plot(t_vals, intensity_vals, label='hawkes')
         self._plot_data_timestamps(data_timestamps, ax)
-        self._make_plot(ax, plot_title='Hawkes True Model: Intensity vs Time')
 
     def plot_intensity_vs_time_index_to_axes(self, ax: Axes, sequence_idx=0):
         intensity_vals, _, data_timestamps = self._get_intensity(sequence_idx, None)
         ax.plot(np.arange(len(intensity_vals)), intensity_vals, label='hawkes')
         self._plot_data_timestamps(data_timestamps, ax)
-        self._make_plot(ax, plot_title='Hawkes True Model: Intensity vs Time')
 
     @classmethod
     def from_hyperparams(cls, hyperparams_dict, params, split_name):
@@ -71,39 +66,31 @@ class HawkesPlotter(BasePlotter):
         return cls(data_model_sandbox)
 
 
-class RMTPPPlotter(BasePlotter):
-    def __init__(self, data_model_sandbox: RMTPPDataModelSandBox):
+class BaseNNPlotter(BasePlotter):
+    data_model_sandbox_class = None
+    hyperparams_class = None
+    model_name = None
+
+    def __init__(self, data_model_sandbox):
         self.data_model_sandbox = data_model_sandbox
 
-    def _get_intensity(self, sequence_idx, grid_size):
-        """
-        :param grid_size:
-        """
-        hidden_seq, data_timestamps = self.data_model_sandbox.setup(sequence_idx)  # # (T, BS=1, h_dim), (T, BS=1, 1)
+    def plot_intensity_vs_timestamp_to_axes(self, ax: Axes, sequence_idx=0, grid_size=1000):
+        intensity_vals, t_vals, data_timestamps = self._get_intensity(sequence_idx, grid_size)
+        ax.plot(t_vals, intensity_vals, label=self.model_name)
+        self._plot_data_timestamps(data_timestamps, ax)
 
-        log_intensity, evaluated_timestamps = self.data_model_sandbox.get_intensity_over_grid(hidden_seq,
-                                                                                              data_timestamps,
-                                                                                              grid_size=grid_size)
+    def plot_intensity_vs_time_index_to_axes(self, ax: Axes, sequence_idx=0):
+        intensity_vals, _, data_timestamps = self._get_intensity(sequence_idx, None)
+        ax.plot(np.arange(len(intensity_vals)), intensity_vals, label=self.model_name)
+        self._plot_data_timestamps(data_timestamps, ax)
+
+    def _get_intensity(self, sequence_idx: int, grid_size: int):
+        log_intensity, data_timestamps, evaluated_timestamps = self.data_model_sandbox.get_intensity_over_grid(
+            sequence_idx, grid_size)
         intensity_np = log_intensity.exp().detach().cpu().numpy().flatten()
         evaluated_timestamps_np = evaluated_timestamps.cpu().numpy().flatten()
         data_timestamps_np = data_timestamps.cpu().numpy().flatten()
         return intensity_np, evaluated_timestamps_np, data_timestamps_np
-
-    def plot_intensity_vs_timestamp_to_axes(self, ax: Axes, sequence_idx=0, grid_size=1000):
-        intensity_vals, t_vals, data_timestamps = self._get_intensity(sequence_idx, grid_size)
-
-        ax.plot(t_vals, intensity_vals, label='rmtpp')
-        self._plot_data_timestamps(data_timestamps, ax)
-
-        self._make_plot(ax, 'RMTPP: Intensity vs Time')
-
-    def plot_intensity_vs_time_index_to_axes(self, ax: Axes, sequence_idx=0):
-        intensity_vals, _, data_timestamps = self._get_intensity(sequence_idx, None)
-
-        ax.plot(np.arange(len(intensity_vals)), intensity_vals, label='rmtpp')
-        self._plot_data_timestamps(data_timestamps, ax)
-
-        self._make_plot(ax, 'RMTPP: Intensity vs Time Index')
 
     @classmethod
     def from_filename(cls, model_filename, params, split_name):
@@ -112,16 +99,21 @@ class RMTPPPlotter(BasePlotter):
             model_filename=model_filename,
             split_name=split_name
         )
-        model_hyperparams = RMTPPHyperparams(params)
-        data_model_sandbox = RMTPPDataModelSandBox(data_model_params, model_hyperparams)
+        model_hyperparams = cls.hyperparams_class(params)
+        data_model_sandbox = cls.data_model_sandbox_class(data_model_params, model_hyperparams)
         return cls(data_model_sandbox)
 
 
-class IntensityVsTimeIndexPlotMixin:
-    def _make_single_plot(self, plotter):
-        assert isinstance(self, MultipleModelPlot)
-        assert isinstance(plotter, (RMTPPPlotter, HawkesPlotter))
-        plotter.plot_intensity_vs_time_index_to_axes(self.ax, sequence_idx=10)
+class RMTPPPlotter(BaseNNPlotter):
+    data_model_sandbox_class = RMTPPDataModelSandBox
+    hyperparams_class = RMTPPHyperparams
+    model_name = "RMTPP"
+
+
+class Model1Plotter(BaseNNPlotter):
+    data_model_sandbox_class = Model1DataModelSandBox
+    hyperparams_class = Model1Hyperparams
+    model_name = "Model1"
 
 
 class MultipleModelPlot(BasePlot):
@@ -130,17 +122,17 @@ class MultipleModelPlot(BasePlot):
         self.plotter_list = plotter_list
         self.fig, self.ax = plt.subplots(1, 1)
 
-    def plot(self, plot_title):
+    def plot(self, plot_title, sequence_idx):
         for plotter in self.plotter_list:
-            self._make_single_plot(plotter)
+            self._make_single_plot(plotter, sequence_idx)
         self.ax.set_title(plot_title)
         self.ax.legend()
+
+    def _make_single_plot(self, plotter, sequence_idx):
+        assert isinstance(plotter, (BaseNNPlotter, HawkesPlotter))
+        plotter.plot_intensity_vs_time_index_to_axes(self.ax, sequence_idx)
 
     @classmethod
     def from_params(cls, params, plotter_list):
         plotting_params = PlottingParams(params)
         return cls(plotting_params, plotter_list)
-
-
-class RMTPPHawkesIntensityTimeIndexPlot(IntensityVsTimeIndexPlotMixin, MultipleModelPlot):
-    pass

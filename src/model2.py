@@ -1,13 +1,11 @@
-import torch
-import torch.nn as nn
-from torch.optim import Adam
-import torch.nn.functional as F
-from torch.distributions import kl_divergence, Normal, Categorical
 import math
 
-from base_model import compute_marker_log_likelihood, compute_point_log_likelihood, generate_marker, create_output_nets, sample_gumbel_softmax
-from base_model import MLP, MLPNormal, MLPCategorical, BaseEncoder, BaseDecoder, BaseModel
-from utils.metric import get_marker_metric, compute_time_expectation, get_time_metric
+import torch
+import torch.nn as nn
+from torch.distributions import kl_divergence, Normal, Categorical
+
+from base_model import BaseEncoder, BaseDecoder, BaseModel
+from base_model import sample_gumbel_softmax
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
