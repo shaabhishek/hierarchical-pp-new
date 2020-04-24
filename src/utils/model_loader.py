@@ -2,80 +2,39 @@ import sys
 
 import torch
 
-from parameters import DataModelParams
-from hyperparameters import BaseModelHyperparams, RMTPPHyperparams, Model1Hyperparams, Model2Hyperparams, \
-    Model2FilterHyperparams, Model2NewHyperparams
+from hyperparameters import RMTPPHyperParams, Model1HyperParams, Model2HyperParams, \
+    Model2FilterHyperParams
 
-sys.path.insert(0, './../')
 from rmtpp import RMTPP
-from model2 import Model2
 from model2_filt import Model2Filter
-from model2_new import Model2 as Model2New
+from model2_new import Model2
 from model1 import Model1
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class ModelLoader:
-    def __init__(self, model_params: DataModelParams, hyperparams):
+    def __init__(self, hyperparams):
         self.model_hyperparams = hyperparams
         self.model = self._load_model(self.model_hyperparams).to(device)
 
     @staticmethod
     def _load_model(hyperparams):
-        if isinstance(hyperparams, RMTPPHyperparams):
-            model = RMTPP(marker_type=hyperparams.marker_type, marker_dim=hyperparams.marker_dim,
-                          time_dim=hyperparams.time_dim,
-                          rnn_hidden_dim=hyperparams.rnn_hidden_dim, x_given_t=hyperparams.x_given_t,
-                          base_intensity=hyperparams.base_intensity, time_influence=hyperparams.time_influence,
-                          gamma=hyperparams.gamma, time_loss=hyperparams.time_loss, dropout=hyperparams.dropout,
-                          latent_dim=None, mc_integration_num_samples=hyperparams.mc_integration_num_samples,
-                          n_cluster=None, )
-        elif isinstance(hyperparams, Model1Hyperparams):
-            model = Model1(marker_type=hyperparams.marker_type, marker_dim=hyperparams.marker_dim,
-                           time_dim=hyperparams.time_dim,
-                           rnn_hidden_dim=hyperparams.rnn_hidden_dim, n_cluster=hyperparams.n_cluster,
-                           latent_dim=hyperparams.latent_dim, x_given_t=hyperparams.x_given_t,
-                           base_intensity=hyperparams.base_intensity, time_influence=hyperparams.time_influence,
-                           gamma=hyperparams.gamma, time_loss=hyperparams.time_loss, dropout=hyperparams.dropout,
-                           mc_integration_num_samples=hyperparams.mc_integration_num_samples,
-                           n_samples_posterior=hyperparams.n_samples_posterior)
-
-        elif isinstance(hyperparams, Model2Hyperparams):
-            model = Model2(marker_type=hyperparams.marker_type, marker_dim=hyperparams.marker_dim,
-                           latent_dim=hyperparams.latent_dim,
-                           time_dim=hyperparams.time_dim, rnn_hidden_dim=hyperparams.rnn_hidden_dim,
-                           n_cluster=hyperparams.n_cluster,
-                           x_given_t=hyperparams.x_given_t, base_intensity=hyperparams.base_intensity,
-                           time_influence=hyperparams.time_influence, gamma=hyperparams.gamma,
-                           time_loss=hyperparams.time_loss,
-                           dropout=hyperparams.dropout)
-
-        elif isinstance(hyperparams, Model2FilterHyperparams):
-            model = Model2Filter(n_sample=hyperparams.n_sample, marker_type=hyperparams.marker_type,
-                                 marker_dim=hyperparams.marker_dim,
-                                 latent_dim=hyperparams.latent_dim, time_dim=hyperparams.time_dim,
-                                 rnn_hidden_dim=hyperparams.rnn_hidden_dim, n_cluster=hyperparams.n_cluster,
-                                 x_given_t=hyperparams.x_given_t, base_intensity=hyperparams.base_intensity,
-                                 time_influence=hyperparams.time_influence, gamma=hyperparams.gamma,
-                                 time_loss=hyperparams.time_loss,
-                                 dropout=hyperparams.dropout)
-        elif isinstance(hyperparams, Model2NewHyperparams):
-            model = Model2New(marker_type=hyperparams.marker_type,
-                              marker_dim=hyperparams.marker_dim,
-                              latent_dim=hyperparams.latent_dim, time_dim=hyperparams.time_dim,
-                              rnn_hidden_dim=hyperparams.rnn_hidden_dim, n_cluster=hyperparams.n_cluster,
-                              x_given_t=hyperparams.x_given_t, base_intensity=hyperparams.base_intensity,
-                              time_influence=hyperparams.time_influence, gamma=hyperparams.gamma,
-                              time_loss=hyperparams.time_loss,
-                              dropout=hyperparams.dropout, n_samples_posterior=hyperparams.n_samples_posterior)
+        if isinstance(hyperparams, RMTPPHyperParams):
+            model = RMTPP(hyperparams)
+        elif isinstance(hyperparams, Model1HyperParams):
+            model = Model1.from_model_hyperparams(hyperparams)
+        elif isinstance(hyperparams, Model2HyperParams):
+            model = Model2.from_model_hyperparams(hyperparams)
+        elif isinstance(hyperparams, Model2FilterHyperParams):
+            model = Model2Filter.from_model_hyperparams(hyperparams)
         else:
             raise ValueError("Did not specify model name correctly")
         return model
 
     @classmethod
     def from_model_checkpoint(cls, model_params, hyperparams):
-        self = cls(model_params, hyperparams)
+        self = cls(hyperparams)
         model_state_path = model_params.get_model_state_path()
         checkpoint = torch.load(model_state_path, map_location=device)
         epoch_num = checkpoint['epoch']

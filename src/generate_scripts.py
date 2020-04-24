@@ -34,7 +34,7 @@ def main():
     params['anneal_iter'] = [20, 50]
     params['gamma'] = [1]
     params['maxgradnorm'] = [ 10., 100.]
-    params['n_cluster'] = [10]
+    params['cluster_dim'] = [10]
     params['dropout'] = [ 0.25, 0.4]
     params['model'] = ['model1', 'model2']# [ 'model2_filt']
     params['max_iter'] = [100]

@@ -89,7 +89,7 @@ class Decoder(BaseDecoder):
 
 class Model2(BaseModel):
     def __init__(self, **kwargs):
-    # def __init__(self, latent_dim=20, marker_dim=31, marker_type='real', rnn_hidden_dim=128, time_dim=2, n_cluster=5, x_given_t=False, time_loss='normal', gamma=1., dropout=None, base_intensity=0, time_influence=0.1):
+    # def __init__(self, latent_dim=20, marker_dim=31, marker_type='real', rnn_hidden_dim=128, time_dim=2, cluster_dim=5, x_given_t=False, time_loss='normal', gamma=1., dropout=None, base_intensity=0, time_influence=0.1):
         super().__init__(**kwargs)
         self.logvar_min = math.log(1e-20)
         self.sigma_min = 1e-10

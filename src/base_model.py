@@ -1,10 +1,12 @@
-import torch
+from collections import namedtuple
 
-import torch.nn as nn
+import torch
 import torch.nn.functional as F
+from torch import nn as nn
 from torch.distributions import Normal, Categorical, Gumbel
 
-from utils.helper import assert_shape, pretty_print_table
+from hyperparameters import EncoderHyperParams, Model1HyperParams
+from utils.helper import assert_shape, pretty_print_table, prepend_dims_to_tensor
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -23,6 +25,9 @@ def sample_gumbel_softmax(logits, temperature, n_sample):
     h = (g + logits) / temperature
     y = F.softmax(h, dim=-1)
     return y
+
+
+DistSampleTuple = namedtuple('DistSampleTuple', ['dist', 'sample'])
 
 
 class MLP(nn.Module):
@@ -65,8 +70,8 @@ class MLPNormal(MLP):
 class MLPCategorical(MLP):
     def __init__(self, dims: list):
         try:
-            assert len(
-                dims) >= 3  # should at least be [inputdim, hiddendim1, logitsdim] - otherwise it's just a matrix multiplication
+            # should at least be [inputdim, hiddendim1, logitsdim] - otherwise it's just a matrix multiplication
+            assert len(dims) >= 3, f"MLP dimension should at least be [in_dim, hiddendim1, out_dim], provided: {dims}"
         except AssertionError:
             print(dims)
             raise
@@ -82,31 +87,28 @@ class MLPCategorical(MLP):
 
 
 class BaseEncoder(nn.Module):
-    def __init__(self, rnn_dims: list, y_dims: list, z_dims: list, num_posterior_samples:int):
+    def __init__(self, encoder_hyperparams: EncoderHyperParams):
         super().__init__()
-        self.rnn_dims = rnn_dims
-        self.y_dims = y_dims
-        self.z_dims = z_dims
-        self.rnn_hidden_dim = rnn_dims[-1]
-        self.y_dim = y_dims[-1]
-        self.latent_dim = z_dims[-1]
-        self.num_posterior_samples = num_posterior_samples
-        self.y_module, self.rnn_module, self.z_module = self.create_inference_nets()
+        self.num_posterior_samples = encoder_hyperparams.num_posterior_samples
+        self.rnn_hidden_dim = encoder_hyperparams.rnn_dims[-1]
+        self.y_dim = encoder_hyperparams.y_dims[-1]
+        self.latent_dim = encoder_hyperparams.z_dims[-1]
+        self.y_module, self.rnn_module, self.z_module = self.create_inference_nets(encoder_hyperparams.y_dims,
+                                                                                   encoder_hyperparams.rnn_dims,
+                                                                                   encoder_hyperparams.z_dims)
 
-    def create_inference_nets(self):
-        y_module = MLPCategorical(self.y_dims)
-
-        rnn = nn.GRU(
-            input_size=self.rnn_dims[0],
-            hidden_size=self.rnn_dims[1],
-        )
-        z_module = MLPNormal(self.z_dims)
+    @staticmethod
+    def create_inference_nets(y_dims, rnn_dims, z_dims):
+        y_module = MLPCategorical(y_dims)
+        rnn = BaseModel.create_rnn(rnn_dims)
+        z_module = MLPNormal(z_dims)
         return y_module, rnn, z_module
 
     def forward(self, xt, temp, mask):
         raise NotImplementedError
 
-    def _get_encoded_y(self, augmented_hidden_seq: torch.Tensor, mask: torch.Tensor, T: int, BS: int, temp: float, Ny: int):
+    def _get_encoded_y(self, augmented_hidden_seq: torch.Tensor, mask: torch.Tensor, T: int, BS: int, temp: float,
+                       Ny: int):
         """
         Encoder for y - discrete latent state
 
@@ -136,60 +138,88 @@ class BaseEncoder(nn.Module):
 
 
 class BaseDecoder(nn.Module):
-    def __init__(self, shared_output_dims: list, marker_dim: int, decoder_in_dim: int, **kwargs):
+    def __init__(self, decoder_hyperparams):
         super().__init__()
-        self.shared_output_dims = shared_output_dims
-        self.marker_dim = marker_dim
-        self.time_loss = kwargs['time_loss']
-        self.marker_type = kwargs['marker_type']
-        self.x_given_t = kwargs['x_given_t']
-        self.preprocessing_module_dims = [decoder_in_dim, *self.shared_output_dims]
-        self.preprocessing_module = self.create_generative_nets()
+        self.marker_type = decoder_hyperparams.marker_type
 
-    def create_generative_nets(self):
-        module = MLP(self.preprocessing_module_dims)
-        return module
+    def forward(self, augmented_hidden_seq, posterior_sample_z, posterior_sample_y, t, x):
+        """
+        :param augmented_hidden_seq: T x BS x h_dim
+        :param posterior_sample_z: Nz x Ny x T x BS x latent_dim
+        :param posterior_sample_y: Ny x T x BS x y_dim
+        :param t: T x BS x t_dim=2
+        time data
+        :param x: T x BS
+        marker data
+
+        :return: marker_log_likelihood: T x BS
+        :return: time_log_likelihood: T x BS
+        :return: predicted_times: Nz x Ny x T x BS x 1
+        :return: dist_marker_recon_logits: Nz x Ny x T x BS x x_dim
+        """
+        T, BS, _ = t.shape
+        time_intervals, event_times = _get_timestamps_and_intervals_from_data(t)
+
+        phi_hzy_seq = self.preprocess_latent_states(augmented_hidden_seq, posterior_sample_y, posterior_sample_z, T, BS)
+        dist_marker_recon = self._get_marker_distribution(phi_hzy_seq)  # logits: (Nz, Ny, T, BS, x_dim)
+        marker_log_likelihood, time_log_likelihood = self._compute_log_likelihoods(phi_hzy_seq, time_intervals,
+                                                                                   x, dist_marker_recon, T, BS)
+
+        predicted_times = self._get_predicted_times(phi_hzy_seq, event_times, BS)
+
+        return marker_log_likelihood, time_log_likelihood, predicted_times, dist_marker_recon.logits
 
     def _get_marker_distribution(self, h):
-        raise NotImplementedError
+        if self.marker_type == 'categorical':
+            logits = self.marked_point_process_net.get_next_event_marker_logits(h)
+            return Categorical(logits=logits)
+        else:
+            raise NotImplementedError
 
     def _compute_log_likelihoods(self, *args):
         raise NotImplementedError
 
+    def _get_predicted_times(self, phi_hzy_seq, event_times, BS):
+        """
+        Predicts the next event for each time step using Numerical Integration
+
+        :param phi_hzy_seq: Nz x Ny x T x BS x phi_dim
+        [phi_0, .., phi_{T-1}] = f[(h_prime, z_0, y), (h_0, z_1, y), ..., (h_{T-2}, z_{T-1}, y)]
+        :param event_times: T x BS x 1
+        [t_0, ..., t_{T-1}]
+        :param BS: int, Batch size
+        :return: predicted_times = Nz x Ny x T x BS x 1
+        [t'_0, ..., t'_{T-1}]
+        """
+        Nz, Ny = phi_hzy_seq.shape[:2]
+        expanded_event_times = prepend_dims_to_tensor(event_times[:-1], Nz, Ny)  # Nz, Ny, T-1, BS, 1
+        # import pdb; pdb.set_trace()
+        with torch.no_grad():
+            # The pairs of (h,t) should be (h_j, t_j) where h_j has information about t_j
+            # don't need the predicted timestamp after the last observed event at time T
+            next_event_times = self.marked_point_process_net.get_next_event_times(phi_hzy_seq[:, :, 1:],
+                                                                                  expanded_event_times)  # (*, T-1, BS, 1)
+            predicted_times = torch.cat([torch.zeros(Nz, Ny, 1, BS, 1).to(device), next_event_times], dim=2)
+        return predicted_times
+
 
 class BaseModel(nn.Module):
     model_name = ""
+    encoder_hyperparams_class = None
+    decoder_hyperparams_class = None
 
-    def __init__(self, **kwargs):
+    def __init__(self, model_hyperparams):
         super().__init__()
-        self.marker_type = kwargs['marker_type']
-        self.marker_dim = kwargs['marker_dim']
-        self.time_dim = kwargs['time_dim']
-        self.rnn_hidden_dim = kwargs['rnn_hidden_dim']
-        self.latent_dim = kwargs['latent_dim']
-        self.cluster_dim = kwargs['n_cluster']
-        self.x_given_t = kwargs['x_given_t']
-        self.time_loss = kwargs['time_loss']
-        self.base_intensity = kwargs['base_intensity']
-        self.time_influence = kwargs['time_influence']
+        self.marker_type = model_hyperparams.marker_type
+        self.marker_dim = model_hyperparams.marker_dim
+        self.time_dim = model_hyperparams.time_dim
+        self.rnn_hidden_dim = model_hyperparams.rnn_hidden_dim
+        self.latent_dim = model_hyperparams.latent_dim
+        self.cluster_dim = model_hyperparams.cluster_dim
 
-        ## Preprocessing networks
         # Embedding network
-        self.x_embedding_dim = [128]
-        self.t_embedding_dim = [8]
-        self.emb_dim = self.x_embedding_dim[-1] + self.t_embedding_dim[-1]
-        self.embed_x, self.embed_t = self.create_embedding_nets()
-        self.shared_output_dims = [self.rnn_hidden_dim]
-
-        # Inference network
-        if self.latent_dim is not None:
-            self.encoder_z_hidden_dims = [64, 64]
-            self.encoder_y_hidden_dims = [64]
-            z_input_dim = self.rnn_hidden_dim + self.emb_dim + self.cluster_dim
-            self.rnn_dims = [self.emb_dim, self.rnn_hidden_dim]
-            self.y_dims = [self.rnn_hidden_dim, *self.encoder_y_hidden_dims, self.cluster_dim]
-            self.z_dims = [z_input_dim, *self.encoder_z_hidden_dims, self.latent_dim]
-        # self.encoder = Encoder(rnn_dims=rnn_dims, y_dims=y_dims, z_dims=z_dims)
+        self.embed_x, self.embed_t = self.create_embedding_nets(model_hyperparams.marker_embedding_net_dims,
+                                                                model_hyperparams.time_embedding_net_dims)
 
     def print_model_info(self):
         # dump whatever str(nn.Module) has to offer
@@ -200,21 +230,14 @@ class BaseModel(nn.Module):
         for param_name, param_data in self.named_parameters():
             pretty_print_table(param_name, param_data.size())
 
-    def create_embedding_nets(self):
-        # marker_dim is passed. timeseries_dim is 2
+    def create_embedding_nets(self, marker_embedding_net_dims, time_embedding_net_dims):
+        # marker_dim is passed. time series dim is 2
         if self.marker_type == 'categorical':
-            x_module = nn.Embedding(self.marker_dim, self.x_embedding_dim[0])
+            x_module = nn.Embedding(*marker_embedding_net_dims)
         else:
-            x_module = nn.Sequential(
-                nn.Linear(self.marker_dim, self.x_embedding_dim[0]),
-                nn.ReLU(),
-            )
-            # raise NotImplementedError
+            x_module = MLP(marker_embedding_net_dims)
 
-        t_module = nn.Sequential(
-            nn.Linear(self.time_dim, self.t_embedding_dim[0]),
-            nn.ReLU()
-        )
+        t_module = MLP(time_embedding_net_dims)
         return x_module, t_module
 
     def compute_metrics(self, predicted_times, event_times, marker_logits, marker, mask):
@@ -235,7 +258,8 @@ class BaseModel(nn.Module):
         num_total_events = Nz * Ny * mask[1:, :].sum().detach().cpu().numpy()
         with torch.no_grad():
             # note: both t[0] and pt[0] are 0 by convention
-            time_squared_error = torch.pow((predicted_times - event_times) * mask.unsqueeze(-1), 2.) # (Nz, Ny, T, BS, 1)
+            time_squared_error = torch.pow((predicted_times - event_times) * mask.unsqueeze(-1),
+                                           2.)  # (Nz, Ny, T, BS, 1)
             metric_dict['time_mse'] = time_squared_error.sum().cpu().numpy()
             # note: because 0th timestamps are zero always, reducing count to ensure accuracy stays unbiased
             metric_dict['time_mse_count'] = num_total_events
@@ -263,6 +287,23 @@ class BaseModel(nn.Module):
             """
         hidden_seq = torch.cat([h_prime, hidden_seq], dim=0)  # (T+1, BS, rnn_hidden_dim)
         return hidden_seq
+
+    @classmethod
+    def from_model_hyperparams(cls, model_hyperparams: Model1HyperParams):
+        encoder_hyperparams = cls.encoder_hyperparams_class(model_hyperparams)
+        decoder_hyperparams = cls.decoder_hyperparams_class(model_hyperparams)
+        return cls(model_hyperparams, encoder_hyperparams, decoder_hyperparams)
+
+    @staticmethod
+    def create_rnn(rnn_dims):
+        rnn = nn.GRU(input_size=rnn_dims[0], hidden_size=rnn_dims[1])
+        return rnn
+
+    def preprocess_inputs(self, x, t):
+        # Transform markers and timesteps into the embedding spaces
+        phi_x, phi_t = self.embed_x(x), self.embed_t(t)
+        phi_xt = torch.cat([phi_x, phi_t], dim=-1)  # (T, BS, emb_dim)
+        return phi_xt
 
 
 def one_hot_encoding(y, n_dims=None):

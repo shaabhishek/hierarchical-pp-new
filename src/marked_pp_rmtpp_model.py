@@ -55,14 +55,14 @@ def extract_closest_hidden_states_and_timestamps(grid_times, hidden_state_sequen
 
 class MarkedPointProcessRMTPPModel(nn.Module):
     def __init__(self, input_dim: int, marker_dim: int, marker_type: str, init_base_intensity: float,
-                 init_time_influence: float, x_given_t: bool = False, mc_integration_num_samples=None):
+                 init_time_influence: float, x_given_t: bool = False, integration_degree=None):
         super().__init__()
 
         self.input_dim = input_dim
         self.marker_dim = marker_dim
         self.x_given_t = x_given_t
         self.marker_type = marker_type
-        self.mc_integration_num_samples = mc_integration_num_samples
+        self.integration_degree = integration_degree
 
         if self.x_given_t:
             self.marker_input_dim = self.input_dim + 1
@@ -153,7 +153,7 @@ class MarkedPointProcessRMTPPModel(nn.Module):
         Output:
             :return expected_t_next: * x T x BS x 1
         """
-        num_samples = self.mc_integration_num_samples
+        num_samples = self.integration_degree
         # expected_t_next = self._mc_transformation_grid(preceding_hidden_states, preceding_event_times, num_samples)
         expected_t_next = self._mc_transformation_gauss_legendre(preceding_hidden_states, preceding_event_times, num_samples)
         return expected_t_next

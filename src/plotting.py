@@ -6,7 +6,7 @@ import torch
 from matplotlib.axes import Axes, np
 
 from data_model_sandbox import HawkesProcessDataModelSandBox, RMTPPDataModelSandBox, Model1DataModelSandBox
-from hyperparameters import RMTPPHyperparams, HawkesHyperparams, Model1Hyperparams
+from hyperparameters import RMTPPHyperParams, HawkesHyperparams, Model1HyperParams
 from parameters import PlottingParams, DataModelParams, DataParams
 
 matplotlib.use('agg')
@@ -106,13 +106,13 @@ class BaseNNPlotter(BasePlotter):
 
 class RMTPPPlotter(BaseNNPlotter):
     data_model_sandbox_class = RMTPPDataModelSandBox
-    hyperparams_class = RMTPPHyperparams
+    hyperparams_class = RMTPPHyperParams
     model_name = "RMTPP"
 
 
 class Model1Plotter(BaseNNPlotter):
     data_model_sandbox_class = Model1DataModelSandBox
-    hyperparams_class = Model1Hyperparams
+    hyperparams_class = Model1HyperParams
     model_name = "Model1"
 
 

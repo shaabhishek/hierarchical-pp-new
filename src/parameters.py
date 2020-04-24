@@ -5,7 +5,7 @@ from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
 
-from hyperparameters import ModelHyperparams
+from hyperparameters import BaseModelHyperParams
 from utils.helper import make_intermediate_dirs_if_absent
 
 
@@ -26,7 +26,7 @@ class ModelFileParams:
             ('_h', params.rnn_hidden_dim), ('_l2', params.l2),
             ('_l', params.latent_dim),
             ('_gn', params.maxgradnorm), ('_lr', params.lr),
-            ('_c', params.n_cluster),
+            ('_c', params.cluster_dim),
             ('_s', params.seed), ('_tl', params.time_loss),
             ('_ai', params.anneal_iter)])
 
@@ -139,7 +139,7 @@ class LoggingParams(BaseParams, TimestampedFilenameMixin):
         return Path(os.path.join('tb_logs', self.dataset_name, self.model_name, self.filename))
 
     @classmethod
-    def from_model_filename(cls, model_filename:str, params, model_file_params):
+    def from_model_filename(cls, model_filename: str, params, model_file_params):
         if model_filename.endswith('.pt'):
             model_filename = model_filename[:-3]
         self = cls(params, model_file_params)
@@ -170,7 +170,7 @@ class PlottingParams(BaseParams):
 
 class TrainerParams(BaseParams):
     def __init__(self, params: Namespace, data_model_params: DataModelParams,
-                 model_hyperparams: ModelHyperparams, model_file_params: ModelFileParams, optimizer_hyperparams):
+                 model_hyperparams: BaseModelHyperParams, model_file_params: ModelFileParams, optimizer_hyperparams):
         super(TrainerParams, self).__init__(params)
         self.data_model_params = data_model_params
         self.model_hyperparams = model_hyperparams
@@ -181,7 +181,7 @@ class TrainerParams(BaseParams):
 
 
 class TestingParams(BaseParams):
-    def __init__(self, params, data_model_params: DataModelParams, model_hyperparams: ModelHyperparams,
+    def __init__(self, params, data_model_params: DataModelParams, model_hyperparams: BaseModelHyperParams,
                  prediction_params: PredictionParams, model_file_params: ModelFileParams):
         super(TestingParams, self).__init__(params)
         self.data_model_params = data_model_params
@@ -289,7 +289,6 @@ def _augment_params(params: Namespace):
         params.marker_type = 'categorical'
         params.batch_size = 32
 
-
     else:  # different dataset. Encode those details.
         raise ValueError
 
@@ -300,9 +299,9 @@ def _augment_params(params: Namespace):
 
 
 def _set_toy_params(params):
-    params.mc_num_samples = 2
+    params.integration_degree = 2
     params.n_samples_posterior = 1
-    params.n_cluster = 2
+    params.cluster_dim = 2
     params.latent_dim = 2
     params.rnn_hidden_dim = 32
     params.max_iter = 2
@@ -323,7 +322,7 @@ def setup_parser():
     parser.add_argument('--time_loss', type=str, default='intensity',
                         help='whether to use normal loss or intensity loss')
     parser.add_argument('--time_scale', type=float, default=1, help='scaling factor to multiply the timestamps with')
-    parser.add_argument('--mc_num_samples', type=int, default=50, help='number of MC samples per event time prediction')
+    parser.add_argument('--integration_degree', type=int, default=20, help='Gaussian Quadrature parameter n')
     parser.add_argument('--n_samples_posterior', type=int, default=2,
                         help='number of MC samples to average wrt posterior')
 
@@ -337,7 +336,7 @@ def setup_parser():
     parser.add_argument('--rnn_hidden_dim', type=int, default=128, help='rnn hidden dim')
     parser.add_argument('--dropout', type=float, default=0.5, help='dropout rate')
     parser.add_argument('--latent_dim', type=int, default=5, help='latent dim')
-    parser.add_argument('--n_cluster', type=int, default=5, help='number of cluster')
+    parser.add_argument('--cluster_dim', type=int, default=5, help='number of cluster')
 
     # Training Helper Parameters
     parser.add_argument('--model', type=str, default='model2', help='model name')

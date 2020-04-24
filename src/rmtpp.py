@@ -1,8 +1,8 @@
 import torch
 
-import torch.nn as nn
 from torch.distributions.normal import Normal
 from base_model import BaseModel
+from hyperparameters import DecoderHyperParams
 from marked_pp_rmtpp_model import MarkedPointProcessRMTPPModel
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -15,26 +15,12 @@ DEBUG = False
 class RMTPP(BaseModel):
     model_name = "rmtpp"
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.rnn = self.create_rnn()
-        mpp_config = {
-            "input_dim": self.shared_output_dims[-1],
-            "marker_dim": self.marker_dim,
-            "marker_type": self.marker_type,
-            "init_base_intensity": self.base_intensity,
-            "init_time_influence": self.time_influence,
-            "x_given_t": self.x_given_t,
-            "mc_integration_num_samples": kwargs["mc_integration_num_samples"]
-        }
+    def __init__(self, model_hyperparams):
+        super().__init__(model_hyperparams)
+        rnn_dims = [model_hyperparams.emb_dim, model_hyperparams.rnn_hidden_dim]
+        self.rnn = self.create_rnn(rnn_dims)
+        mpp_config = DecoderHyperParams._get_mpp_config(model_hyperparams.rnn_hidden_dim, model_hyperparams)
         self.marked_point_process_net = MarkedPointProcessRMTPPModel(**mpp_config)
-
-    def create_rnn(self):
-        rnn = nn.GRU(
-            input_size=self.x_embedding_dim[-1] + self.t_embedding_dim[-1],
-            hidden_size=self.rnn_hidden_dim,
-        )
-        return rnn
 
     def forward(self, marker_seq, time_seq, mask=None, **kwargs):
         time_log_likelihood, marker_log_likelihood, metric_dict = self._forward(marker_seq, time_seq, mask)

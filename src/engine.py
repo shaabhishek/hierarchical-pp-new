@@ -1,5 +1,5 @@
 from data_model_sandbox import load_dataloader_from_params
-from hyperparameters import ModelHyperparams, OptimizerHyperparams
+from hyperparameters import OptimizerHyperparams, BaseModelHyperParams
 from parameters import ModelFileParams, TrainerParams, PredictionParams, TestingParams, DataModelParams, LoggingParams
 from run import TrainValRunner, TestRunner
 from utils.logger import Logger
@@ -9,7 +9,7 @@ class Engine:
     def __init__(self, params, model_filename=None):
         self.params = params
         self.model_file_params = ModelFileParams(params)
-        self.model_hyperparams = ModelHyperparams(params)
+        self.model_hyperparams = BaseModelHyperParams.from_params(params)
         self.model_filename = model_filename
 
         self.logger = self._make_logger(self.params, self.model_file_params, self.model_filename)

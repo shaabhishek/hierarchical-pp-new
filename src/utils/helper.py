@@ -45,7 +45,7 @@ def make_intermediate_dirs_if_absent(full_file_path: Path):
     os.makedirs(str(full_file_path.resolve()), exist_ok=True)
 
 
-def _prepend_dims_to_tensor(tensor, *dims):
+def prepend_dims_to_tensor(tensor, *dims):
     """Add dimensions of required size in the beginning of tensor
     Example:
     _prepend_dims(tensor, d1, d2) modifies tensor of shape (a,b,c) to tensor of shape (d1, d2, a, b, c)

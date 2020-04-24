@@ -3,7 +3,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from base_model import _get_timestamps_and_intervals_from_data
-from hyperparameters import HawkesHyperparams, BaseModelHyperparams
+from hyperparameters import HawkesHyperparams, BaseModelHyperParams
 from model1 import Model1
 from parameters import DataModelParams, DataParams, _augment_params, setup_parser
 from rmtpp import RMTPP
@@ -48,7 +48,7 @@ class HawkesProcessDataModelSandBox:
 
 
 class BaseNNDataModelSandBox:
-    def __init__(self, data_model_params: DataModelParams, model_hyperparams: BaseModelHyperparams):
+    def __init__(self, data_model_params: DataModelParams, model_hyperparams: BaseModelHyperParams):
         self.dataloader = load_dataloader_from_params(data_model_params)
         self.model = _load_model_from_params(data_model_params, model_hyperparams)
 
@@ -123,7 +123,7 @@ class Model1DataModelSandBox(BaseNNDataModelSandBox):
         return log_intensity, evaluated_timestamps
 
 
-def _load_model_from_params(data_model_params: DataModelParams, model_hyperparams: BaseModelHyperparams):
+def _load_model_from_params(data_model_params: DataModelParams, model_hyperparams: BaseModelHyperParams):
     model, _ = ModelLoader.from_model_checkpoint(data_model_params, model_hyperparams)
     model = model.to(device)
     return model

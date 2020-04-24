@@ -54,8 +54,7 @@ class TrainValRunner(BaseRunner):
                                                                  trainer_params.model_hyperparams)
             return model, epoch_num
         else:
-            model = ModelLoader(trainer_params.data_model_params,
-                                trainer_params.model_hyperparams).model
+            model = ModelLoader(trainer_params.model_hyperparams).model
             return model, 1
 
     def train_dataset(self, starting_epoch):
