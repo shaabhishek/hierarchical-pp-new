@@ -58,9 +58,15 @@ class BaseModelHyperParams:
 
 class RMTPPHyperParams(BaseModelHyperParams):
     model_name = 'rmtpp'
+    latent_dim = None
+    cluster_dim = None
 
     def __init__(self, params: Namespace):
         super(RMTPPHyperParams, self).__init__(params)
+
+    @classmethod
+    def from_state_dict(cls, state_dict):
+        raise NotImplementedError
 
 
 class Model1HyperParams(BaseModelHyperParams):

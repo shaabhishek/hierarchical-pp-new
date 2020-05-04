@@ -1,14 +1,9 @@
-import sys
-
 import torch
 
-from hyperparameters import RMTPPHyperParams, Model1HyperParams, Model2HyperParams, \
-    Model2FilterHyperParams
-
-from rmtpp import RMTPP
-from model2_filt import Model2Filter
-from model2_new import Model2
+from hyperparameters import RMTPPHyperParams, Model1HyperParams, Model2HyperParams
 from model1 import Model1
+from model2_new import Model2
+from rmtpp import RMTPP
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -26,8 +21,8 @@ class ModelLoader:
             model = Model1.from_model_hyperparams(hyperparams)
         elif isinstance(hyperparams, Model2HyperParams):
             model = Model2.from_model_hyperparams(hyperparams)
-        elif isinstance(hyperparams, Model2FilterHyperParams):
-            model = Model2Filter.from_model_hyperparams(hyperparams)
+        # elif isinstance(hyperparams, Model2FilterHyperParams):
+        #     model = Model2Filter.from_model_hyperparams(hyperparams)
         else:
             raise ValueError("Did not specify model name correctly")
         return model

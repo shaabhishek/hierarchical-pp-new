@@ -1,7 +1,6 @@
-from abc import abstractmethod, ABC
+from abc import abstractmethod
 
 import matplotlib
-import numpy
 import torch
 from matplotlib.axes import Axes, np
 
@@ -56,7 +55,7 @@ class HawkesPlotter(BasePlotter):
     def plot_intensity_vs_time_index_to_axes(self, ax: Axes, sequence_idx=0):
         intensity_vals, _, data_timestamps = self._get_intensity(sequence_idx, None)
         ax.plot(np.arange(len(intensity_vals)), intensity_vals, label='hawkes')
-        self._plot_data_timestamps(data_timestamps, ax)
+        # self._plot_data_timestamps(data_timestamps, ax)
 
     @classmethod
     def from_hyperparams(cls, hyperparams_dict, params, split_name):
@@ -82,7 +81,7 @@ class BaseNNPlotter(BasePlotter):
     def plot_intensity_vs_time_index_to_axes(self, ax: Axes, sequence_idx=0):
         intensity_vals, _, data_timestamps = self._get_intensity(sequence_idx, None)
         ax.plot(np.arange(len(intensity_vals)), intensity_vals, label=self.model_name)
-        self._plot_data_timestamps(data_timestamps, ax)
+        # self._plot_data_timestamps(data_timestamps, ax)
 
     def _get_intensity(self, sequence_idx: int, grid_size: int):
         log_intensity, data_timestamps, evaluated_timestamps = self.data_model_sandbox.get_intensity_over_grid(

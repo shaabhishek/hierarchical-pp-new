@@ -97,17 +97,6 @@ class MarkedPointProcessRMTPPModel(nn.Module):
         else:
             raise NotImplementedError
 
-    def get_log_intensity(self, h, time_interval):
-        """
-        Input:
-            same as for get_point_log_density function
-        Output:
-            log_intensity : tensor of shape TxBS - computed as per eqn 11 in the paper
-        """
-        past_influence, current_influence = self._get_past_and_current_influences(h, time_interval)
-        log_intensity = past_influence + current_influence + self.base_intensity
-        return log_intensity
-
     def get_point_log_density(self, h, time_intervals):
         """
         Input:
@@ -126,6 +115,17 @@ class MarkedPointProcessRMTPPModel(nn.Module):
         log_density = log_intensity + (term_2 - log_intensity.exp()) / self.time_influence
 
         return log_density.squeeze(-1)
+
+    def get_log_intensity(self, h, time_interval):
+        """
+        Input:
+            same as for get_point_log_density function
+        Output:
+            log_intensity : tensor of shape TxBS - computed as per eqn 11 in the paper
+        """
+        past_influence, current_influence = self._get_past_and_current_influences(h, time_interval)
+        log_intensity = past_influence + current_influence + self.base_intensity
+        return log_intensity
 
     def get_intensity_over_timestamps(self, hidden_state_sequence: Tensor, data_timestamps: Tensor, grid_times: Tensor):
         """

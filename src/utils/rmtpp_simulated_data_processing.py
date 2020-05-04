@@ -2,7 +2,7 @@ import numpy as np
 from pathlib import Path
 import pickle
 
-from helper import train_val_split
+from utils.helper import train_val_split
 
 
 def read_timestamps(filename_times):
