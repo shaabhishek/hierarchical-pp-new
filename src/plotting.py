@@ -98,8 +98,8 @@ class BaseNNPlotter(BasePlotter):
             model_filename=model_filename,
             split_name=split_name
         )
-        model_hyperparams = cls.hyperparams_class(params)
-        data_model_sandbox = cls.data_model_sandbox_class(data_model_params, model_hyperparams)
+        # model_hyperparams = cls.hyperparams_class(params)
+        data_model_sandbox = cls.data_model_sandbox_class(data_model_params)
         return cls(data_model_sandbox)
 
 

@@ -80,10 +80,10 @@ if __name__ == "__main__":
         "rmtpp",
         "simulated_hawkes",
         plotter_data_list=[
-            # PlotterData(
-            #     RMTPPPlotter,
-            #     "rmtpp_mc_50_g1_do0.5_b16_h128_l20.0_l20_gn1000.0_lr0.01_c10_s1_tlintensity_ai40_20_04_14_18_08_10.pt"
-            # ),
+            PlotterData(
+                RMTPPPlotter,
+                "rmtpp_trial_g1_do0.5_b64_h32_l20.0_l5_gn1000.0_lr0.01_c5_s1_tlintensity_ai100_20_05_03_23_40_13.pt"
+            ),
             # PlotterData(
             #     Model1Plotter,
             #     "test_model_1_g1_do0.5_b32_h256_l20.0_l20_gn10.0_lr0.001_c10_s1_tlintensity_ai40_20_04_20_12_12_20.pt"

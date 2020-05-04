@@ -28,12 +28,13 @@ class ModelLoader:
         return model
 
     @classmethod
-    def from_model_checkpoint(cls, model_params, hyperparams):
-        self = cls(hyperparams)
+    def from_model_checkpoint(cls, model_params):
         model_state_path = model_params.get_model_state_path()
         checkpoint = torch.load(model_state_path, map_location=device)
+        hyperparams = checkpoint['model_hyperparams']
         epoch_num = checkpoint['epoch']
         print(f"Loading model from {model_state_path}, Epoch number: {epoch_num}")
+        self = cls(hyperparams)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         return self.model, epoch_num
 

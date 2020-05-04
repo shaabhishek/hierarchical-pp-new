@@ -48,9 +48,9 @@ class HawkesProcessDataModelSandBox:
 
 
 class BaseNNDataModelSandBox:
-    def __init__(self, data_model_params: DataModelParams, model_hyperparams: BaseModelHyperParams):
+    def __init__(self, data_model_params: DataModelParams):
         self.dataloader = load_dataloader_from_params(data_model_params)
-        self.model = _load_model_from_params(data_model_params, model_hyperparams)
+        self.model = _load_model_from_params(data_model_params)
 
     def _setup(self, sequence_idx):
         raise NotImplementedError
@@ -123,9 +123,8 @@ class Model1DataModelSandBox(BaseNNDataModelSandBox):
         return log_intensity, evaluated_timestamps
 
 
-def _load_model_from_params(data_model_params: DataModelParams, model_hyperparams: BaseModelHyperParams):
-    import  pdb; pdb.set_trace()
-    model, _ = ModelLoader.from_model_checkpoint(data_model_params, model_hyperparams)
+def _load_model_from_params(data_model_params: DataModelParams):
+    model, _ = ModelLoader.from_model_checkpoint(data_model_params)
     model = model.to(device)
     return model
 

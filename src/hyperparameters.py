@@ -65,7 +65,9 @@ class RMTPPHyperParams(BaseModelHyperParams):
         super(RMTPPHyperParams, self).__init__(params)
 
     @classmethod
-    def from_state_dict(cls, state_dict):
+    def from_state_dict(cls, state_dict:dict, params: Namespace):
+        self = cls(params)
+        self.rnn_hidden_dim
         raise NotImplementedError
 
 

@@ -50,8 +50,7 @@ class TrainValRunner(BaseRunner):
     @staticmethod
     def load_model(trainer_params, is_loading_previous_model):
         if is_loading_previous_model:
-            model, epoch_num = ModelLoader.from_model_checkpoint(trainer_params.data_model_params,
-                                                                 trainer_params.model_hyperparams)
+            model, epoch_num = ModelLoader.from_model_checkpoint(trainer_params.data_model_params)
             return model, epoch_num
         else:
             model = ModelLoader(trainer_params.model_hyperparams).model
@@ -109,6 +108,7 @@ class TrainValRunner(BaseRunner):
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'loss': loss_value,
+            'model_hyperparams': self.trainer_hyperparams.model_hyperparams
         }
         torch.save(state, self.model_state_path)
 
@@ -120,8 +120,7 @@ class TestRunner(BaseRunner):
 
         self.model_state_path = testing_params.data_model_params.get_model_state_path()
 
-        self.model, _ = ModelLoader.from_model_checkpoint(testing_params.data_model_params,
-                                                          testing_params.model_hyperparams)
+        self.model, _ = ModelLoader.from_model_checkpoint(testing_params.data_model_params)
 
         self.test_epoch_runner = TestEpochRunner(self.model, self.test_dataloader, logger)
 
