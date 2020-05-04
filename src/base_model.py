@@ -240,10 +240,11 @@ class BaseModel(nn.Module):
         t_module = MLP(time_embedding_net_dims)
         return x_module, t_module
 
-    def compute_metrics(self, predicted_times, event_times, marker_logits, marker, mask):
+    def compute_metrics(self, predicted_times: torch.Tensor, event_times: torch.Tensor, marker_logits: torch.Tensor,
+                        marker: torch.Tensor, mask: torch.Tensor):
         """
         Input:
-            :param predicted_times: Nz x Ny x T x BS x 1 ;
+            :param predicted_times: Nz x Ny x T x BS x 1  or T x BS x 1 ;
             pt_j : predicted time of event j
             :param event_times : T x BS x 1
             t_j : actual time of event j
@@ -254,6 +255,10 @@ class BaseModel(nn.Module):
             metric_dict: dict
         """
         metric_dict = {}
+        has_latent_samples = predicted_times.dim() == 5
+        if not has_latent_samples:
+            predicted_times = prepend_dims_to_tensor(predicted_times, 1, 1)
+            marker_logits = prepend_dims_to_tensor(marker_logits, 1, 1)
         Nz, Ny = predicted_times.shape[:2]
         num_total_events = Nz * Ny * mask[1:, :].sum().detach().cpu().numpy()
         with torch.no_grad():
